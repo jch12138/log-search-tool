@@ -4,6 +4,11 @@
     border-bottom: 1px solid #f0f0f0;
 }
 
+.log-group:last-child {
+    border-bottom: none;
+    /* 最后一个分组不显示底部边框 */
+}
+
 .group-header {
     padding: 15px 20px;
     background: linear-gradient(135deg, #f8f9fa 0%, #f1f3f4 100%);
@@ -14,6 +19,11 @@
     gap: 8px;
     transition: all 0.3s ease;
     user-select: none;
+    position: sticky;
+    /* 粘性定位，滚动时保持可见 */
+    top: 0;
+    z-index: 1;
+    /* 确保在其他元素上方 */
 }
 
 .group-header:hover {

@@ -71,6 +71,31 @@
                             </div>
                         </div>
                     </div>
+                    
+                    <!-- 更多功能按钮 -->
+                    <div class="more-actions">
+                        <button class="more-button" @click="toggleMoreMenu" :class="{ active: showMoreMenu }">
+                            <span class="more-icon">⚙️</span>
+                            <span class="more-text">更多功能</span>
+                            <span class="arrow-icon" :class="{ rotated: showMoreMenu }">▼</span>
+                        </button>
+                        
+                        <!-- 更多功能菜单 -->
+                        <div v-show="showMoreMenu" class="more-menu">
+                            <div class="menu-item" @click="navigateToPage('config')">
+                                <span class="menu-icon">⚙️</span>
+                                <span class="menu-text">日志配置</span>
+                            </div>
+                            <div class="menu-item" @click="navigateToPage('sftp')">
+                                <span class="menu-icon">📁</span>
+                                <span class="menu-text">文件管理</span>
+                            </div>
+                            <div class="menu-item" @click="navigateToPage('terminals')">
+                                <span class="menu-icon">💻</span>
+                                <span class="menu-text">在线终端</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- 右侧搜索和结果区域 -->
@@ -220,6 +245,7 @@
                     availableFiles: [], // 可用文件列表
                     filesLoading: false, // 文件列表加载状态
                     collapsedGroups: new Set(), // 折叠的分组
+                    showMoreMenu: false, // 更多菜单显示状态
                     searchForm: {
                         keyword: '',
                         search_mode: 'keyword', // keyword 或 context
@@ -308,11 +334,15 @@
 
                 // 添加全局回车键监听
                 document.addEventListener('keydown', this.handleGlobalKeydown);
+                
+                // 添加点击外部关闭菜单的监听
+                document.addEventListener('click', this.handleClickOutside);
             },
 
             beforeUnmount() {
                 // 清理事件监听器
                 document.removeEventListener('keydown', this.handleGlobalKeydown);
+                document.removeEventListener('click', this.handleClickOutside);
             },
 
             methods: {
@@ -330,6 +360,20 @@
                         // 执行搜索
                         this.executeSearch();
                     }
+                    
+                    // 按ESC键关闭更多菜单
+                    if (event.key === 'Escape' && this.showMoreMenu) {
+                        this.showMoreMenu = false;
+                    }
+                },
+
+                // 点击外部关闭菜单
+                handleClickOutside(event) {
+                    // 检查点击是否在更多按钮区域外
+                    const moreActions = event.target.closest('.more-actions');
+                    if (!moreActions && this.showMoreMenu) {
+                        this.showMoreMenu = false;
+                    }
                 },
 
                 // 分组折叠/展开控制
@@ -338,6 +382,53 @@
                         this.collapsedGroups.delete(groupName);
                     } else {
                         this.collapsedGroups.add(groupName);
+                    }
+                },
+
+                // 切换更多菜单显示状态
+                toggleMoreMenu() {
+                    this.showMoreMenu = !this.showMoreMenu;
+                },
+
+                // 页面导航
+                navigateToPage(page) {
+                    this.showMoreMenu = false; // 关闭菜单
+                    
+                    // 页面配置
+                    const pageConfig = {
+                        'config': {
+                            url: '/config',
+                            title: '日志配置',
+                            icon: '⚙️'
+                        },
+                        'sftp': {
+                            url: '/sftp',
+                            title: '文件管理',
+                            icon: '�'
+                        },
+                        'terminals': {
+                            url: '/terminals',
+                            title: '在线终端',
+                            icon: '💻'
+                        }
+                    };
+                    
+                    const config = pageConfig[page];
+                    if (config) {
+                        // 显示导航提示
+                        ElMessage.info(`正在打开 ${config.icon} ${config.title}...`);
+                        
+                        // 延迟一点时间再打开，让用户看到提示
+                        setTimeout(() => {
+                            // 可以选择在新窗口打开或当前窗口跳转
+                            // 新窗口打开（推荐）
+                            window.open(config.url, '_blank');
+                            
+                            // 如果要在当前窗口跳转，使用：
+                            // window.location.href = config.url;
+                        }, 300);
+                    } else {
+                        ElMessage.warning(`功能 ${page} 暂未开放`);
                     }
                 },
 

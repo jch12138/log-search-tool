@@ -1,0 +1,18 @@
+/* Sarasa Mono SC local font-face (Regular, Bold if available) */
+@font-face {
+  font-family: 'Sarasa Mono SC';
+  src: url('/static/fonts/SarasaMonoSC-Regular.woff2') format('woff2'),
+       url('/static/fonts/SarasaMonoSC-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Sarasa Mono SC';
+  src: url('/static/fonts/SarasaMonoSC-Bold.woff2') format('woff2'),
+       url('/static/fonts/SarasaMonoSC-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}

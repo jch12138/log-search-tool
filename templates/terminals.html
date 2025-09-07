@@ -4,10 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>在线终端</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Ctext%20x%3D%2750%25%27%20y%3D%2750%25%27%20text-anchor%3D%27middle%27%20dominant-baseline%3D%27central%27%20font-size%3D%2752%27%3E%F0%9F%92%BB%3C/text%3E%3C/svg%3E" />
   <link rel="stylesheet" href="/static/fonts/microsoft-yahei.css" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5.1.0/index.min.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/source-code-pro@5.1.0/index.min.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+  <link rel="stylesheet" href="/static/fonts/source-code-pro.css" />
+  <link rel="stylesheet" href="/static/css/xterm.css">
   <style>
     /* Minimal container layout, adapted to app look */
   /* Prefer JetBrains Mono for Latin; fallback to 黑体 family for Chinese */
@@ -113,9 +113,9 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
-  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
+  <script src="/static/js/vendor/xterm.min.js"></script>
+  <script src="/static/js/vendor/xterm-addon-fit.min.js"></script>
+  <script src="/static/js/vendor/socket.io.min.js"></script>
   <script>
     const API = '/api/v1';
   const state = { sessions:{}, current:null, servers:[], socket:null };
@@ -207,7 +207,7 @@
           rendererType:'canvas',
           allowProposedApi:true,
           convertEol:true,
-          fontFamily: "'Source Code Pro','Microsoft YaHei UI','SimHei','Heiti SC','PingFang SC','Noto Sans CJK SC','WenQuanYi Micro Hei',monospace",
+          fontFamily: "'Source Code Pro','SimHei','Heiti SC','PingFang SC','Microsoft YaHei','Noto Sans CJK SC','WenQuanYi Micro Hei',monospace",
           fontSize:15,
           theme:{ background:'#0f172a', foreground:'#e2e8f0' },
           scrollback:10000

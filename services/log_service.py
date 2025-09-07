@@ -338,22 +338,14 @@ class LogSearchService:
         return command
     
     def get_log_files(self, ssh_config: Dict[str, Any], log_path: str) -> List[Dict[str, Any]]:
-        """获取日志目录下的所有文件，支持通配符解析"""
+        """获取日志目录下的所有文件
+
+        说明：不再解析文件名中的通配符，也不对文件名进行匹配过滤，
+        仅基于配置的 log_path 取其所在目录并列出该目录下的文件。
+        """
         try:
-            # 检查是否包含通配符
-            if any(placeholder in log_path for placeholder in ['{YYYY}', '{MM}', '{DD}', '{N}']):
-                # 包含通配符，先解析一个示例路径来确定目录
-                try:
-                    resolved_path = resolve_log_filename(log_path)
-                    log_dir = os.path.dirname(resolved_path)
-                    logger.info(f"通过通配符解析确定目录: {log_path} -> {log_dir}")
-                except Exception as e:
-                    logger.warning(f"通配符解析失败，使用原路径: {e}")
-                    log_dir = os.path.dirname(log_path)
-            else:
-                # 提取目录
-                import os
-                log_dir = os.path.dirname(log_path)
+            # 直接取目录
+            log_dir = os.path.dirname(log_path)
             
             # 构建文件列表命令 - 列出目录下所有文件，包含创建时间和修改时间
             # 兼容macOS和Linux的find命令
@@ -395,18 +387,14 @@ class LogSearchService:
                                 size_bytes = 0
                             
                             modified_time = f"{parts[5]} {parts[6]} {parts[7]}"
-                            
-                            # 检查文件是否匹配通配符模式
-                            is_match = self._check_wildcard_match(filename, log_path)
-                            
+
                             files.append({
                                 'filename': filename,
                                 'full_path': full_path,
                                 'size': size_bytes,  # 保持原始字节数
                                 'birth_time': modified_time,  # ls命令无法获取创建时间，使用修改时间
                                 'modified_time': modified_time,
-                                'host': host,
-                                'is_wildcard_match': is_match  # 标记是否匹配通配符
+                                'host': host
                             })
                     except (ValueError, IndexError):
                         continue
@@ -429,36 +417,28 @@ class LogSearchService:
                         birth_time = parts[2]  # 创建时间
                         modified_time = parts[3]  # 修改时间
                         full_path = parts[4] if parts[4].startswith('/') else parts[0]
-                        
-                        # 检查文件是否匹配通配符模式
-                        is_match = self._check_wildcard_match(filename, log_path)
-                        
+
                         files.append({
                             'filename': filename,
                             'full_path': full_path,
                             'size': size_bytes,  # 保持原始字节数，让前端格式化
                             'birth_time': birth_time,
                             'modified_time': modified_time,
-                            'host': host,
-                            'is_wildcard_match': is_match  # 标记是否匹配通配符
+                            'host': host
                         })
                     elif len(parts) >= 4:  # 向后兼容旧格式
                         filename = os.path.basename(parts[0])
                         size_bytes = int(parts[1])
                         modified_time = parts[2]
                         full_path = parts[3] if parts[3].startswith('/') else parts[0]
-                        
-                        # 检查文件是否匹配通配符模式
-                        is_match = self._check_wildcard_match(filename, log_path)
-                        
+
                         files.append({
                             'filename': filename,
                             'full_path': full_path,
                             'size': size_bytes,
                             'birth_time': modified_time,  # 如果没有创建时间，使用修改时间
                             'modified_time': modified_time,
-                            'host': host,
-                            'is_wildcard_match': is_match  # 标记是否匹配通配符
+                            'host': host
                         })
                 except (ValueError, IndexError):
                     # 解析失败，跳过这一行
@@ -470,56 +450,7 @@ class LogSearchService:
             logger.error(f"获取文件列表失败 {ssh_config.get('host', 'unknown')}: {e}")
             return []
     
-    def _check_wildcard_match(self, filename: str, pattern: str) -> bool:
-        """
-        检查文件名是否匹配通配符模式
-        
-        Args:
-            filename: 实际文件名
-            pattern: 包含通配符的模式
-            
-        Returns:
-            是否匹配
-        """
-        # 如果模式中没有通配符，直接比较
-        if not any(placeholder in pattern for placeholder in ['{YYYY}', '{MM}', '{DD}', '{N}']):
-            return os.path.basename(pattern) == filename
-        
-        try:
-            from .filename_resolver import FilenameResolver
-            resolver = FilenameResolver()
-            
-            # 提取文件名部分的模式
-            pattern_filename = os.path.basename(pattern)
-            
-            # 如果只有日期通配符，直接替换当前日期进行匹配
-            if '{N}' not in pattern_filename:
-                resolved_pattern = resolver._replace_date_placeholders(pattern_filename, datetime.now())
-                return resolved_pattern == filename
-            
-            # 如果包含 {N} 通配符，需要检查格式是否匹配
-            # 创建正则表达式来匹配
-            regex_pattern = resolver._create_regex_from_pattern(pattern_filename)
-            
-            # 先替换日期通配符
-            if any(placeholder in regex_pattern for placeholder in ['{YYYY}', '{MM}', '{DD}']):
-                # 将日期通配符替换为对应的正则表达式
-                current_date = datetime.now()
-                date_replacements = {
-                    r'\{YYYY\}': current_date.strftime('%Y'),
-                    r'\{MM\}': current_date.strftime('%m'),
-                    r'\{DD\}': current_date.strftime('%d')
-                }
-                for placeholder, value in date_replacements.items():
-                    regex_pattern = regex_pattern.replace(placeholder, value)
-            
-            # 检查是否匹配
-            import re
-            return bool(re.match(regex_pattern, filename))
-            
-        except Exception as e:
-            logger.warning(f"通配符匹配检查失败: {e}")
-            return False
+    # 已不再对文件名进行通配符匹配，保留占位方便未来扩展
     
     def close(self):
         """关闭服务"""

@@ -64,6 +64,12 @@ def register_routes(app: Flask):
     def index():
         """前端日志搜索页面"""
         return render_template('index.html')
+
+    # 配置编辑页面
+    @app.route('/config')
+    def config_page():
+        """日志配置编辑页面"""
+        return render_template('config.html')
     
     # 前端健康检查
     @app.route('/health')

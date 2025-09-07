@@ -120,6 +120,12 @@ class TerminalService:
             # 启动输出读取线程
             threading.Thread(target=self._output_reader, args=(terminal_id,), daemon=True).start()
             
+            # 尝试将远端环境切换为 UTF-8，降低乱码概率（C.UTF-8 通常更通用）
+            try:
+                channel.send("export LANG=C.UTF-8 LC_ALL=C.UTF-8\n")
+            except Exception:
+                pass
+
             # 执行初始命令（如果提供）
             if initial_command:
                 time.sleep(1)  # 等待shell准备就绪
@@ -252,7 +258,16 @@ class TerminalService:
                     try:
                         text = decoder.decode(data)
                     except Exception:
-                        text = data.decode(session_data['encoding'], errors='replace')
+                        # 动态回退到 GBK（常见中文编码）
+                        try:
+                            text = data.decode('gbk')
+                            # 切换会话编码与解码器
+                            session_data['encoding'] = 'gbk'
+                            decoder = codecs.getincrementaldecoder('gbk')()
+                            session_data['decoder'] = decoder
+                        except Exception:
+                            # 最后兜底：UTF-8 替换错误字符
+                            text = data.decode('utf-8', errors='replace')
                     
                     with session_data['lock']:
                         session_data['buffer'].append(text)

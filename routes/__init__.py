@@ -77,6 +77,12 @@ def register_routes(app: Flask):
         """SFTP 文件管理页面"""
         return render_template('sftp.html')
     
+    # 在线终端页面
+    @app.route('/terminals')
+    def terminals_page():
+        """在线终端页面"""
+        return render_template('terminals.html')
+    
     # 前端健康检查
     @app.route('/health')
     def frontend_health():

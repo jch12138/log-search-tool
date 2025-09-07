@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SFTP 文件管理</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/sftp.css') }}" />
+  <style>
+    /* 轻量覆盖：沿用全局消息定位为居中（与 main.css 的 Element Plus 一致）*/
+    .message { left: 50%; transform: translateX(-50%); right: auto; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>SFTP 文件浏览器</h1>
+      <div class="actions">
+        <a href="/" class="btn btn-secondary">返回主页</a>
+        <button class="btn btn-primary" id="new-conn-btn">新建连接</button>
+      </div>
+    </div>
+
+    <div class="main-layout">
+      <aside class="sidebar">
+        <div class="sidebar-section">
+          <div style="font-weight:600;color:#556">活跃连接</div>
+        </div>
+        <div id="connections-list"><div class="loading">正在加载连接...</div></div>
+
+        <div class="sidebar-section" style="border-top:1px solid var(--color-border)">
+          <div style="font-weight:600;color:#556">可用服务器</div>
+        </div>
+        <div id="log-based-servers" style="padding:12px 18px 24px;flex:1;overflow:auto;min-height:0"></div>
+      </aside>
+
+      <main class="main-pane">
+        <div class="topbar">
+          <div class="topbar-row">
+            <div class="path-input-container" style="display:flex;gap:8px;align-items:center;flex:1">
+              <input id="path-input" class="input" type="text" placeholder="请选择连接" readonly />
+              <button id="path-nav-btn" class="btn" disabled>跳转</button>
+            </div>
+            <div class="spacer"></div>
+            <div class="topbar-actions" style="display:flex;gap:8px">
+              <button id="upload-btn" class="btn" disabled>上传</button>
+              <button id="mkdir-btn" class="btn" disabled>新建目录</button>
+              <button id="refresh-btn" class="btn" disabled>刷新</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="file-table-wrapper" id="file-table-wrapper">
+          <div class="loading">请先连接到 SFTP 服务器</div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- 连接模态框 -->
+  <div class="modal" id="connect-modal">
+    <div class="modal-content">
+      <div class="modal-header"><h3 class="modal-title">连接 SFTP 服务器</h3></div>
+      <form id="connect-form">
+        <div class="form-group"><label>连接名称</label><input type="text" id="connection-name" placeholder="可选，如：生产服务器" /></div>
+        <div class="form-group"><label>服务器地址</label><input type="text" id="host" required placeholder="192.168.1.100" /></div>
+        <div class="form-group"><label>端口</label><input type="number" id="port" value="22" required /></div>
+        <div class="form-group"><label>用户名</label><input type="text" id="username" required /></div>
+        <div class="form-group"><label>密码</label><input type="password" id="password" required /></div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;">
+          <button type="button" class="btn btn-secondary" id="cancel-connect">取消</button>
+          <button type="submit" class="btn btn-primary">连接</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 上传模态框 -->
+  <div class="modal" id="upload-modal">
+    <div class="modal-content">
+      <div class="modal-header"><h3 class="modal-title">上传文件</h3></div>
+      <div class="upload-area" id="upload-area">
+        <div class="upload-icon">📁</div>
+        <div class="upload-text">点击选择文件或拖拽文件到此处</div>
+        <div style="font-size:12px;color:#999;">支持多种文件格式</div>
+      </div>
+      <input type="file" id="file-input" multiple style="display:none" />
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+        <button type="button" class="btn btn-secondary" id="close-upload">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 新建目录模态框 -->
+  <div class="modal" id="mkdir-modal">
+    <div class="modal-content">
+      <div class="modal-header"><h3 class="modal-title">新建目录</h3></div>
+      <form id="mkdir-form">
+        <div class="form-group"><label>目录名称</label><input type="text" id="dir-name" required placeholder="输入目录名称" /></div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;">
+          <button type="button" class="btn btn-secondary" id="cancel-mkdir">取消</button>
+          <button type="submit" class="btn btn-primary">创建</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // State
+    let currentConnectionId = null;
+    let currentPath = '/';
+    let currentItems = [];
+    let fileSelection = new Set();
+    const sortState = { key: 'name', dir: 'asc' };
+
+    // 每个连接的独立状态（路径、所选文件）
+    const connectionStates = {};
+
+    // API prefix
+    const API = '/api/v1';
+
+    // Helpers
+    const $ = (id) => document.getElementById(id);
+    const showMessage = (msg, type='success') => {
+      const el = document.createElement('div');
+      el.className = 'message ' + (type === 'error' ? 'error' : 'success');
+      el.textContent = msg;
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 2600);
+    };
+
+    function enableToolbar() {
+      ['upload-btn','mkdir-btn','refresh-btn','path-nav-btn'].forEach(id => $(id).disabled = false);
+      const input = $('path-input');
+      input.readOnly = false; input.placeholder = '点击输入路径或直接编辑当前路径';
+    }
+    function disableToolbar() {
+      ['upload-btn','mkdir-btn','refresh-btn','path-nav-btn'].forEach(id => $(id).disabled = true);
+      const input = $('path-input');
+      input.readOnly = true; input.placeholder = '请选择连接'; input.value = '';
+    }
+
+    async function fetchJSON(url, options={}){
+      const r = await fetch(url, options);
+      const j = await r.json();
+      if (!j.success) throw new Error(j.error?.message || '请求失败');
+      return j.data;
+    }
+
+    async function loadActiveConnections(){
+      try {
+        const data = await fetchJSON(`${API}/sftp/connections`);
+        renderActiveConnections(data.connections || []);
+      } catch (e) {
+        // 清空
+        renderActiveConnections([]);
+      }
+    }
+
+    function renderActiveConnections(conns){
+      const container = $('connections-list');
+      if (!conns.length) {
+        container.innerHTML = '<div class="loading">暂无活跃连接</div>';
+        return;
+      }
+      container.innerHTML = conns.map(c => {
+        const title = c.connection_name || `${c.host}:${c.port}`;
+        return `<div class="connection-item" data-id="${c.connection_id}">
+          <div class="connection-info"><strong>${title}</strong><span style="color:#16a34a;font-size:12px;margin-left:6px;">●</span></div>
+          <div class="connection-status">${c.username}@${c.host}:${c.port}</div>
+          <div class="connection-status" style="font-size:12px;opacity:.75;">连接时间: ${c.connected_at}</div>
+          <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">
+            <button class="btn btn-secondary js-nav-log" style="font-size:12px;padding:4px 8px;">打开</button>
+            <button class="btn btn-danger js-disconnect" style="font-size:12px;padding:4px 8px;">断开</button>
+          </div>
+        </div>`;
+      }).join('');
+
+      container.querySelectorAll('.connection-item').forEach(el => {
+        el.addEventListener('click', (e) => {
+          if (e.target.closest('button')) return; // button handler below
+          const id = el.getAttribute('data-id');
+          selectConnection(id, el);
+        });
+        el.querySelector('.js-nav-log').addEventListener('click', (e) => {
+          e.stopPropagation();
+          const id = el.getAttribute('data-id');
+          selectConnection(id, el);
+        });
+        el.querySelector('.js-disconnect').addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const id = el.getAttribute('data-id');
+          try{
+            await fetchJSON(`${API}/sftp/disconnect`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({connection_id: id})});
+            if (connectionStates[id]) delete connectionStates[id];
+            if (currentConnectionId === id) { currentConnectionId = null; disableToolbar(); $('file-table-wrapper').innerHTML = '<div class="loading">已断开连接</div>'; }
+            loadActiveConnections();
+          }catch(err){ showMessage(err.message, 'error'); }
+        });
+      });
+    }
+
+    async function loadLogBasedServers(){
+      try {
+        const data = await fetchJSON(`${API}/logs?include_ssh=true`);
+        const list = data.log_configs || [];
+        const container = $('log-based-servers');
+        if (!list.length) { container.innerHTML = '<div class="loading">暂无日志配置</div>'; return; }
+        container.innerHTML = list.map(cfg => {
+          const title = cfg.ssh_index != null ? `${cfg.log_name} #${cfg.ssh_index+1}` : cfg.log_name;
+          return `<div class="connection-item server-item" data-host="${cfg.host}" data-port="${cfg.port}" data-username="${cfg.username}" data-name="${cfg.connection_name}" data-logpath="${cfg.log_path}">
+            <div class="connection-info"><strong>${title}</strong></div>
+            <div class="connection-status">${cfg.username}@${cfg.host}:${cfg.port}</div>
+            <div style="margin-top:6px;"><button class="btn btn-primary js-connect" style="font-size:12px;padding:4px 8px;">连接</button></div>
+          </div>`;
+        }).join('');
+
+        container.querySelectorAll('.server-item .js-connect').forEach(btn => {
+          btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            // 直接通过后端配置发起连接（无需前端输入密码）
+            const card = btn.closest('.server-item');
+            const connectionName = card.getAttribute('data-name') || '';
+            const host = card.getAttribute('data-host');
+            const port = parseInt(card.getAttribute('data-port')||'22',10);
+            const username = card.getAttribute('data-username');
+            const logTitle = card.querySelector('.connection-info strong')?.textContent || '';
+            // 从标题推断 ssh_index（形如 `#2`），否则后端按0索引
+            let sshIndex = 0;
+            const m = logTitle.match(/#(\d+)/);
+            if (m) { sshIndex = Math.max(0, parseInt(m[1],10)-1); }
+            const logName = (connectionName || '').split(' - ')[0] || logTitle.split(' #')[0] || '';
+            try{
+              const res = await fetchJSON(`${API}/sftp/connect-by-config`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ log_name: logName, ssh_index: sshIndex, connection_name: connectionName }) });
+              showMessage('连接成功','success');
+              // 自动跳转到日志目录
+              const connId = res.connection_id;
+              const logPath = card.getAttribute('data-logpath') || '';
+              let logDir = '/';
+              if (logPath && logPath.includes('/')) {
+                const idx = logPath.lastIndexOf('/');
+                logDir = idx > 0 ? logPath.slice(0, idx) : '/';
+              }
+              // 设置为当前连接并导航
+              currentConnectionId = connId;
+              if (!connectionStates[connId]) connectionStates[connId] = { path: logDir, selection: new Set() };
+              else connectionStates[connId].path = logDir;
+              enableToolbar();
+              $('path-input').value = logDir;
+              await loadDirectory(logDir);
+              // 刷新活跃连接列表以展示新连接
+              loadActiveConnections();
+            }catch(err){ showMessage(err.message, 'error'); }
+          });
+        });
+      } catch (e) {
+        $('log-based-servers').innerHTML = '<div class="loading">加载日志配置失败</div>';
+      }
+    }
+
+    function openConnectModal(prefill={}){
+      $('connect-modal').classList.add('active');
+      $('connection-name').value = prefill.connection_name || '';
+      $('host').value = prefill.host || '';
+      $('port').value = prefill.port || 22;
+      $('username').value = prefill.username || '';
+      $('password').value = '';
+    }
+
+    function closeConnectModal(){ $('connect-modal').classList.remove('active'); $('connect-form').reset(); }
+    function openUploadModal(){ if(!currentConnectionId){ return showMessage('请先连接到服务器','error'); } $('upload-modal').classList.add('active'); }
+    function closeUploadModal(){ $('upload-modal').classList.remove('active'); $('file-input').value=''; }
+    function openMkdirModal(){ if(!currentConnectionId){ return showMessage('请先连接到服务器','error'); } $('mkdir-modal').classList.add('active'); }
+    function closeMkdirModal(){ $('mkdir-modal').classList.remove('active'); $('mkdir-form').reset(); }
+
+    async function connectViaForm(e){
+      e.preventDefault();
+      const payload = {
+        connection_name: $('connection-name').value.trim(),
+        host: $('host').value.trim(),
+        port: parseInt($('port').value, 10) || 22,
+        username: $('username').value.trim(),
+        password: $('password').value
+      };
+      if(!payload.host || !payload.username || !payload.password){ return showMessage('请填写必填项','error'); }
+      try{
+        await fetchJSON(`${API}/sftp/connect`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        closeConnectModal();
+        showMessage('连接成功','success');
+        loadActiveConnections();
+      }catch(err){ showMessage(err.message, 'error'); }
+    }
+
+    function selectConnection(id, el){
+      // 保存上一个连接状态
+      if (currentConnectionId && connectionStates[currentConnectionId]) {
+        connectionStates[currentConnectionId].path = currentPath;
+        connectionStates[currentConnectionId].selection = new Set(fileSelection);
+      }
+      currentConnectionId = id;
+      if (!connectionStates[id]) connectionStates[id] = { path: '/', selection: new Set() };
+      currentPath = connectionStates[id].path;
+      fileSelection = new Set(connectionStates[id].selection);
+      document.querySelectorAll('.connection-item').forEach(i => i.classList.remove('active'));
+      if (el) el.classList.add('active');
+      enableToolbar();
+      $('path-input').value = currentPath;
+      loadDirectory(currentPath);
+    }
+
+    async function loadDirectory(path){
+      if (!currentConnectionId) return;
+      // 记录当前连接的状态
+      if (connectionStates[currentConnectionId]) connectionStates[currentConnectionId].path = path;
+      $('file-table-wrapper').innerHTML = '<div class="loading">加载中...</div>';
+      try{
+        const data = await fetchJSON(`${API}/sftp/list`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ connection_id: currentConnectionId, path }) });
+        currentPath = data.current_path;
+        $('path-input').value = currentPath;
+        currentItems = data.items || [];
+        renderTable();
+      }catch(err){ $('file-table-wrapper').innerHTML = `<div class="loading">加载失败：${err.message}</div>`; }
+    }
+
+    function renderTable(){
+      const dirs = currentItems.filter(i => i.is_directory);
+      const files = currentItems.filter(i => !i.is_directory);
+      const k = sortState.key; const dir = sortState.dir;
+      const cmp = (a,b) => { let av=a[k], bv=b[k]; if(k==='name'){ av=a.name.toLowerCase(); bv=b.name.toLowerCase(); } if(k==='size'){ av=a.size||0; bv=b.size||0; } if(k==='modified_time'){ av=a.modified_time; bv=b.modified_time; } if(av===bv) return 0; const c = av>bv?1:-1; return dir==='asc'?c:-c; };
+      files.sort(cmp);
+      const rows = [];
+      if (currentPath !== '/') {
+        const parent = currentPath.split('/').slice(0,-1).join('/') || '/';
+        rows.push(`<tr onclick="loadDirectory('${parent}')"><td class='checkbox-cell'></td><td class='name'>..</td><td>—</td><td>返回上级</td><td></td><td></td></tr>`);
+      }
+      [...dirs, ...files].forEach(f => {
+        const checked = fileSelection.has(joinPath(currentPath, f.name)) ? 'checked' : '';
+        const fullPath = joinPath(currentPath, f.name);
+        const actions = f.is_directory ? '' : `<button class='btn btn-secondary' onclick="event.stopPropagation();downloadFile('${fullPath}')">下载</button>`;
+        const delBtn = `<button class='btn btn-danger' onclick="event.stopPropagation();deleteItem('${fullPath}', ${f.is_directory})">删除</button>`;
+        rows.push(`<tr ${f.is_directory?`onclick=\"loadDirectory('${fullPath}')\"`:''} class='${fileSelection.has(fullPath)?'row-selected':''}'>
+          <td class='checkbox-cell'><input type='checkbox' ${checked} onclick="toggleSelect(event,'${fullPath}')"></td>
+          <td class='name' title='${f.name}'>${f.is_directory?'<span class=\"tag-dir\">DIR</span> ':''}${f.name}</td>
+          <td>${f.is_directory?'‑':f.size_human||'-'}</td>
+          <td>${f.modified_time||''}</td>
+          <td>${f.permissions||''}</td>
+          <td class='actions'><div class='action-buttons'>${actions}${delBtn}</div></td>
+        </tr>`);
+      });
+      const table = `<table class='table'>
+        <thead><tr>
+          <th class='checkbox-cell'><input type='checkbox' id='header-select' ${allVisibleSelected()? 'checked':''} onclick='toggleSelectVisible(event)'></th>
+          <th>名称 ${sortableHeader('name')}</th>
+          <th>大小 ${sortableHeader('size')}</th>
+          <th>修改时间 ${sortableHeader('modified_time')}</th>
+          <th>权限</th>
+          <th class='actions'>操作</th>
+        </tr></thead>
+        <tbody>${rows.join('') || `<tr><td colspan='6'><div class='loading'>无文件</div></td></tr>`}</tbody>
+      </table>`;
+      $('file-table-wrapper').innerHTML = table;
+      updateBatchButtons();
+    }
+
+    function joinPath(base, name){ if(base.endsWith('/')) return base + name; if(base === '/') return '/' + name; return base + '/' + name; }
+    function sortableHeader(key){ const active = sortState.key===key; const sym = active ? (sortState.dir==='asc'?'▲':'▼') : '↕'; return `<span style='cursor:pointer;color:${active?'var(--color-accent)':'#94a3b8'}' onclick="changeSort('${key}')">${sym}</span>`; }
+    function changeSort(k){ if(sortState.key===k) sortState.dir = sortState.dir==='asc'?'desc':'asc'; else { sortState.key=k; sortState.dir='asc'; } renderTable(); }
+
+    function toggleSelect(e, p){ e.stopPropagation(); if(fileSelection.has(p)) fileSelection.delete(p); else fileSelection.add(p); if (connectionStates[currentConnectionId]) connectionStates[currentConnectionId].selection = new Set(fileSelection); renderTable(); }
+    function allVisibleSelected(){ const all = currentItems.map(i => joinPath(currentPath, i.name)); return all.length>0 && all.every(p => fileSelection.has(p)); }
+    function toggleSelectVisible(e){ e.stopPropagation(); const all = currentItems.map(i => joinPath(currentPath, i.name)); if (all.every(p => fileSelection.has(p))) all.forEach(p => fileSelection.delete(p)); else all.forEach(p => fileSelection.add(p)); if (connectionStates[currentConnectionId]) connectionStates[currentConnectionId].selection = new Set(fileSelection); renderTable(); }
+    function updateBatchButtons(){ const hasSel = fileSelection.size>0; ['batch-delete-btn','batch-download-btn','batch-zip-btn'].forEach(id => { const el=document.getElementById(id); if(el) el.disabled = !currentConnectionId || !hasSel; }); }
+
+    async function deleteItem(path, isDir){ if(!confirm(`确定要删除这个${isDir?'目录':'文件'}吗?`)) return; try{ await fetchJSON(`${API}/sftp/delete`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ connection_id: currentConnectionId, remote_path: path, is_directory: !!isDir }) }); showMessage('删除成功'); loadDirectory(currentPath); } catch(err){ showMessage(err.message, 'error'); } }
+    function downloadFile(path){ if(!currentConnectionId) return; const url = `${API}/sftp/download?connection_id=${encodeURIComponent(currentConnectionId)}&remote_path=${encodeURIComponent(path)}`; const w = window.open(url, '_blank'); if(!w) showMessage('浏览器阻止了下载窗口', 'error'); }
+
+    // 上传/打包下载（按钮在工具栏之外，按需拓展）
+    async function uploadFiles(files){ if(!currentConnectionId) return showMessage('请先连接到服务器','error'); for(const file of files){ const fd = new FormData(); fd.append('file', file); fd.append('connection_id', currentConnectionId); fd.append('remote_path', currentPath); try{ const r = await fetch(`${API}/sftp/upload`, { method:'POST', body: fd }); const j = await r.json(); if(!j.success) throw new Error(j.error?.message||'上传失败'); showMessage('上传成功'); }catch(e){ showMessage(e.message, 'error'); } } closeUploadModal(); loadDirectory(currentPath); }
+
+    // 目录创建
+    async function createDirectory(e){ e.preventDefault(); const name = $('dir-name').value.trim(); if(!name) return; try{ await fetchJSON(`${API}/sftp/mkdir`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ connection_id: currentConnectionId, remote_path: currentPath, dir_name: name }) }); closeMkdirModal(); showMessage('目录创建成功'); loadDirectory(currentPath); }catch(err){ showMessage(err.message, 'error'); } }
+
+    // 路径输入相关
+    function navigateToPath(){ if(!currentConnectionId) return; const input = $('path-input'); let target = (input.value||'').trim(); if(!target) return; if(!target.startsWith('/')) target = '/' + target; if(target === currentPath) return; loadDirectory(target); input.readOnly = true; }
+
+    // 初始化事件
+    function setupEvents(){
+      $('new-conn-btn').addEventListener('click', () => openConnectModal());
+      $('cancel-connect').addEventListener('click', closeConnectModal);
+      $('connect-form').addEventListener('submit', connectViaForm);
+
+      $('upload-btn').addEventListener('click', openUploadModal);
+      $('close-upload').addEventListener('click', closeUploadModal);
+      $('upload-area').addEventListener('click', () => $('file-input').click());
+      $('file-input').addEventListener('change', (e) => uploadFiles(e.target.files));
+      ['dragover','dragleave','drop'].forEach(evt => $('upload-area').addEventListener(evt, ev => { ev.preventDefault(); if(evt==='dragover') $('upload-area').classList.add('dragover'); if(evt==='dragleave') $('upload-area').classList.remove('dragover'); if(evt==='drop'){ $('upload-area').classList.remove('dragover'); uploadFiles(ev.dataTransfer.files); } }));
+
+      $('mkdir-btn').addEventListener('click', openMkdirModal);
+      $('cancel-mkdir').addEventListener('click', closeMkdirModal);
+      $('mkdir-form').addEventListener('submit', createDirectory);
+
+      $('refresh-btn').addEventListener('click', () => currentConnectionId && loadDirectory(currentPath));
+      $('path-nav-btn').addEventListener('click', navigateToPath);
+      $('path-input').addEventListener('keydown', (e) => { if(e.key==='Enter') navigateToPath(); });
+      $('path-input').addEventListener('click', (e) => { if(currentConnectionId) e.target.readOnly = false; });
+      $('path-input').addEventListener('blur', (e) => { if(currentConnectionId) e.target.readOnly = true; });
+
+      // 关闭模态（点击遮罩）
+      document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', e => { if(e.target===m) m.classList.remove('active'); }));
+    }
+
+    // 启动
+    document.addEventListener('DOMContentLoaded', () => {
+      disableToolbar();
+      setupEvents();
+      loadActiveConnections();
+      loadLogBasedServers();
+    });
+  </script>
+</body>
+</html>

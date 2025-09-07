@@ -3,6 +3,7 @@ SFTP路由
 
 提供SFTP文件管理的API接口：
 - POST /sftp/connect - 建立SFTP连接
+- POST /sftp/connect-by-config - 通过日志配置建立SFTP连接（无需前端提供密码）
 - POST /sftp/disconnect - 断开SFTP连接
 - GET /sftp/connections - 列出所有活跃的SFTP连接
 - POST /sftp/list - 列出指定路径下的文件和目录
@@ -23,6 +24,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from flask import Blueprint, request, jsonify, send_file
 from werkzeug.utils import secure_filename
 from services.sftp_service import SFTPService
+from services import ConfigService
+from config import Config
 
 # 创建蓝图
 sftp_bp = Blueprint('sftp', __name__)
@@ -84,6 +87,98 @@ def connect_sftp():
             'error': {
                 'code': 'INTERNAL',
                 'message': f'SFTP连接失败: {str(e)}'
+            }
+        }), 500
+
+
+@sftp_bp.route('/sftp/connect-by-config', methods=['POST'])
+def connect_sftp_by_config():
+    """通过日志配置建立SFTP连接（后端读取密码）
+    请求体: { log_name: str, ssh_index: int, connection_name?: str }
+    """
+    try:
+        data = request.get_json() or {}
+        log_name = data.get('log_name')
+        ssh_index = data.get('ssh_index')
+        if log_name is None or ssh_index is None:
+            return jsonify({
+                'success': False,
+                'error': {
+                    'code': 'INVALID_REQUEST',
+                    'message': '缺少必需字段: log_name 或 ssh_index'
+                }
+            }), 400
+
+        # 读取配置，定位SSH条目
+        config_service = ConfigService(Config.CONFIG_FILE_PATH)
+        log_cfg = config_service.get_log_by_name(log_name)
+        if not log_cfg:
+            return jsonify({
+                'success': False,
+                'error': {
+                    'code': 'NOT_FOUND',
+                    'message': f'未找到日志配置: {log_name}'
+                }
+            }), 404
+
+        sshs = getattr(log_cfg, 'sshs', []) or []
+        try:
+            ssh_index = int(ssh_index)
+        except Exception:
+            return jsonify({
+                'success': False,
+                'error': {
+                    'code': 'INVALID_REQUEST',
+                    'message': 'ssh_index 必须是整数'
+                }
+            }), 400
+
+        if ssh_index < 0 or ssh_index >= len(sshs):
+            return jsonify({
+                'success': False,
+                'error': {
+                    'code': 'INVALID_ARGUMENT',
+                    'message': 'ssh_index 超出范围'
+                }
+            }), 400
+
+        ssh = sshs[ssh_index]
+        host = ssh.get('host')
+        port = ssh.get('port', 22)
+        username = ssh.get('username')
+        password = ssh.get('password')
+        if not password:
+            return jsonify({
+                'success': False,
+                'error': {
+                    'code': 'INVALID_CONFIG',
+                    'message': '该SSH配置未提供密码，无法自动连接'
+                }
+            }), 400
+
+        # 连接
+        connection_info = sftp_service.connect(
+            host=host,
+            port=port,
+            username=username,
+            password=password,
+            connection_name=data.get('connection_name') or f"{log_cfg.name} - {host}{'#'+str(ssh_index+1) if len(sshs)>1 else ''}"
+        )
+
+        response_data = {
+            'connection_id': connection_info.connection_id,
+            'message': f'成功连接到 {connection_info.host}:{connection_info.port}',
+            'connected_at': connection_info.connected_at
+        }
+
+        return jsonify({ 'success': True, 'data': response_data })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': {
+                'code': 'INTERNAL',
+                'message': f'通过配置连接失败: {str(e)}'
             }
         }), 500
 

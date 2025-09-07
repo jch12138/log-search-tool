@@ -71,6 +71,12 @@ def register_routes(app: Flask):
         """日志配置编辑页面"""
         return render_template('config.html')
     
+    # SFTP 文件管理页面
+    @app.route('/sftp')
+    def sftp_page():
+        """SFTP 文件管理页面"""
+        return render_template('sftp.html')
+    
     # 前端健康检查
     @app.route('/health')
     def frontend_health():

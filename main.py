@@ -41,25 +41,31 @@ def create_app():
     if not Config.validate():
         raise RuntimeError("配置验证失败")
     
-    # 设置日志
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
-    
-    # 配置控制台日志输出格式
-    console_handler = logging.StreamHandler()
-    console_formatter = logging.Formatter(
-        '%(asctime)s [%(levelname)s] %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
-    console_handler.setFormatter(console_formatter)
-    
-    # 获取root logger并设置格式
+    # 设置日志：控制台 + 按天滚动文件
     root_logger = logging.getLogger()
-    root_logger.handlers.clear()  # 清除默认handler
+    root_logger.setLevel(getattr(logging, Config.LOG_LEVEL, logging.INFO))
+    root_logger.handlers.clear()  # 清除默认handler，避免重复
+
+    # 控制台输出
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(getattr(logging, Config.LOG_LEVEL, logging.INFO))
+    console_formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+                                          datefmt='%Y-%m-%d %H:%M:%S')
+    console_handler.setFormatter(console_formatter)
     root_logger.addHandler(console_handler)
+
+    # 文件输出（按天轮转，保留N天）
+    try:
+        log_path = os.path.join(Config.LOG_DIR, Config.LOG_FILE_NAME)
+        file_handler = TimedRotatingFileHandler(log_path, when='midnight', backupCount=Config.LOG_BACKUP_COUNT, encoding='utf-8')
+        file_handler.setLevel(getattr(logging, Config.LOG_LEVEL, logging.INFO))
+        file_formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+                                           datefmt='%Y-%m-%d %H:%M:%S')
+        file_handler.setFormatter(file_formatter)
+        root_logger.addHandler(file_handler)
+        logging.getLogger(__name__).info(f"应用日志写入: {log_path} (保留 {Config.LOG_BACKUP_COUNT} 天)")
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"文件日志配置失败: {e}")
     
     # 注册中间件
     setup_middleware(app)
@@ -118,6 +124,8 @@ def create_app():
                 time.sleep(0.2)
 
     threading.Thread(target=push_output_loop, daemon=True).start()
+
+    logging.getLogger(__name__).info("应用初始化完成")
 
     return app
 

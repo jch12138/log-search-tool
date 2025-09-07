@@ -19,6 +19,12 @@ class Config:
     
     # 日志配置文件路径
     CONFIG_FILE_PATH = os.environ.get('CONFIG_FILE_PATH') or os.path.expanduser('~/.log_search_app/config.yaml')
+
+    # 程序运行日志（应用日志）配置
+    LOG_DIR = os.environ.get('LOG_DIR') or os.path.expanduser('~/.log_search_app/logs')
+    LOG_FILE_NAME = os.environ.get('LOG_FILE_NAME') or 'app.log'
+    LOG_BACKUP_COUNT = int(os.environ.get('LOG_BACKUP_COUNT', '14'))  # 保留14天
+    LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
     
     # SSH连接配置
     SSH_TIMEOUT = int(os.environ.get('SSH_TIMEOUT', '30'))
@@ -44,4 +50,9 @@ class Config:
                 os.makedirs(config_dir, exist_ok=True)
             except Exception:
                 return False
+        # 创建应用日志目录
+        try:
+            os.makedirs(cls.LOG_DIR, exist_ok=True)
+        except Exception:
+            return False
         return True

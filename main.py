@@ -25,7 +25,12 @@ socketio: SocketIO | None = None
 
 def create_app():
     """创建Flask应用实例"""
-    app = Flask(__name__)
+    # 兼容 PyInstaller（onefile/onedir）资源路径
+    base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    static_folder = os.path.join(base_path, 'static')
+    template_folder = os.path.join(base_path, 'templates')
+
+    app = Flask(__name__, static_folder=static_folder, template_folder=template_folder)
     
     # 加载配置
     app.config.from_object(Config)
@@ -132,4 +137,12 @@ def create_app():
 if __name__ == '__main__':
     app = create_app()
     assert socketio is not None
-    socketio.run(app, host='0.0.0.0', port=8000, debug=True, allow_unsafe_werkzeug=True)
+    is_frozen = hasattr(sys, 'frozen')
+    socketio.run(
+        app,
+        host='0.0.0.0',
+        port=8000,
+        debug=(Config.DEBUG and not is_frozen),
+        allow_unsafe_werkzeug=True,
+        use_reloader=not is_frozen,
+    )

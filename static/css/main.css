@@ -164,6 +164,10 @@ body {
     /* 降低最小高度 */
     max-height: calc(100vh - 120px);
     /* 调整最大高度，减少顶部空间 */
+    width: 100%;
+    max-width: 100%; /* 限制最大宽度以居中显示 */
+    margin-left: 0;
+    margin-right: 0;
     min-width: 0;
     /* 允许收缩 */
     overflow: hidden;

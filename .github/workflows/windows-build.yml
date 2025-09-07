@@ -1,10 +1,12 @@
 name: build-windows-exe
 
 on:
-  workflow_dispatch:
   push:
+    branches:
+      - '**'
     tags:
       - 'v*'
+  workflow_dispatch:
 
 jobs:
   build:
@@ -35,10 +37,22 @@ jobs:
           python --version
           python -c "import sys; print(sys.platform)"
 
-      - name: Build (onedir) with spec
+      - name: Build (onedir) via CLI (no spec)
         run: |
-          pyinstaller app.spec --clean --noconfirm
-        working-directory: .
+          pyinstaller \
+            --name log-search-api \
+            --onedir \
+            --noconfirm \
+            --clean \
+            --add-data "templates;templates" \
+            --add-data "static;static" \
+            --additional-hooks-dir pyinstaller-hooks \
+            --hidden-import engineio \
+            --hidden-import socketio \
+            --hidden-import engineio.async_drivers.threading \
+            --hidden-import socketio.async_drivers.threading \
+            --collect-all paramiko \
+            main.py
 
       - name: Rename onedir folder
         run: |

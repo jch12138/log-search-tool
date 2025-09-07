@@ -408,3 +408,13 @@ body {
     font-size: 0.9rem;
     color: #0369a1;
 }
+
+/* Fix: Ensure Element Plus Message pops up centered instead of left-aligned */
+.el-message {
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+}
+
+/* Optional: center the text content inside message */
+/* .el-message .el-message__content { text-align: center; } */

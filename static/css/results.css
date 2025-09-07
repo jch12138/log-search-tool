@@ -1,0 +1,159 @@
+/* 搜索结果样式 */
+
+.search-results {
+    margin-top: 20px;
+}
+
+.results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    font-size: 14px;
+    color: #606266;
+}
+
+.results-count {
+    font-weight: 500;
+}
+
+.sort-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* 日志条目 */
+.log-entry {
+    background: #f8f9fa;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    transition: all 0.3s;
+    overflow: hidden;
+}
+
+.log-entry:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    border-color: #d1d5db;
+}
+
+.log-entry-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 12px 16px;
+    font-weight: 500;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+}
+
+.log-entry-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+}
+
+.log-entry.expanded .log-entry-content {
+    max-height: 100vh;
+}
+
+.log-content {
+    padding: 16px;
+    background: white;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    line-height: 1.6;
+    font-family: 'Microsoft YaHei', 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+    border-top: 1px solid #e5e7eb;
+}
+
+/* 匹配高亮 */
+.highlight {
+    background-color: #fff3cd;
+    color: #856404;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-weight: 600;
+    border: 1px solid #ffeaa7;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* 上下文样式 */
+.context {
+    color: #6c757d;
+    background-color: #f8f9fa;
+    border-left: 3px solid #dee2e6;
+    padding-left: 12px;
+    margin: 8px 0;
+    line-height: 1.5;
+}
+
+/* 搜索结果加载状态 */
+.loading-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #6c757d;
+}
+
+.loading-spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #409eff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-right: 8px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* 空状态样式 */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #6c757d;
+}
+
+.empty-state-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.6;
+}
+
+.empty-state-text {
+    font-size: 16px;
+    margin-bottom: 8px;
+}
+
+.empty-state-subtext {
+    font-size: 14px;
+    opacity: 0.8;
+}
+
+/* 错误状态样式 */
+.error-state {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    padding: 16px;
+    color: #dc2626;
+    margin-top: 16px;
+}
+
+.error-state-title {
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.error-state-message {
+    font-size: 14px;
+}

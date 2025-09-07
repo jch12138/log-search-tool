@@ -1,0 +1,65 @@
+/* 微软雅黑字体样式 - 使用系统本地字体 */
+@font-face {
+    font-family: 'Microsoft YaHei';
+    src: local('Microsoft YaHei'),
+         local('Microsoft YaHei UI'),
+         local('微软雅黑'),
+         local('Microsoft JhengHei'),
+         local('Microsoft JhengHei UI');
+    font-weight: 300;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Microsoft YaHei';
+    src: local('Microsoft YaHei'),
+         local('Microsoft YaHei UI'),
+         local('微软雅黑'),
+         local('Microsoft JhengHei'),
+         local('Microsoft JhengHei UI');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Microsoft YaHei';
+    src: local('Microsoft YaHei Bold'),
+         local('Microsoft YaHei UI Bold'),
+         local('微软雅黑 Bold'),
+         local('Microsoft JhengHei Bold'),
+         local('Microsoft JhengHei UI Bold');
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Microsoft YaHei';
+    src: local('Microsoft YaHei Bold'),
+         local('Microsoft YaHei UI Bold'),
+         local('微软雅黑 Bold'),
+         local('Microsoft JhengHei Bold'),
+         local('Microsoft JhengHei UI Bold');
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Microsoft YaHei';
+    src: local('Microsoft YaHei Bold'),
+         local('Microsoft YaHei UI Bold'),
+         local('微软雅黑 Bold'),
+         local('Microsoft JhengHei Bold'),
+         local('Microsoft JhengHei UI Bold');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* 字体回退定义 */
+.microsoft-yahei {
+    font-family: 'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft JhengHei', '微软雅黑', 'Helvetica Neue', Arial, sans-serif;
+}

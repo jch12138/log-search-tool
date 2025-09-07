@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>日志搜索系统</title>
+
+    <!-- 本地资源 -->
+    <!-- Element Plus CSS -->
+    <link rel="stylesheet" href="/static/css/element-plus.css" />
+    <!-- Prism.js CSS主题 -->
+    <link rel="stylesheet" href="/static/css/prism-okaidia.min.css" />
+    <!-- 自定义CSS -->
+    <link rel="stylesheet" href="/static/fonts/microsoft-yahei.css" />
+    <link rel="stylesheet" href="/static/css/main.css" />
+    <link rel="stylesheet" href="/static/css/groups.css" />
+    <link rel="stylesheet" href="/static/css/search.css" />
+    <link rel="stylesheet" href="/static/css/results.css" />
+    
+    <!-- 本地JavaScript库 -->
+    <script src="/static/js/vendor/vue.global.js"></script>
+    <script src="/static/js/vendor/element-plus.js"></script>
+    <script src="/static/js/vendor/axios.min.js"></script>
+    <!-- Prism.js库 -->
+    <script src="/static/js/vendor/prism-core.min.js"></script>
+    <script src="/static/js/vendor/prism-markup.min.js"></script>
+    <script src="/static/js/vendor/prism-clike.min.js"></script>
+    <script src="/static/js/vendor/prism-javascript.min.js"></script>
+    <script src="/static/js/vendor/prism-json.min.js"></script>
+    <script src="/static/js/vendor/prism-sql.min.js"></script>
+    <script src="/static/js/vendor/prism-xml-doc.min.js"></script>
+    <!-- LogSearchResults 组件 -->
+    <script src="/static/js/LogSearchResults.js"></script>
+
+</head>
+
+<body>
+    <div id="app">
+        <div class="app-container">
+
+
+            <!-- 主内容区域 -->
+            <div class="main-content">
+                <!-- 左侧日志列表 -->
+                <div class="left-panel">
+                    <div class="panel-header">
+                        <h3>🔍 日志聚合搜索</h3>
+                    </div>
+                    <div class="log-list" v-loading="logsLoading">
+                        <div v-if="logs.length === 0 && !logsLoading" class="empty-state">
+                            <div>暂无日志配置</div>
+                        </div>
+                        
+                        <!-- 分组显示 -->
+                        <div v-for="group in groupedLogs" :key="group.name" class="log-group">
+                            <!-- 分组标题 -->
+                            <div class="group-header" @click="toggleGroup(group.name)">
+                                <span class="group-name">[[ group.name ]]</span>
+                                <span class="group-count">([[ group.logs.length ]])</span>
+                                <span class="toggle-icon" :class="{ collapsed: group.isCollapsed }">▼</span>
+                            </div>
+                            
+                            <!-- 分组内的日志列表 -->
+                            <div v-show="!group.isCollapsed" class="group-content">
+                                <div v-for="log in group.logs" :key="log.name" class="log-item"
+                                    :class="{ active: selectedLog?.name === log.name }" @click="selectLog(log)">
+                                    <h4>[[ log.name ]]</h4>
+                                    <p>[[ log.description || '暂无描述' ]]</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右侧搜索和结果区域 -->
+                <div class="right-panel">
+                    <!-- 搜索区域 -->
+                    <div class="search-section">
+
+
+                        <el-form :model="searchForm" class="search-form" :disabled="!selectedLog" @submit.prevent="executeSearch">
+                            <!-- 主搜索框容器 -->
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <div class="search-input-container" :class="{ focused: searchInputFocused }" style="flex: 1;">
+                                    <input type="text" v-model="searchForm.keyword" placeholder="输入搜索关键词，留空则显示最新日志"
+                                        class="search-input" @focus="searchInputFocused = true"
+                                        @blur="searchInputFocused = false" @keyup.enter="executeSearch"
+                                        :disabled="!selectedLog" />
+
+                                    <!-- 搜索设置按钮组 -->
+                                    <div class="search-buttons">
+                                        <!-- 搜索模式切换 -->
+                                        <button type="button" class="search-button"
+                                            :class="{ active: searchForm.search_mode === 'context' }"
+                                            @click="toggleSearchMode" :disabled="!selectedLog" title="搜索模式">
+                                            <span v-if="searchForm.search_mode === 'keyword'">⚡</span>
+                                            <span v-else>📄</span>
+                                        </button>
+
+                                        <!-- 正则表达式 -->
+                                        <button type="button" class="search-button"
+                                            :class="{ active: searchForm.use_regex }"
+                                            @click="searchForm.use_regex = !searchForm.use_regex" :disabled="!selectedLog"
+                                            title="正则表达式">
+                                            .*
+                                        </button>
+
+                                        <!-- 逆序搜索 -->
+                                        <button type="button" class="search-button"
+                                            :class="{ active: searchForm.reverse_order }"
+                                            @click="searchForm.reverse_order = !searchForm.reverse_order"
+                                            :disabled="!selectedLog" title="逆序搜索">
+                                            <span v-if="searchForm.reverse_order">⬆️</span>
+                                            <span v-else>⬇️</span>
+                                        </button>
+
+                                        <!-- 指定文件搜索 -->
+                                        <button type="button" class="search-button"
+                                            :class="{ active: searchForm.use_file_filter }" @click="toggleFileFilter"
+                                            :disabled="!selectedLog" title="指定文件搜索">
+                                            📁
+                                        </button>
+
+                                        <!-- 上下文行数 - 只在上下文模式时显示 -->
+                                        <template v-if="searchForm.search_mode === 'context'">
+                                            <span style="font-size: 12px; color: #909399; margin-left: 8px;">行数:</span>
+                                            <input type="number" v-model.number="searchForm.context_span"
+                                                class="context-span-input" min="0" max="20" :disabled="!selectedLog"
+                                                title="上下文行数" />
+                                        </template>
+                                    </div>
+                                </div>
+                                
+                                <!-- 搜索按钮 - 移到外面 -->
+                                <button type="button" class="execute-search-btn" @click="executeSearch">
+                                    搜索
+                                </button>
+                            </div>
+
+                            <!-- 文件过滤器 (当启用指定文件搜索时显示) -->
+                            <div v-if="searchForm.use_file_filter" style="margin-top: 12px;">
+                                <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+                                    <div v-for="group in groupedFiles" :key="group.host"
+                                        style="flex: 1; min-width: 300px;">
+                                        <div
+                                            style="font-size: 14px; font-weight: bold; color: #409eff; margin-bottom: 8px; display: flex; align-items: center;">
+                                            [[ group.host ]] ([[ group.files.length ]] 个文件)
+                                        </div>
+                                        <el-select v-model="searchForm.selected_files[group.host]"
+                                            :placeholder="`选择 ${group.host} 上的文件`" size="default" filterable clearable
+                                            :loading="filesLoading" style="width: 100%;" :disabled="!selectedLog">
+                                            <el-option v-for="fileItem in group.files" :key="fileItem.full_path"
+                                                :label="fileItem.filename" :value="fileItem.full_path">
+                                                [[ fileItem.filename ]]
+                                            </el-option>
+                                        </el-select>
+                                    </div>
+                                </div>
+                            </div>
+                        </el-form>
+                    </div>
+
+                    <!-- 搜索结果区域 -->
+                    <div class="results-section">
+                        <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                            <h3 style="margin: 0; color: #303133;">搜索结果</h3>
+                            <div v-if="searchResults && searchResults.total_matches > 0"
+                                style="margin-left: 16px; display: flex; align-items: center; gap: 8px;">
+                                <span class="el-tag el-tag--info el-tag--small">
+                                    共找到 [[ searchResults.total_matches ]] 个匹配项
+                                </span>
+                                <span class="el-tag el-tag--success el-tag--small">
+                                    搜索耗时: [[ Number(searchResults.search_time).toFixed(3) ]]s
+                                </span>
+                                <span class="el-tag el-tag--warning el-tag--small">
+                                    主机数: [[ searchResults.hosts_searched ]]
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- 使用日志搜索结果组件 -->
+                        <log-search-results :search-results="searchResults" :search-keyword="searchForm.keyword"
+                            :use-regex="searchForm.use_regex" :height="searchResultsHeight" :max-results="5000"
+                            :show-search-stats="false" :show-host-grouping="true" :enabled-highlighters="{
+                                logLevels: true,
+                                timestamps: true,
+                                network: true,
+                                xml: true,
+                                sql: true,
+                                json: true,
+                                filePaths: true,
+                                urls: true,
+                                emails: true,
+                                uuids: true
+                            }" empty-message="未找到匹配的日志记录" />
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+        const { ElMessage, ElMessageBox, ElLoading } = ElementPlus;
+
+        const app = createApp({
+            delimiters: ['[[', ']]'],
+            components: {
+                LogSearchResults
+            },
+            data() {
+                return {
+                    logs: [],
+                    selectedLog: null,
+                    logsLoading: false,
+                    searching: false,
+                    hasSearched: false,
+                    searchInputFocused: false,
+                    availableFiles: [], // 可用文件列表
+                    filesLoading: false, // 文件列表加载状态
+                    collapsedGroups: new Set(), // 折叠的分组
+                    searchForm: {
+                        keyword: '',
+                        search_mode: 'keyword', // keyword 或 context
+                        context_span: 5,
+                        use_regex: false,
+                        reverse_order: false,
+                        use_file_filter: false,
+                        selected_file: '',  // 保持向后兼容
+                        selected_files: {}  // 新增：主机到文件的映射
+                    },
+                    searchResults: null
+                };
+            },
+
+            computed: {
+                // 按分组组织的日志列表
+                groupedLogs() {
+                    const groups = {};
+                    this.logs.forEach(log => {
+                        const groupName = log.group || '默认分组';
+                        if (!groups[groupName]) {
+                            groups[groupName] = [];
+                        }
+                        groups[groupName].push(log);
+                    });
+
+                    return Object.keys(groups).map(groupName => ({
+                        name: groupName,
+                        logs: groups[groupName].sort((a, b) => a.name.localeCompare(b.name)),
+                        isCollapsed: this.collapsedGroups.has(groupName)
+                    })).sort((a, b) => {
+                        // 默认分组排在最后
+                        if (a.name === '默认分组' && b.name !== '默认分组') return 1;
+                        if (b.name === '默认分组' && a.name !== '默认分组') return -1;
+                        return a.name.localeCompare(b.name);
+                    });
+                },
+                
+                // 按主机分组的文件列表
+                groupedFiles() {
+                    const groups = {};
+                    this.availableFiles.forEach(file => {
+                        const host = file.host || 'unknown';
+                        if (!groups[host]) {
+                            groups[host] = [];
+                        }
+                        groups[host].push(file);
+                    });
+
+                    return Object.keys(groups).map(host => ({
+                        host: host,
+                        files: groups[host].sort((a, b) => a.filename.localeCompare(b.filename))
+                    }));
+                },
+
+                // 动态计算搜索结果框高度
+                searchResultsHeight() {
+                    // 基础高度：100vh - 顶部固定区域高度
+                    let baseOffset = 220;
+
+                    // 如果启用了文件过滤，需要额外减去文件过滤器的高度
+                    if (this.searchForm.use_file_filter && this.groupedFiles.length > 0) {
+                        // 每个主机行大约80px（标题+下拉框+间距）
+                        const filterHeight = this.groupedFiles.length * 40 + 20; // 20px额外间距
+                        baseOffset += filterHeight;
+                    }
+
+                    return `calc(100vh - ${baseOffset}px)`;
+                },
+
+                // 检查是否所有必需的文件都已选择
+                isFileFilterValid() {
+                    if (!this.searchForm.use_file_filter) {
+                        return true; // 如果没有启用文件过滤，总是有效
+                    }
+
+                    // 检查每个主机是否都选择了文件
+                    return this.groupedFiles.every(group =>
+                        this.searchForm.selected_files[group.host]
+                    );
+                }
+            },
+
+            mounted() {
+                this.loadLogs();
+
+                // 添加全局回车键监听
+                document.addEventListener('keydown', this.handleGlobalKeydown);
+            },
+
+            beforeUnmount() {
+                // 清理事件监听器
+                document.removeEventListener('keydown', this.handleGlobalKeydown);
+            },
+
+            methods: {
+                // 全局键盘事件处理
+                handleGlobalKeydown(event) {
+                    // 按下回车键且不在输入框、文本域或其他可编辑元素中
+                    if (event.key === 'Enter' &&
+                        !['INPUT', 'TEXTAREA'].includes(event.target.tagName) &&
+                        !event.target.isContentEditable) {
+
+                        // 防止默认行为和事件冒泡
+                        event.preventDefault();
+                        event.stopPropagation();
+
+                        // 执行搜索
+                        this.executeSearch();
+                    }
+                },
+
+                // 分组折叠/展开控制
+                toggleGroup(groupName) {
+                    if (this.collapsedGroups.has(groupName)) {
+                        this.collapsedGroups.delete(groupName);
+                    } else {
+                        this.collapsedGroups.add(groupName);
+                    }
+                },
+
+                async loadLogs() {
+                    this.logsLoading = true;
+                    try {
+                        const response = await axios.get('/api/v1/logs');
+                        if (response.data.success) {
+                            this.logs = response.data.data.logs || [];
+                        } else {
+                            ElMessage.error('加载日志列表失败: ' + (response.data.error?.message || '未知错误'));
+                        }
+                    } catch (error) {
+                        ElMessage.error('连接服务器失败: ' + error.message);
+                        console.error('加载日志失败:', error);
+                    } finally {
+                        this.logsLoading = false;
+                    }
+                },
+
+                selectLog(log) {
+                    this.selectedLog = log;
+                    this.searchResults = null;
+                    this.hasSearched = false;
+
+                    // 只清理文件选择，保持搜索关键词和搜索设置
+                    this.searchForm.selected_file = '';
+                    this.searchForm.selected_files = {};
+
+                    // 如果文件过滤已启用，自动加载文件列表
+                    if (this.searchForm.use_file_filter) {
+                        this.loadAvailableFiles();
+                    }
+                },
+
+                // 切换搜索模式
+                toggleSearchMode() {
+                    this.searchForm.search_mode = this.searchForm.search_mode === 'keyword' ? 'context' : 'keyword';
+                    const mode = this.searchForm.search_mode === 'keyword' ? '关键词搜索' : '上下文搜索';
+                    ElMessage.info(`已切换到${mode}模式`);
+                },
+
+                // 切换文件过滤
+                toggleFileFilter() {
+                    this.searchForm.use_file_filter = !this.searchForm.use_file_filter;
+                    if (this.searchForm.use_file_filter) {
+                        ElMessage.info('已启用文件过滤，正在加载文件列表...');
+                        this.loadAvailableFiles();
+                    } else {
+                        this.searchForm.selected_file = '';
+                        this.searchForm.selected_files = {};
+                        this.availableFiles = [];
+                        ElMessage.info('已关闭文件过滤');
+                    }
+                },
+
+                // 加载可用文件列表
+                async loadAvailableFiles() {
+                    if (!this.selectedLog) {
+                        ElMessage.warning('请先选择一个日志配置');
+                        return;
+                    }
+
+                    this.filesLoading = true;
+                    try {
+                        const response = await axios.get(`/api/v1/logs/${this.selectedLog.name}/files`);
+                        if (response.data.success) {
+                            this.availableFiles = response.data.data.files || [];
+                            ElMessage.success(`加载了 ${this.availableFiles.length} 个文件`);
+                        } else {
+                            ElMessage.error('加载文件列表失败: ' + (response.data.error?.message || '未知错误'));
+                            this.availableFiles = [];
+                        }
+                    } catch (error) {
+                        ElMessage.error('加载文件列表请求失败: ' + error.message);
+                        console.error('加载文件列表失败:', error);
+                        this.availableFiles = [];
+                    } finally {
+                        this.filesLoading = false;
+                    }
+                },
+
+                // 格式化文件大小显示
+                formatFileSize(bytes) {
+                    if (!bytes || bytes === 0) return '0 B';
+                    const k = 1024;
+                    const sizes = ['B', 'KB', 'MB', 'GB'];
+                    const i = Math.floor(Math.log(bytes) / Math.log(k));
+                    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+                },
+
+                // 格式化文件时间显示
+                formatFileTime(timeStr) {
+                    if (!timeStr) return '未知';
+                    try {
+                        const date = new Date(timeStr);
+                        // 返回标准格式：YYYY-MM-DD HH:mm:ss
+                        return date.toLocaleString('zh-CN', {
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                            hour12: false
+                        });
+                    } catch (e) {
+                        return timeStr;
+                    }
+                },
+
+                async executeSearch() {
+                    if (!this.selectedLog) {
+                        ElMessage.warning('请先选择一个日志配置');
+                        return;
+                    }
+
+                    // 验证文件过滤设置
+                    if (this.searchForm.use_file_filter) {
+                        const missingHosts = [];
+                        this.groupedFiles.forEach(group => {
+                            if (!this.searchForm.selected_files[group.host]) {
+                                missingHosts.push(group.host);
+                            }
+                        });
+
+                        if (missingHosts.length > 0) {
+                            ElMessage.error(`请为以下主机选择文件: ${missingHosts.join(', ')}`);
+                            return;
+                        }
+                    }
+
+                    this.searching = true;
+                    this.hasSearched = true;
+
+                    try {
+                        const response = await axios.post(
+                            `/api/v1/logs/${this.selectedLog.name}/search`,
+                            this.searchForm
+                        );
+
+                        if (response.data.success) {
+                            this.searchResults = response.data.data;
+                            if (this.searchResults.total_matches === 0) {
+                                ElMessage.info('未找到匹配的日志记录');
+                            } else {
+                                ElMessage.success(`找到 ${this.searchResults.total_matches} 个匹配项`);
+                            }
+                        } else {
+                            ElMessage.error('搜索失败: ' + (response.data.error?.message || '未知错误'));
+                            this.searchResults = null;
+                        }
+                    } catch (error) {
+                        ElMessage.error('搜索请求失败: ' + error.message);
+                        console.error('搜索失败:', error);
+                        this.searchResults = null;
+                    } finally {
+                        this.searching = false;
+                    }
+                }
+            }
+        });
+
+        // 使用 Element Plus 和其指令
+        app.use(ElementPlus);
+
+        // 挂载应用
+        app.mount('#app');
+    </script>
+</body>
+
+</html>

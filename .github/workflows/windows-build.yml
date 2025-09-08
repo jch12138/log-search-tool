@@ -60,7 +60,6 @@ jobs:
           mv dist/log-search-api artifacts/log-search-api-onedir
           # 复制启动和停止脚本到onedir版本
           cp start.bat artifacts/log-search-api-onedir/
-          cp stop.bat artifacts/log-search-api-onedir/
 
       - name: Build (onefile) without spec
         run: |
@@ -84,7 +83,6 @@ jobs:
           mv dist/log-search-api.exe artifacts/log-search-api-onefile.exe
           # 复制启动和停止脚本到onefile版本同目录
           cp start.bat artifacts/
-          cp stop.bat artifacts/
 
       - name: Archive onedir
         shell: pwsh
@@ -103,7 +101,6 @@ jobs:
           # 复制onefile版本和脚本
           Copy-Item "log-search-api-onefile.exe" "deployment/log-search-api.exe"
           Copy-Item "start.bat" "deployment/"
-          Copy-Item "stop.bat" "deployment/"
           Copy-Item "../README-DEPLOY.md" "deployment/README.md"
           
           # 创建部署包zip
@@ -117,6 +114,5 @@ jobs:
           path: |
             artifacts/log-search-api-onefile.exe
             artifacts/start.bat
-            artifacts/stop.bat
             artifacts/log-search-api-onedir.zip
             artifacts/deployment.zip

@@ -58,8 +58,6 @@ jobs:
         run: |
           mkdir -p artifacts
           mv dist/log-search-api artifacts/log-search-api-onedir
-          # 复制启动和停止脚本到onedir版本
-          cp start.bat artifacts/log-search-api-onedir/
 
       - name: Build (onefile) without spec
         run: |
@@ -81,8 +79,6 @@ jobs:
       - name: Move onefile exe
         run: |
           mv dist/log-search-api.exe artifacts/log-search-api-onefile.exe
-          # 复制启动和停止脚本到onefile版本同目录
-          cp start.bat artifacts/
 
       - name: Archive onedir
         shell: pwsh
@@ -91,27 +87,10 @@ jobs:
           if (Test-Path log-search-api-onedir.zip) { Remove-Item log-search-api-onedir.zip }
           Compress-Archive -Path 'log-search-api-onedir/*' -DestinationPath 'log-search-api-onedir.zip'
 
-      - name: Create deployment package
-        shell: pwsh
-        run: |
-          Set-Location artifacts
-          # 创建部署包目录
-          New-Item -ItemType Directory -Name "deployment" -Force
-          
-          # 复制onefile版本和脚本
-          Copy-Item "log-search-api-onefile.exe" "deployment/log-search-api.exe"
-          Copy-Item "start.bat" "deployment/"
-          
-          # 创建部署包zip
-          if (Test-Path deployment.zip) { Remove-Item deployment.zip }
-          Compress-Archive -Path 'deployment/*' -DestinationPath 'deployment.zip'
-
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-executables
           path: |
             artifacts/log-search-api-onefile.exe
-            artifacts/start.bat
             artifacts/log-search-api-onedir.zip
-            artifacts/deployment.zip

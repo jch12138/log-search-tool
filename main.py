@@ -48,12 +48,12 @@ def create_app():
     
     # 设置日志：控制台 + 按天滚动文件
     root_logger = logging.getLogger()
-    root_logger.setLevel(getattr(logging, Config.LOG_LEVEL, logging.INFO))
+    root_logger.setLevel(getattr(logging, Config.LOG_LEVEL, logging.DEBUG))
     root_logger.handlers.clear()  # 清除默认handler，避免重复
 
     # 控制台输出
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(getattr(logging, Config.LOG_LEVEL, logging.INFO))
+    console_handler.setLevel(getattr(logging, Config.LOG_LEVEL, logging.DEBUG))
     console_formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s',
                                           datefmt='%Y-%m-%d %H:%M:%S')
     console_handler.setFormatter(console_formatter)
@@ -63,7 +63,7 @@ def create_app():
     try:
         log_path = os.path.join(Config.LOG_DIR, Config.LOG_FILE_NAME)
         file_handler = TimedRotatingFileHandler(log_path, when='midnight', backupCount=Config.LOG_BACKUP_COUNT, encoding='utf-8')
-        file_handler.setLevel(getattr(logging, Config.LOG_LEVEL, logging.INFO))
+        file_handler.setLevel(getattr(logging, Config.LOG_LEVEL, logging.DEBUG))
         file_formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s',
                                            datefmt='%Y-%m-%d %H:%M:%S')
         file_handler.setFormatter(file_formatter)

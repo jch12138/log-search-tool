@@ -24,7 +24,7 @@ class Config:
     LOG_DIR = os.environ.get('LOG_DIR') or os.path.expanduser('~/.log_search_app/logs')
     LOG_FILE_NAME = os.environ.get('LOG_FILE_NAME') or 'app.log'
     LOG_BACKUP_COUNT = int(os.environ.get('LOG_BACKUP_COUNT', '14'))  # 保留14天
-    LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
+    LOG_LEVEL = os.environ.get('LOG_LEVEL', 'DEBUG').upper()
     
     # SSH连接配置
     SSH_TIMEOUT = int(os.environ.get('SSH_TIMEOUT', '30'))

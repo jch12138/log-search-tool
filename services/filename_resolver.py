@@ -43,6 +43,8 @@ class FilenameResolver:
         
         # 第二步：处理切片通配符 {N}
         if '{N}' in resolved_pattern:
+            if ssh_conn is None:
+                raise ValueError("处理切片通配符 {N} 需要提供 SSH 连接对象")
             resolved_filename = self._resolve_slice_placeholder(resolved_pattern, ssh_conn)
         else:
             resolved_filename = resolved_pattern
@@ -60,13 +62,13 @@ class FilenameResolver:
                 logger.debug(f"替换 {placeholder} -> {date_value}")
         return result
     
-    def _resolve_slice_placeholder(self, pattern: str, ssh_conn=None) -> str:
+    def _resolve_slice_placeholder(self, pattern: str, ssh_conn) -> str:
         """
         解析切片通配符 {N}，找到N值最大的文件
         
         Args:
             pattern: 包含{N}的文件名模式
-            ssh_conn: SSH连接对象，用于远程文件系统操作
+            ssh_conn: SSH连接对象，用于远程文件系统操作（必需）
             
         Returns:
             实际存在的文件名（N值最大的）
@@ -79,17 +81,19 @@ class FilenameResolver:
         
         # 将{N}替换为通配符*来搜索文件
         glob_pattern = filename_pattern.replace('{N}', '*')
-        full_glob_pattern = os.path.join(directory, glob_pattern)
+        
+        # 统一使用Unix风格的路径分隔符（用于远程Linux服务器）
+        if directory == '.':
+            full_glob_pattern = glob_pattern
+        else:
+            # 确保使用Unix风格的路径分隔符
+            directory_unix = directory.replace('\\', '/')
+            full_glob_pattern = f"{directory_unix}/{glob_pattern}"
         
         logger.debug(f"搜索模式: {full_glob_pattern}")
         
-        # 查找匹配的文件
-        if ssh_conn:
-            # 远程文件系统操作
-            matching_files = self._find_remote_files(full_glob_pattern, ssh_conn)
-        else:
-            # 本地文件系统操作
-            matching_files = glob.glob(full_glob_pattern)
+        # 在远程服务器上查找匹配的文件
+        matching_files = self._find_remote_files(full_glob_pattern, ssh_conn)
         
         if not matching_files:
             # 如果没有找到匹配的文件，返回N=0的默认文件名
@@ -162,13 +166,12 @@ class FilenameResolver:
         """
         try:
             # 构建ls命令来查找匹配的文件
-            # 使用bash的文件扩展功能
-            directory = os.path.dirname(glob_pattern) or '.'
-            filename_pattern = os.path.basename(glob_pattern)
+            # 确保glob_pattern使用Unix风格的路径分隔符
+            unix_glob_pattern = glob_pattern.replace('\\', '/')
             
             # 创建远程命令来查找文件
             # 使用ls命令配合通配符
-            command = f"ls {glob_pattern} 2>/dev/null || true"
+            command = f"ls {unix_glob_pattern} 2>/dev/null || true"
             
             logger.debug(f"远程搜索命令: {command}")
             
@@ -230,10 +233,13 @@ def resolve_log_filename(filename_pattern: str, target_date: Optional[datetime] 
     Args:
         filename_pattern: 文件名模式
         target_date: 目标日期，默认为当前日期
-        ssh_conn: SSH连接对象，用于远程文件系统操作
+        ssh_conn: SSH连接对象，处理切片通配符{N}时必需
         
     Returns:
         解析后的文件名
+        
+    Raises:
+        ValueError: 当文件名模式包含{N}但未提供ssh_conn时
     """
     return filename_resolver.resolve_filename(filename_pattern, target_date, ssh_conn)
 

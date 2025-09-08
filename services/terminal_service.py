@@ -214,6 +214,26 @@ class TerminalService:
             except Exception as e:
                 session_info.status = "error"
                 raise Exception(f"发送命令失败: {str(e)}")
+
+    def resize_terminal(self, terminal_id: str, cols: int, rows: int):
+        """调整终端尺寸"""
+        with self._lock:
+            session_data = self.sessions.get(terminal_id)
+            session_info = self.session_info.get(terminal_id)
+            
+            if not session_data or not session_info:
+                raise ValueError("终端会话不存在")
+            
+            try:
+                channel = session_data['channel']
+                # 调整SSH通道的伪终端尺寸
+                channel.resize_pty(width=cols, height=rows)
+                
+                # 更新会话信息
+                session_info.last_activity = datetime.now().isoformat() + "Z"
+                
+            except Exception as e:
+                raise Exception(f"调整终端尺寸失败: {str(e)}")
     
     def get_output(self, terminal_id: str) -> str:
         """获取终端输出"""

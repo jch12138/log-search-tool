@@ -53,10 +53,26 @@
     .main { flex:1; display:flex; flex-direction:column; min-width:0; background:#0a0e1a; }
     .topbar { background:#fff; border-bottom:1px solid #e5e7eb; padding:10px 16px; display:flex; align-items:center; gap:8px; }
   .current { flex:1; font-size:14px; }
-    .viewport { flex:1; padding:12px; overflow:hidden; display:flex; }
-    .panel { flex:1; border:1px solid #1e293b; background:#0f172a; border-radius:10px; overflow:hidden; display:flex; }
-    .term { flex:1; display:none; }
-    .term.active { display:block; }
+    .viewport { flex:1; padding:12px; overflow:hidden; display:flex; min-height:0; }
+    .panel { flex:1; border:1px solid #1e293b; background:#0f172a; border-radius:10px; overflow:hidden; display:flex; position:relative; }
+    .term { 
+      flex:1; 
+      display:none; 
+      width:100%; 
+      height:100%; 
+      position:absolute;
+      top:0;
+      left:0;
+      right:0;
+      bottom:0;
+    }
+    .term.active { display:flex; }
+
+    /* 确保 xterm 容器正确填充父容器 */
+    .term .xterm {
+      width: 100% !important;
+      height: 100% !important;
+    }
 
     /* Xterm viewport scrollbar: semi-transparent black */
     .xterm .xterm-viewport {
@@ -139,8 +155,32 @@
       state.socket.on('error', (msg)=>{ /* optionally show */ });
       loadServers();
       refreshActive();
-  // Resize fit
-  window.addEventListener('resize', ()=>{ if(state.current){ const s=state.sessions[state.current]; if(s && s.fitAddon){ s.fitAddon.fit(); } }});
+  // Resize fit - 改进窗口大小变化处理
+  let resizeTimeout;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+      if (state.current && state.sessions[state.current]) {
+        const session = state.sessions[state.current];
+        if (session.fitAddon) {
+          try {
+            session.fitAddon.fit();
+            // 通知服务器终端尺寸变化
+            if (state.socket) {
+              const { cols, rows } = session.term;
+              state.socket.emit('resize', { 
+                terminal_id: state.current, 
+                cols: cols, 
+                rows: rows 
+              });
+            }
+          } catch (e) {
+            console.warn('窗口大小调整失败:', e);
+          }
+        }
+      }
+    }, 250); // 防抖延迟
+  });
     });
 
     async function loadServers(){
@@ -207,14 +247,35 @@
           rendererType:'canvas',
           allowProposedApi:true,
           convertEol:true,
-          fontFamily: "'Source Code Pro','SimHei','Heiti SC','PingFang SC','Microsoft YaHei','Noto Sans CJK SC','WenQuanYi Micro Hei',monospace",
-          fontSize:15,
+          fontFamily: "'Source Code Pro','Consolas','Monaco','Menlo','Ubuntu Mono','SimHei','Heiti SC','PingFang SC','Microsoft YaHei','Noto Sans CJK SC','WenQuanYi Micro Hei',monospace",
+          fontSize:14,
+          lineHeight:1.2,
+          letterSpacing:0,
           theme:{ background:'#0f172a', foreground:'#e2e8f0' },
-          scrollback:10000
+          scrollback:10000,
+          cols: 80,  // 默认列数
+          rows: 24   // 默认行数
         });
-        const fitAddon = new window.FitAddon.FitAddon(); term.loadAddon(fitAddon);
-        const termEl = document.createElement('div'); termEl.className='term'; termEl.id = `term-${sid}`; $('panel').appendChild(termEl);
-        term.open(termEl); setTimeout(()=>fitAddon.fit(), 50);
+        const fitAddon = new window.FitAddon.FitAddon(); 
+        term.loadAddon(fitAddon);
+        
+        const termEl = document.createElement('div'); 
+        termEl.className='term'; 
+        termEl.id = `term-${sid}`; 
+        $('panel').appendChild(termEl);
+        
+        term.open(termEl); 
+        
+        // 确保容器有正确的尺寸后再调整
+        setTimeout(() => {
+          try {
+            fitAddon.fit();
+            // 强制刷新终端尺寸
+            term.refresh(0, term.rows - 1);
+          } catch (e) {
+            console.warn('终端尺寸调整失败:', e);
+          }
+        }, 100);
   // 初始提示
   if (d.initial_prompt) {
           term.write(d.initial_prompt.replace(/\n/g, '\r\n'));
@@ -234,10 +295,33 @@
 
     function switchTo(sid){
       Object.keys(state.sessions).forEach(id=>{ state.sessions[id].el.classList.remove('active'); });
-  state.sessions[sid].el.classList.add('active');
-      state.current = sid; updateToolbar();
+      state.sessions[sid].el.classList.add('active');
+      state.current = sid; 
+      updateToolbar();
       $('current-label').textContent = `${state.sessions[sid].server.log_name} (${sid.slice(-6)})`;
-  setTimeout(()=>{ state.sessions[sid].fitAddon.fit(); state.sessions[sid].term.focus(); }, 60);
+      
+      // 延迟调整尺寸，确保 DOM 更新完成
+      setTimeout(() => {
+        const session = state.sessions[sid];
+        if (session && session.fitAddon) {
+          try {
+            session.fitAddon.fit();
+            session.term.focus();
+            // 通知服务器终端尺寸
+            if (state.socket) {
+              const { cols, rows } = session.term;
+              state.socket.emit('resize', { 
+                terminal_id: sid, 
+                cols: cols, 
+                rows: rows 
+              });
+            }
+          } catch (e) {
+            console.warn('切换终端时尺寸调整失败:', e);
+          }
+        }
+      }, 100);
+      
       renderActive();
     }
 

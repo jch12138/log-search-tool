@@ -109,6 +109,27 @@ def create_app():
         except Exception as e:
             emit('error', { 'terminal_id': tid, 'message': str(e) })
 
+    # Socket 事件：调整终端尺寸
+    @socketio.on('resize')
+    def on_resize(data):
+        tid = data.get('terminal_id')
+        cols = data.get('cols')
+        rows = data.get('rows')
+        if not tid or not cols or not rows:
+            return
+        try:
+            terminal_service.resize_terminal(tid, cols, rows)
+        except Exception as e:
+            emit('error', { 'terminal_id': tid, 'message': str(e) })
+
+    # Socket 事件：客户端离开终端房间
+    @socketio.on('leave')
+    def on_leave(data):
+        tid = data.get('terminal_id')
+        if not tid:
+            return
+        leave_room(tid)
+
     # 后台线程：将输出推送给订阅房间
     import threading, time
     def push_output_loop():

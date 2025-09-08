@@ -17,6 +17,10 @@ class Config:
     # API配置
     API_PREFIX = '/api/v1'
     
+    # 服务器配置
+    HOST = os.environ.get('FLASK_HOST', '0.0.0.0')
+    PORT = int(os.environ.get('FLASK_PORT', '8000'))
+    
     # 日志配置文件路径
     CONFIG_FILE_PATH = os.environ.get('CONFIG_FILE_PATH') or os.path.expanduser('~/.log_search_app/config.yaml')
 

@@ -159,10 +159,18 @@ if __name__ == '__main__':
     app = create_app()
     assert socketio is not None
     is_frozen = hasattr(sys, 'frozen')
+    
+    # Windows后台运行提示信息
+    print("=" * 50)
+    print("Log Search Tool 启动中...")
+    print(f"服务地址: http://127.0.0.1:{Config.PORT}")
+    print(f"服务地址: http://{Config.HOST}:{Config.PORT}")
+    print("=" * 50)
+    
     socketio.run(
         app,
-        host='0.0.0.0',
-        port=8000,
+        host=Config.HOST,
+        port=Config.PORT,
         debug=(Config.DEBUG and not is_frozen),
         allow_unsafe_werkzeug=True,
         use_reloader=not is_frozen,

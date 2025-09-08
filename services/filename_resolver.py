@@ -165,13 +165,31 @@ class FilenameResolver:
             匹配的文件路径列表
         """
         try:
-            # 构建ls命令来查找匹配的文件
             # 确保glob_pattern使用Unix风格的路径分隔符
             unix_glob_pattern = glob_pattern.replace('\\', '/')
             
-            # 创建远程命令来查找文件
-            # 使用ls命令配合通配符
-            command = f"ls {unix_glob_pattern} 2>/dev/null || true"
+            # 提取目录和文件名模式
+            directory = unix_glob_pattern.rsplit('/', 1)[0] if '/' in unix_glob_pattern else '.'
+            filename_pattern = unix_glob_pattern.rsplit('/', 1)[-1]
+            
+            # 首先检查目录是否存在
+            dir_check_command = f"test -d '{directory}' && echo 'dir_exists' || echo 'dir_not_exists'"
+            dir_stdout, _, _ = ssh_conn.execute_command(dir_check_command, timeout=5)
+            
+            if 'dir_not_exists' in dir_stdout:
+                logger.warning(f"目录不存在: {directory}")
+                return []
+            
+            # 使用更安全的文件查找方法
+            # 使用 find 命令代替 ls 来避免通配符展开问题
+            if '*' in filename_pattern or '?' in filename_pattern:
+                # 包含通配符，使用 find 命令
+                escaped_pattern = filename_pattern.replace("'", "'\"'\"'")  # 转义单引号
+                command = f"find '{directory}' -maxdepth 1 -name '{escaped_pattern}' -type f 2>/dev/null || true"
+            else:
+                # 精确文件名，直接检查文件是否存在
+                full_path = f"{directory}/{filename_pattern}" if directory != '.' else filename_pattern
+                command = f"test -f '{full_path}' && echo '{full_path}' || true"
             
             logger.debug(f"远程搜索命令: {command}")
             
@@ -183,7 +201,7 @@ class FilenameResolver:
                 logger.debug(f"远程找到的文件: {files}")
                 return files
             else:
-                logger.debug("远程未找到匹配的文件")
+                logger.debug(f"远程未找到匹配模式 '{unix_glob_pattern}' 的文件")
                 return []
                 
         except Exception as e:

@@ -23,13 +23,14 @@ class FilenameResolver:
             '{DD}': '%d'
         }
     
-    def resolve_filename(self, filename_pattern: str, target_date: Optional[datetime] = None) -> str:
+    def resolve_filename(self, filename_pattern: str, target_date: Optional[datetime] = None, ssh_conn=None) -> str:
         """
         解析文件名模式，支持日期通配符和切片通配符
         
         Args:
             filename_pattern: 文件名模式，如 "app-{YYYY}-{MM}-{DD}-{N}.log"
             target_date: 目标日期，默认为当前日期
+            ssh_conn: SSH连接对象，用于远程文件系统操作
             
         Returns:
             解析后的实际文件名
@@ -42,7 +43,7 @@ class FilenameResolver:
         
         # 第二步：处理切片通配符 {N}
         if '{N}' in resolved_pattern:
-            resolved_filename = self._resolve_slice_placeholder(resolved_pattern)
+            resolved_filename = self._resolve_slice_placeholder(resolved_pattern, ssh_conn)
         else:
             resolved_filename = resolved_pattern
             
@@ -59,12 +60,13 @@ class FilenameResolver:
                 logger.debug(f"替换 {placeholder} -> {date_value}")
         return result
     
-    def _resolve_slice_placeholder(self, pattern: str) -> str:
+    def _resolve_slice_placeholder(self, pattern: str, ssh_conn=None) -> str:
         """
         解析切片通配符 {N}，找到N值最大的文件
         
         Args:
             pattern: 包含{N}的文件名模式
+            ssh_conn: SSH连接对象，用于远程文件系统操作
             
         Returns:
             实际存在的文件名（N值最大的）
@@ -82,7 +84,12 @@ class FilenameResolver:
         logger.debug(f"搜索模式: {full_glob_pattern}")
         
         # 查找匹配的文件
-        matching_files = glob.glob(full_glob_pattern)
+        if ssh_conn:
+            # 远程文件系统操作
+            matching_files = self._find_remote_files(full_glob_pattern, ssh_conn)
+        else:
+            # 本地文件系统操作
+            matching_files = glob.glob(full_glob_pattern)
         
         if not matching_files:
             # 如果没有找到匹配的文件，返回N=0的默认文件名
@@ -142,6 +149,44 @@ class FilenameResolver:
         logger.debug(f"生成的正则表达式: {regex_pattern}")
         return regex_pattern
     
+    def _find_remote_files(self, glob_pattern: str, ssh_conn) -> List[str]:
+        """
+        在远程服务器上查找匹配glob模式的文件
+        
+        Args:
+            glob_pattern: glob模式，如 "./2025-09-08.*.log"
+            ssh_conn: SSH连接对象
+            
+        Returns:
+            匹配的文件路径列表
+        """
+        try:
+            # 构建ls命令来查找匹配的文件
+            # 使用bash的文件扩展功能
+            directory = os.path.dirname(glob_pattern) or '.'
+            filename_pattern = os.path.basename(glob_pattern)
+            
+            # 创建远程命令来查找文件
+            # 使用ls命令配合通配符
+            command = f"ls {glob_pattern} 2>/dev/null || true"
+            
+            logger.debug(f"远程搜索命令: {command}")
+            
+            stdout, stderr, exit_code = ssh_conn.execute_command(command, timeout=10)
+            
+            if stdout.strip():
+                # 解析输出，每行一个文件
+                files = [line.strip() for line in stdout.strip().split('\n') if line.strip()]
+                logger.debug(f"远程找到的文件: {files}")
+                return files
+            else:
+                logger.debug("远程未找到匹配的文件")
+                return []
+                
+        except Exception as e:
+            logger.warning(f"远程文件搜索失败: {e}")
+            return []
+    
     def validate_pattern(self, pattern: str) -> Tuple[bool, List[str]]:
         """
         验证文件名模式的有效性
@@ -178,18 +223,19 @@ class FilenameResolver:
 filename_resolver = FilenameResolver()
 
 
-def resolve_log_filename(filename_pattern: str, target_date: Optional[datetime] = None) -> str:
+def resolve_log_filename(filename_pattern: str, target_date: Optional[datetime] = None, ssh_conn=None) -> str:
     """
     便捷函数：解析日志文件名
     
     Args:
         filename_pattern: 文件名模式
         target_date: 目标日期，默认为当前日期
+        ssh_conn: SSH连接对象，用于远程文件系统操作
         
     Returns:
         解析后的文件名
     """
-    return filename_resolver.resolve_filename(filename_pattern, target_date)
+    return filename_resolver.resolve_filename(filename_pattern, target_date, ssh_conn)
 
 
 def validate_log_filename_pattern(pattern: str) -> Tuple[bool, List[str]]:

@@ -285,7 +285,9 @@ class LogSearchService:
         # 解析文件名通配符（如果包含通配符）
         if any(placeholder in file_path for placeholder in ['{YYYY}', '{MM}', '{DD}', '{N}']):
             try:
-                resolved_path = resolve_log_filename(file_path)
+                # 获取SSH连接对象
+                conn = self.ssh_manager.get_connection(ssh_config)
+                resolved_path = resolve_log_filename(file_path, ssh_conn=conn)
                 logger.info(f"文件名通配符解析: {file_path} -> {resolved_path}")
                 file_path = resolved_path
             except Exception as e:
@@ -339,118 +341,165 @@ class LogSearchService:
     
     def get_log_files(self, ssh_config: Dict[str, Any], log_path: str) -> List[Dict[str, Any]]:
         """获取日志目录下的所有文件
-
-        说明：不再解析文件名中的通配符，也不对文件名进行匹配过滤，
-        仅基于配置的 log_path 取其所在目录并列出该目录下的文件。
+        
+        Args:
+            ssh_config: SSH连接配置
+            log_path: 日志文件路径，将提取其目录部分
+            
+        Returns:
+            文件信息列表，每个文件包含：filename, full_path, size, birth_time, modified_time, host
         """
         try:
-            # 直接取目录
+            # 提取日志文件所在目录
             log_dir = os.path.dirname(log_path)
-            
-            # 构建文件列表命令 - 列出目录下所有文件，包含创建时间和修改时间
-            # 兼容macOS和Linux的find命令
-            command = f"""
-            find '{log_dir}' -maxdepth 1 -type f -exec stat -f '%N\t%z\t%SB\t%Sm\t%N' -t '%Y-%m-%d %H:%M:%S' {{}} \\; 2>/dev/null || \\
-            find '{log_dir}' -maxdepth 1 -type f -printf '%f\\t%s\\t%TY-%Tm-%Td %TH:%TM:%TS\\t%CY-%Cm-%Cd %CH:%CM:%CS\\t%p\\n' 2>/dev/null
-            """
+            if not log_dir:
+                log_dir = '.'
             
             conn = self.ssh_manager.get_connection(ssh_config)
             if not conn:
                 raise Exception("SSH连接失败")
-
-            stdout, stderr, exit_code = conn.execute_command(command)
             
-            if exit_code != 0 or not stdout.strip():
-                # 如果find命令失败，尝试简单的ls - 列出所有文件
-                command = f"ls -la '{log_dir}'"
-                stdout, stderr, exit_code = conn.execute_command(command)
-                
-                files = []
-                host = ssh_config.get('host', 'unknown')
-                
-                for line in stdout.strip().split('\n'):
-                    if not line.strip():
-                        continue
-                    
-                    try:
-                        # 解析ls -la输出
-                        parts = line.split()
-                        if len(parts) >= 9:
-                            filename = parts[-1]
-                            size_str = parts[4]
-                            full_path = os.path.join(log_dir, filename)
-                            
-                            # 格式化文件大小
-                            try:
-                                size_bytes = int(size_str)
-                            except ValueError:
-                                size_bytes = 0
-                            
-                            modified_time = f"{parts[5]} {parts[6]} {parts[7]}"
-
-                            files.append({
-                                'filename': filename,
-                                'full_path': full_path,
-                                'size': size_bytes,  # 保持原始字节数
-                                'birth_time': modified_time,  # ls命令无法获取创建时间，使用修改时间
-                                'modified_time': modified_time,
-                                'host': host
-                            })
-                    except (ValueError, IndexError):
-                        continue
-                        
-                return files
-            
-            # 正常情况下解析find/stat输出
-            files = []
             host = ssh_config.get('host', 'unknown')
             
-            for line in stdout.strip().split('\n'):
-                if not line.strip():
-                    continue
-                
-                try:
-                    parts = line.split('\t')
-                    if len(parts) >= 5:  # 更新为5个字段：filename, size, birth_time, modified_time, full_path
-                        filename = os.path.basename(parts[0])  # 提取文件名
-                        size_bytes = int(parts[1])
-                        birth_time = parts[2]  # 创建时间
-                        modified_time = parts[3]  # 修改时间
-                        full_path = parts[4] if parts[4].startswith('/') else parts[0]
-
-                        files.append({
-                            'filename': filename,
-                            'full_path': full_path,
-                            'size': size_bytes,  # 保持原始字节数，让前端格式化
-                            'birth_time': birth_time,
-                            'modified_time': modified_time,
-                            'host': host
-                        })
-                    elif len(parts) >= 4:  # 向后兼容旧格式
-                        filename = os.path.basename(parts[0])
-                        size_bytes = int(parts[1])
-                        modified_time = parts[2]
-                        full_path = parts[3] if parts[3].startswith('/') else parts[0]
-
-                        files.append({
-                            'filename': filename,
-                            'full_path': full_path,
-                            'size': size_bytes,
-                            'birth_time': modified_time,  # 如果没有创建时间，使用修改时间
-                            'modified_time': modified_time,
-                            'host': host
-                        })
-                except (ValueError, IndexError):
-                    # 解析失败，跳过这一行
-                    continue
+            # 首先尝试使用Linux风格的命令
+            linux_command = f"find '{log_dir}' -maxdepth 1 -type f -printf '%f\\t%s\\t%TY-%Tm-%Td %TH:%TM:%TS\\t%CY-%Cm-%Cd %CH:%CM:%CS\\t%p\\n' 2>/dev/null"
             
-            return files
+            stdout, stderr, exit_code = conn.execute_command(linux_command)
+            
+            if exit_code == 0 and stdout.strip():
+                # Linux命令成功，解析输出
+                return self._parse_linux_find_output(stdout, host)
+            
+            # Linux命令失败，尝试macOS风格的命令
+            macos_command = f"find '{log_dir}' -maxdepth 1 -type f -exec stat -f '%N\\t%z\\t%SB\\t%Sm\\t%N' -t '%Y-%m-%d %H:%M:%S' {{}} \\; 2>/dev/null"
+            
+            stdout, stderr, exit_code = conn.execute_command(macos_command)
+            
+            if exit_code == 0 and stdout.strip():
+                # macOS命令成功，解析输出
+                return self._parse_macos_stat_output(stdout, host)
+            
+            # 所有高级命令都失败，使用最基本的ls命令
+            ls_command = f"ls -la '{log_dir}' | grep '^-'"
+            stdout, stderr, exit_code = conn.execute_command(ls_command)
+            
+            if exit_code == 0 and stdout.strip():
+                return self._parse_ls_output(stdout, log_dir, host)
+            
+            logger.warning(f"无法获取目录 {log_dir} 的文件列表")
+            return []
             
         except Exception as e:
             logger.error(f"获取文件列表失败 {ssh_config.get('host', 'unknown')}: {e}")
             return []
     
-    # 已不再对文件名进行通配符匹配，保留占位方便未来扩展
+    def _parse_linux_find_output(self, stdout: str, host: str) -> List[Dict[str, Any]]:
+        """解析Linux find命令的输出"""
+        files = []
+        
+        for line in stdout.strip().split('\n'):
+            if not line.strip():
+                continue
+            
+            try:
+                parts = line.split('\t')
+                if len(parts) >= 5:
+                    filename = parts[0]
+                    size_bytes = int(parts[1])
+                    modified_time = parts[2]
+                    birth_time = parts[3]
+                    full_path = parts[4]
+                    
+                    files.append({
+                        'filename': filename,
+                        'full_path': full_path,
+                        'size': size_bytes,
+                        'birth_time': birth_time,
+                        'modified_time': modified_time,
+                        'host': host
+                    })
+            except (ValueError, IndexError) as e:
+                logger.debug(f"解析Linux find输出失败: {line}, 错误: {e}")
+                continue
+        
+        return files
+    
+    def _parse_macos_stat_output(self, stdout: str, host: str) -> List[Dict[str, Any]]:
+        """解析macOS stat命令的输出"""
+        files = []
+        
+        for line in stdout.strip().split('\n'):
+            if not line.strip():
+                continue
+            
+            try:
+                parts = line.split('\t')
+                if len(parts) >= 5:
+                    filename = os.path.basename(parts[0])
+                    size_bytes = int(parts[1])
+                    birth_time = parts[2]
+                    modified_time = parts[3]
+                    full_path = parts[4]
+                    
+                    files.append({
+                        'filename': filename,
+                        'full_path': full_path,
+                        'size': size_bytes,
+                        'birth_time': birth_time,
+                        'modified_time': modified_time,
+                        'host': host
+                    })
+            except (ValueError, IndexError) as e:
+                logger.debug(f"解析macOS stat输出失败: {line}, 错误: {e}")
+                continue
+        
+        return files
+    
+    def _parse_ls_output(self, stdout: str, log_dir: str, host: str) -> List[Dict[str, Any]]:
+        """解析ls命令的输出"""
+        files = []
+        
+        for line in stdout.strip().split('\n'):
+            if not line.strip():
+                continue
+            
+            try:
+                # 解析ls -la输出格式
+                parts = line.split()
+                if len(parts) >= 9:
+                    filename = parts[-1]
+                    size_str = parts[4]
+                    full_path = os.path.join(log_dir, filename)
+                    
+                    # 尝试解析文件大小
+                    try:
+                        size_bytes = int(size_str)
+                    except ValueError:
+                        size_bytes = 0
+                    
+                    # 解析修改时间
+                    if len(parts) >= 8:
+                        # ls输出格式: month day time/year
+                        month = parts[5]
+                        day = parts[6]
+                        time_or_year = parts[7]
+                        modified_time = f"{month} {day} {time_or_year}"
+                    else:
+                        modified_time = "unknown"
+                    
+                    files.append({
+                        'filename': filename,
+                        'full_path': full_path,
+                        'size': size_bytes,
+                        'birth_time': modified_time,  # ls命令无法获取创建时间
+                        'modified_time': modified_time,
+                        'host': host
+                    })
+            except (ValueError, IndexError) as e:
+                logger.debug(f"解析ls输出失败: {line}, 错误: {e}")
+                continue
+        
+        return files
     
     def close(self):
         """关闭服务"""

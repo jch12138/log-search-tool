@@ -439,6 +439,16 @@
                         const response = await axios.get('/api/v1/logs');
                         if (response.data.success) {
                             this.logs = response.data.data.logs || [];
+                            // 默认折叠所有分组
+                            this.collapsedGroups.clear();
+                            const groups = new Set();
+                            this.logs.forEach(log => {
+                                const groupName = log.group || '默认分组';
+                                groups.add(groupName);
+                            });
+                            groups.forEach(groupName => {
+                                this.collapsedGroups.add(groupName);
+                            });
                         } else {
                             ElMessage.error('加载日志列表失败: ' + (response.data.error?.message || '未知错误'));
                         }

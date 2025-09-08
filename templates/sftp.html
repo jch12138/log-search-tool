@@ -26,12 +26,12 @@
         <div class="sidebar-section">
           <div style="font-weight:600;color:#556">活跃连接</div>
         </div>
-        <div id="connections-list"><div class="loading">正在加载连接...</div></div>
+        <div id="connections-list"><div class="item" style="text-align:center;cursor:default;">正在加载连接...</div></div>
 
         <div class="sidebar-section" style="border-top:1px solid var(--color-border)">
           <div style="font-weight:600;color:#556">可用服务器</div>
         </div>
-        <div id="log-based-servers" style="padding:12px 18px 24px;flex:1;overflow:auto;min-height:0"></div>
+        <div id="log-based-servers" style="padding:10px;flex:1;overflow:auto;min-height:0"></div>
       </aside>
 
       <main class="main-pane">
@@ -160,17 +160,16 @@
     function renderActiveConnections(conns){
       const container = $('connections-list');
       if (!conns.length) {
-        container.innerHTML = '<div class="loading">暂无活跃连接</div>';
+        container.innerHTML = '<div class="item" style="text-align:center;cursor:default;">暂无活跃连接</div>';
         return;
       }
       container.innerHTML = conns.map(c => {
-        const title = c.connection_name || `${c.host}:${c.port}`;
-        return `<div class="connection-item" data-id="${c.connection_id}">
-          <div class="connection-info"><strong>${title}</strong><span style="color:#16a34a;font-size:12px;margin-left:6px;">●</span></div>
-          <div class="connection-status">${c.username}@${c.host}:${c.port}</div>
-          <div class="connection-status" style="font-size:12px;opacity:.75;">连接时间: ${c.connected_at}</div>
-          <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">
-            <button class="btn btn-secondary js-nav-log" style="font-size:12px;padding:4px 8px;">打开</button>
+        return `<div class="item connection-item" data-id="${c.connection_id}">
+          <div class="info">
+            <div class="title">${c.username}@${c.host}</div>
+            <div class="meta">端口: ${c.port}</div>
+          </div>
+          <div class="actions">
             <button class="btn btn-danger js-disconnect" style="font-size:12px;padding:4px 8px;">断开</button>
           </div>
         </div>`;
@@ -178,83 +177,139 @@
 
       container.querySelectorAll('.connection-item').forEach(el => {
         el.addEventListener('click', (e) => {
-          if (e.target.closest('button')) return; // button handler below
+          if (e.target.closest('button')) return; // 防止按钮事件冒泡
           const id = el.getAttribute('data-id');
           selectConnection(id, el);
         });
-        el.querySelector('.js-nav-log').addEventListener('click', (e) => {
-          e.stopPropagation();
-          const id = el.getAttribute('data-id');
-          selectConnection(id, el);
-        });
+        
         el.querySelector('.js-disconnect').addEventListener('click', async (e) => {
           e.stopPropagation();
           const id = el.getAttribute('data-id');
           try{
             await fetchJSON(`${API}/sftp/disconnect`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({connection_id: id})});
             if (connectionStates[id]) delete connectionStates[id];
-            if (currentConnectionId === id) { currentConnectionId = null; disableToolbar(); $('file-table-wrapper').innerHTML = '<div class="loading">已断开连接</div>'; }
+            if (currentConnectionId === id) { 
+              currentConnectionId = null; 
+              disableToolbar(); 
+              $('file-table-wrapper').innerHTML = '<div class="loading">已断开连接</div>'; 
+            }
+            // 重新加载连接列表和服务器列表
             loadActiveConnections();
-          }catch(err){ showMessage(err.message, 'error'); }
+            loadAvailableServers(); // 重新加载可用服务器列表
+            showMessage('连接已断开', 'success');
+          }catch(err){ 
+            showMessage(err.message, 'error'); 
+          }
         });
       });
     }
 
-    async function loadLogBasedServers(){
+    async function loadAvailableServers(){
       try {
-        const data = await fetchJSON(`${API}/logs?include_ssh=true`);
-        const list = data.log_configs || [];
+        const [serversData, connectionsData] = await Promise.all([
+          fetchJSON(`${API}/servers?type=sftp`),
+          fetchJSON(`${API}/sftp/connections`).catch(() => ({ connections: [] }))
+        ]);
+        
+        const servers = serversData.servers || [];
+        const activeConnections = connectionsData.connections || [];
         const container = $('log-based-servers');
-        if (!list.length) { container.innerHTML = '<div class="loading">暂无日志配置</div>'; return; }
-        container.innerHTML = list.map(cfg => {
-          const title = cfg.ssh_index != null ? `${cfg.log_name} #${cfg.ssh_index+1}` : cfg.log_name;
-          return `<div class="connection-item server-item" data-host="${cfg.host}" data-port="${cfg.port}" data-username="${cfg.username}" data-name="${cfg.connection_name}" data-logpath="${cfg.log_path}">
-            <div class="connection-info"><strong>${title}</strong></div>
-            <div class="connection-status">${cfg.username}@${cfg.host}:${cfg.port}</div>
-            <div style="margin-top:6px;"><button class="btn btn-primary js-connect" style="font-size:12px;padding:4px 8px;">连接</button></div>
+        
+        // 创建已连接服务器的映射，用于过滤
+        const connectedServerIds = new Set();
+        activeConnections.forEach(conn => {
+          // 基于 username@host:port 创建服务器ID
+          const serverId = `${conn.username}@${conn.host}:${conn.port}`;
+          connectedServerIds.add(serverId);
+        });
+        
+        // 过滤掉已连接的服务器
+        const availableServers = servers.filter(server => !connectedServerIds.has(server.server_id));
+        
+        if (!availableServers.length) { 
+          container.innerHTML = '<div class="item" style="text-align:center;cursor:default;">暂无可用服务器</div>'; 
+          return; 
+        }
+        
+        container.innerHTML = availableServers.map(server => {
+          return `<div class="item server-item" 
+                      data-server-id="${server.server_id}"
+                      data-host="${server.host}" 
+                      data-port="${server.port}" 
+                      data-username="${server.username}" 
+                      data-server-name="${server.server_name}">
+            <div class="info">
+              <div class="title">${server.username}@${server.host}</div>
+              <div class="meta">端口: ${server.port}</div>
+            </div>
+            <div class="actions">
+              <button class="btn btn-primary js-connect" style="font-size:12px;padding:4px 8px;">连接</button>
+            </div>
           </div>`;
         }).join('');
 
         container.querySelectorAll('.server-item .js-connect').forEach(btn => {
           btn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            // 直接通过后端配置发起连接（无需前端输入密码）
             const card = btn.closest('.server-item');
-            const connectionName = card.getAttribute('data-name') || '';
-            const host = card.getAttribute('data-host');
-            const port = parseInt(card.getAttribute('data-port')||'22',10);
-            const username = card.getAttribute('data-username');
-            const logTitle = card.querySelector('.connection-info strong')?.textContent || '';
-            // 从标题推断 ssh_index（形如 `#2`），否则后端按0索引
-            let sshIndex = 0;
-            const m = logTitle.match(/#(\d+)/);
-            if (m) { sshIndex = Math.max(0, parseInt(m[1],10)-1); }
-            const logName = (connectionName || '').split(' - ')[0] || logTitle.split(' #')[0] || '';
-            try{
-              const res = await fetchJSON(`${API}/sftp/connect-by-config`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ log_name: logName, ssh_index: sshIndex, connection_name: connectionName }) });
+            const serverId = card.getAttribute('data-server-id');
+            const serverName = card.getAttribute('data-server-name');
+            
+            // 获取服务器信息
+            const server = availableServers.find(s => s.server_id === serverId);
+            if (!server) {
+              showMessage('服务器信息不存在', 'error');
+              return;
+            }
+            
+            try {
+              // 直接使用服务器的第一个日志配置连接（如果有的话）
+              const firstLog = server.log_configs && server.log_configs.length > 0 ? server.log_configs[0] : null;
+              
+              const requestData = firstLog ? {
+                log_name: firstLog.log_name,
+                ssh_index: firstLog.ssh_index,
+                connection_name: serverName
+              } : {
+                server_id: serverId,
+                connection_name: serverName
+              };
+              
+              const res = await fetchJSON(`${API}/sftp/connect-by-config`, { 
+                method:'POST', 
+                headers:{'Content-Type':'application/json'}, 
+                body: JSON.stringify(requestData) 
+              });
+              
               showMessage('连接成功','success');
-              // 自动跳转到日志目录
+              
+              // 连接后默认跳转到根目录
               const connId = res.connection_id;
-              const logPath = card.getAttribute('data-logpath') || '';
-              let logDir = '/';
-              if (logPath && logPath.includes('/')) {
-                const idx = logPath.lastIndexOf('/');
-                logDir = idx > 0 ? logPath.slice(0, idx) : '/';
-              }
-              // 设置为当前连接并导航
+              const rootDir = '/';
+              
+              // 设置为当前连接并导航到根目录
               currentConnectionId = connId;
-              if (!connectionStates[connId]) connectionStates[connId] = { path: logDir, selection: new Set() };
-              else connectionStates[connId].path = logDir;
+              if (!connectionStates[connId]) {
+                connectionStates[connId] = { path: rootDir, selection: new Set() };
+              } else {
+                connectionStates[connId].path = rootDir;
+              }
+              
               enableToolbar();
-              $('path-input').value = logDir;
-              await loadDirectory(logDir);
-              // 刷新活跃连接列表以展示新连接
+              $('path-input').value = rootDir;
+              await loadDirectory(rootDir);
+              
+              // 重新加载连接列表和服务器列表，实现状态切换
               loadActiveConnections();
-            }catch(err){ showMessage(err.message, 'error'); }
+              loadAvailableServers(); // 重新加载可用服务器列表，已连接的服务器会被过滤掉
+              
+            } catch(err) { 
+              showMessage(err.message, 'error'); 
+            }
           });
         });
       } catch (e) {
-        $('log-based-servers').innerHTML = '<div class="loading">加载日志配置失败</div>';
+        $('log-based-servers').innerHTML = '<div class="item" style="text-align:center;cursor:default;">加载服务器失败</div>';
       }
     }
 
@@ -288,6 +343,7 @@
         closeConnectModal();
         showMessage('连接成功','success');
         loadActiveConnections();
+        loadAvailableServers(); // 刷新可用服务器列表，移除已连接的服务器
       }catch(err){ showMessage(err.message, 'error'); }
     }
 
@@ -301,7 +357,7 @@
       if (!connectionStates[id]) connectionStates[id] = { path: '/', selection: new Set() };
       currentPath = connectionStates[id].path;
       fileSelection = new Set(connectionStates[id].selection);
-      document.querySelectorAll('.connection-item').forEach(i => i.classList.remove('active'));
+      document.querySelectorAll('.item.connection-item').forEach(i => i.classList.remove('active'));
       if (el) el.classList.add('active');
       enableToolbar();
       $('path-input').value = currentPath;
@@ -414,7 +470,7 @@
       disableToolbar();
       setupEvents();
       loadActiveConnections();
-      loadLogBasedServers();
+      loadAvailableServers();
     });
   </script>
 </body>

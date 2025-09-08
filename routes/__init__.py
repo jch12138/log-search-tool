@@ -14,6 +14,7 @@ from .config import config_bp
 from .connections import connections_bp
 from .terminals import terminals_bp
 from .sftp import sftp_bp
+from .servers import servers_bp
 
 def register_routes(app: Flask):
     """注册所有API路由"""
@@ -27,6 +28,7 @@ def register_routes(app: Flask):
     app.register_blueprint(connections_bp, url_prefix=api_prefix)
     app.register_blueprint(terminals_bp, url_prefix=api_prefix)
     app.register_blueprint(sftp_bp, url_prefix=api_prefix)
+    app.register_blueprint(servers_bp, url_prefix=api_prefix)
     
     # 健康检查接口
     @app.route(f'{api_prefix}/health', methods=['GET'])

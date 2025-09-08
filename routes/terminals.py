@@ -24,9 +24,96 @@ terminals_bp = Blueprint('terminals', __name__)
 
 
 def _create_from_config(data):
-    """根据日志配置创建终端会话的公共实现"""
+    """根据日志配置或服务器ID创建终端会话的公共实现"""
+    # 支持两种连接方式：通过日志配置或直接通过服务器ID
     log_name = data.get('log_name')
     ssh_index = data.get('ssh_index')
+    server_id = data.get('server_id')
+    
+    if server_id:
+        # 通过服务器ID连接
+        return _create_from_server_id(server_id, data)
+    elif log_name is not None and ssh_index is not None:
+        # 通过日志配置连接
+        return _create_from_log_config(log_name, ssh_index, data)
+    else:
+        return None, (jsonify({
+            'success': False,
+            'error': {
+                'code': 'INVALID_REQUEST',
+                'message': '缺少必需字段: 需要 (log_name + ssh_index) 或 server_id'
+            }
+        }), 400)
+
+def _create_from_server_id(server_id, data):
+    """通过服务器ID创建终端会话"""
+    try:
+        # 解析 server_id (格式: username@host:port)
+        if '@' not in server_id or ':' not in server_id:
+            raise ValueError("无效的服务器ID格式")
+        
+        username_host, port_str = server_id.rsplit(':', 1)
+        username, host = username_host.split('@', 1)
+        port = int(port_str)
+    except (ValueError, TypeError) as e:
+        return None, (jsonify({
+            'success': False,
+            'error': {
+                'code': 'INVALID_REQUEST',
+                'message': f'无效的服务器ID: {server_id}'
+            }
+        }), 400)
+
+    # 从配置中查找匹配的SSH配置以获取密码
+    config_service = ConfigService(Config.CONFIG_FILE_PATH)
+    logs_summary = config_service.get_log_summary()
+    
+    password = None
+    for log in logs_summary:
+        log_cfg = config_service.get_log_by_name(log['name'])
+        if not log_cfg or not hasattr(log_cfg, 'sshs') or not log_cfg.sshs:
+            continue
+            
+        for ssh_config in log_cfg.sshs:
+            if (ssh_config.get('host') == host and 
+                ssh_config.get('port', 22) == port and 
+                ssh_config.get('username') == username):
+                password = ssh_config.get('password')
+                break
+        
+        if password:
+            break
+    
+    if not password:
+        return None, (jsonify({
+            'success': False,
+            'error': {
+                'code': 'INVALID_CONFIG',
+                'message': f'未找到服务器 {server_id} 的密码配置'
+            }
+        }), 400)
+
+    session_info = terminal_service.create_terminal(
+        host=host,
+        port=port,
+        username=username,
+        password=password,
+        private_key='',
+        initial_command=data.get('initial_command', '')
+    )
+
+    response_data = {
+        'terminal_id': session_info.terminal_id,
+        'session_id': session_info.session_id,
+        'connection_status': session_info.status,
+        'host': session_info.host,
+        'created_at': session_info.created_at,
+    }
+
+    return response_data, None
+
+def _create_from_log_config(log_name, ssh_index, data):
+    """根据日志配置创建终端会话"""
     if log_name is None or ssh_index is None:
         return None, (jsonify({
             'success': False,

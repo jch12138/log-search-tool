@@ -143,7 +143,16 @@
   if (homeBtn) homeBtn.addEventListener('click', ()=>{ window.location.href = '/'; });
       $('btn-refresh').addEventListener('click', loadServers);
       $('btn-clear').addEventListener('click', ()=>{ if(state.current) state.sessions[state.current].term.clear(); });
-      $('btn-reconnect').addEventListener('click', ()=>{ if(state.current){ const s=state.sessions[state.current]; connectByConfig(s.server.log_name, s.server.ssh_index||0); }});
+      $('btn-reconnect').addEventListener('click', ()=>{ 
+        if(state.current){ 
+          const s = state.sessions[state.current]; 
+          if (s.server.log_name && s.server.ssh_index !== undefined) {
+            connectByConfig(s.server.log_name, s.server.ssh_index, s.server); 
+          } else {
+            connectToServer(s.server);
+          }
+        }
+      });
       $('btn-disconnect').addEventListener('click', ()=>{ if(state.current) closeSession(state.current); });
       // 建立Socket连接
       state.socket = io('/', { path: '/socket.io', transports: ['websocket'] });
@@ -186,61 +195,97 @@
     async function loadServers(){
       $('avail-list').innerHTML = '<div class="item" style="text-align:center;cursor:default;">加载中...</div>';
       try{
-        const r = await fetch(`${API}/logs?include_ssh=true`);
+        const r = await fetch(`${API}/servers?type=terminal`);
         const j = await r.json();
         if(!j.success) throw new Error(j.error?.message||'加载失败');
-        const list = j.data?.log_configs || j.data?.logs || j.log_configs || [];
-  state.servers = list;
-  renderServers(); // will set the available-count based on filtering
-  renderActive();
-      }catch(e){ $('avail-list').innerHTML = `<div class="item" style="text-align:center;cursor:default;">加载失败：${e.message}</div>`; }
+        const servers = j.data?.servers || [];
+        state.servers = servers;
+        renderServers();
+        renderActive();
+      }catch(e){ 
+        $('avail-list').innerHTML = `<div class="item" style="text-align:center;cursor:default;">加载失败：${e.message}</div>`; 
+      }
     }
 
     function renderServers(){
       const c = $('avail-list'); c.innerHTML = '';
-      // Only show servers that are not currently connected
-      const available = state.servers.filter(sv=>!isActiveServer(sv.log_name, typeof sv.ssh_index==='number'?sv.ssh_index:0));
+      // 只显示当前未连接的服务器
+      const available = state.servers.filter(server => !isActiveServer(server.server_id));
       $('available-count').textContent = available.length;
-      if(available.length===0){
+      
+      if(available.length === 0){
         c.innerHTML = '<div class="item" style="text-align:center;cursor:default;">暂无可用服务器</div>';
         return;
       }
-      available.forEach((sv,i)=>{
-        const el = document.createElement('div'); el.className='item';
-        const sshIndex = typeof sv.ssh_index==='number'?sv.ssh_index:0;
+      
+      available.forEach((server, i) => {
+        const el = document.createElement('div'); 
+        el.className = 'item';
+        
         el.innerHTML = `
           <div class="info">
-            <div class="title">${sv.log_name || '服务器 '+(i+1)}</div>
-            <div class="meta">${sv.username||''}@${sv.host||''}:${sv.port||22}</div>
+            <div class="title">${server.username}@${server.host}</div>
+            <div class="meta">端口: ${server.port}</div>
           </div>
           <div class="actions">
-            <button class="btn btn-primary btn-connect" data-log="${sv.log_name}" data-index="${sshIndex}">连接</button>
+            <button class="btn btn-primary btn-connect" data-server-id="${server.server_id}">连接</button>
           </div>
         `;
-        // click handler only on the button
+        
+        // 连接按钮点击处理
         const btn = el.querySelector('.btn-connect');
-        btn.addEventListener('click', (e)=>{
+        btn.addEventListener('click', (e) => {
           e.stopPropagation();
-          connectByConfig(sv.log_name, sshIndex);
+          connectToServer(server);
         });
+        
         c.appendChild(el);
       });
     }
 
-    function isActiveServer(logName, sshIndex){
+    function isActiveServer(serverId){
       const ids = Object.keys(state.sessions);
-      return ids.some(id=>{
+      return ids.some(id => {
         const s = state.sessions[id];
-        return s && s.server && s.server.log_name===logName && (s.server.ssh_index||0)===(sshIndex||0);
+        return s && s.server && s.server.server_id === serverId;
       });
     }
 
-    async function connectByConfig(logName, sshIndex){
+    async function connectToServer(server) {
+      // 直接连接服务器，使用第一个可用的日志配置（如果有的话）
+      const firstLog = server.log_configs && server.log_configs.length > 0 ? server.log_configs[0] : null;
+      
+      if (firstLog) {
+        await connectByConfig(firstLog.log_name, firstLog.ssh_index, server);
+      } else {
+        // 使用服务器信息直接连接
+        await connectByConfig('', 0, server);
+      }
+    }
+
+    async function connectByConfig(logName, sshIndex, server = null) {
       try{
-  const r = await fetch(`${API}/terminals`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ log_name: logName, ssh_index: sshIndex }) });
+        const requestData = logName ? 
+          { log_name: logName, ssh_index: sshIndex } :
+          { 
+            host: server.host,
+            port: server.port,
+            username: server.username,
+            // 注意：这里需要后端支持直接通过服务器信息连接
+            server_id: server.server_id
+          };
+
+        const r = await fetch(`${API}/terminals`, { 
+          method:'POST', 
+          headers:{'Content-Type':'application/json'}, 
+          body: JSON.stringify(requestData) 
+        });
+        
         const j = await r.json();
         if(!j.success) throw new Error(j.error?.message||'连接失败');
-        const d = j.data; const sid = d.terminal_id;
+        
+        const d = j.data; 
+        const sid = d.terminal_id;
         // Create xterm
         const term = new window.Terminal({
           cursorBlink:true,
@@ -280,17 +325,35 @@
   if (d.initial_prompt) {
           term.write(d.initial_prompt.replace(/\n/g, '\r\n'));
         }
-  // 输入通过Socket实时发送
-  term.onData(data => { if(state.socket){ state.socket.emit('input', { terminal_id: sid, data }); }});
-  // 加入该终端房间，接收输出
-  if(state.socket){ state.socket.emit('join', { terminal_id: sid }); }
-  state.sessions[sid] = { term, fitAddon, server:{ log_name: logName, ssh_index: sshIndex }, el: termEl };
+        // 输入通过Socket实时发送
+        term.onData(data => { if(state.socket){ state.socket.emit('input', { terminal_id: sid, data }); }});
+        // 加入该终端房间，接收输出
+        if(state.socket){ state.socket.emit('join', { terminal_id: sid }); }
+        
+        // 保存会话信息
+        const serverInfo = server || { 
+          server_id: `${logName}_${sshIndex}`,
+          server_name: logName,
+          log_name: logName, 
+          ssh_index: sshIndex 
+        };
+        
+        state.sessions[sid] = { 
+          term, 
+          fitAddon, 
+          server: serverInfo, 
+          el: termEl 
+        };
+        
         switchTo(sid);
-  term.focus();
-  // refresh lists so the Connect button becomes disabled for this server, and active list updates
-  renderServers();
-  renderActive();
-      }catch(e){ alert('连接失败：'+e.message); }
+        term.focus();
+        
+        // 刷新列表
+        renderServers();
+        renderActive();
+      }catch(e){ 
+        alert('连接失败：'+e.message); 
+      }
     }
 
     function switchTo(sid){
@@ -298,7 +361,7 @@
       state.sessions[sid].el.classList.add('active');
       state.current = sid; 
       updateToolbar();
-      $('current-label').textContent = `${state.sessions[sid].server.log_name} (${sid.slice(-6)})`;
+      $('current-label').textContent = `${state.sessions[sid].server.server_name || state.sessions[sid].server.log_name} (${sid.slice(-6)})`;
       
       // 延迟调整尺寸，确保 DOM 更新完成
       setTimeout(() => {
@@ -342,10 +405,11 @@
       if(ids.length===0){ c.innerHTML = '<div class="item" style="text-align:center;cursor:default;">暂无活跃连接</div>'; return; }
       ids.forEach(id=>{
         const it = document.createElement('div'); it.className='item clickable';
-        const name = state.sessions[id].server.log_name;
+        const session = state.sessions[id];
+        const server = session.server;
         it.innerHTML = `
           <div class="info">
-            <div class="title">${name}</div>
+            <div class="title">${server.username}@${server.host}</div>
             <div class="meta">会话 ${id.slice(-6)}</div>
           </div>
           <div class="actions">

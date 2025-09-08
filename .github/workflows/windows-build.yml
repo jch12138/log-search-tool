@@ -101,7 +101,6 @@ jobs:
           # 复制onefile版本和脚本
           Copy-Item "log-search-api-onefile.exe" "deployment/log-search-api.exe"
           Copy-Item "start.bat" "deployment/"
-          Copy-Item "../README-DEPLOY.md" "deployment/README.md"
           
           # 创建部署包zip
           if (Test-Path deployment.zip) { Remove-Item deployment.zip }

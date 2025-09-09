@@ -13,7 +13,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        # 暂时仅启用 Windows 平台，其它平台先禁用
+        os: [windows-latest]
+        # os: [windows-latest, ubuntu-latest, macos-latest]
     defaults:
       run:
         shell: bash
@@ -81,6 +83,11 @@ jobs:
             run.py
           mkdir -p artifacts
           mv dist/log-search-api artifacts/log-search-api-onedir
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            # 额外复制脚本到 onedir 根目录，方便用户直接使用
+            cp -f build/start_prod.bat artifacts/log-search-api-onedir/ 2>/dev/null || true
+            cp -f build/start_test.bat artifacts/log-search-api-onedir/ 2>/dev/null || true
+          fi
 
       - name: Build onefile
         run: |
@@ -131,6 +138,9 @@ jobs:
           cd artifacts
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             mv log-search-api.exe log-search-api-onefile-windows.exe
+            # 也把脚本复制到 artifacts 目录，便于与 onefile 一起分发
+            cp -f ../build/start_prod.bat . 2>/dev/null || true
+            cp -f ../build/start_test.bat . 2>/dev/null || true
           elif [[ "$RUNNER_OS" == "Linux" ]]; then
             mv log-search-api log-search-api-onefile-linux
           else

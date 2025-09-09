@@ -119,7 +119,7 @@ jobs:
         run: |
           cd artifacts
           if [[ "$RUNNER_OS" == "Windows" ]]; then
-            zip -r log-search-api-onedir-windows.zip log-search-api-onedir
+            powershell -command "Compress-Archive -Path 'log-search-api-onedir\\*' -DestinationPath 'log-search-api-onedir-windows.zip'"
           elif [[ "$RUNNER_OS" == "Linux" ]]; then
             tar -czf log-search-api-onedir-linux.tar.gz log-search-api-onedir
           else

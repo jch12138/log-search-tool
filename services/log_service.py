@@ -5,27 +5,15 @@
 """
 
 import os
-import sys
-import re
-import asyncio
-from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional
-from concurrent.futures import ThreadPoolExecutor, as_completed
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from models import SearchParams, SearchResult, HostResult
-from .ssh_service import SSHConnectionManager
-from .encoding import decode_bytes
-from .config_service import ConfigService
-from .filename_resolver import resolve_log_filename
-
 import re
 import time
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from models import SearchParams, SearchResult, MultiHostSearchResult
+from app.models import SearchParams, SearchResult, MultiHostSearchResult
 from .ssh_service import SSHConnectionManager
+from app.services.utils.encoding import decode_bytes
+from app.services.utils.filename_resolver import resolve_log_filename
 
 logger = logging.getLogger(__name__)
 

@@ -1,0 +1,223 @@
+"""Log search service (migrated)."""
+
+import os
+import logging
+import time
+from typing import Dict, Any, List
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from app.models import SearchParams, SearchResult, MultiHostSearchResult
+from app.services.ssh import SSHConnectionManager
+from app.services.utils.encoding import decode_bytes
+from app.services.utils.filename_resolver import resolve_log_filename
+
+logger = logging.getLogger(__name__)
+
+
+class LogSearchService:
+	def __init__(self):
+		self.ssh_manager = SSHConnectionManager()
+		self._reverse_cmd_cache: Dict[str, str] = {}
+
+	def _get_reverse_command(self, ssh_config: Dict[str, Any]) -> str:
+		host = ssh_config.get('host', 'localhost')
+		if host in self._reverse_cmd_cache:
+			return self._reverse_cmd_cache[host]
+		try:  # pragma: no cover - network
+			conn = self.ssh_manager.get_connection(ssh_config)
+			if conn:
+				stdout, _, code = conn.execute_command("which tac", timeout=5)
+				if code == 0 and stdout.strip():
+					cmd = 'tac'
+				else:
+					cmd = "sed '1!G;h;$!d'"
+			else:
+				cmd = "sed '1!G;h;$!d'"
+		except Exception:
+			cmd = "sed '1!G;h;$!d'"
+		self._reverse_cmd_cache[host] = cmd
+		return cmd
+
+	def search_multi_host(self, log_config: Dict[str, Any], search_params: SearchParams) -> MultiHostSearchResult:
+		search_params.validate()
+		sshs = log_config.get('sshs', [])
+		if not sshs:
+			raise ValueError("日志配置中没有SSH主机")
+		log_name = log_config['name']
+		log_path = log_config['path']
+		start = time.time()
+		results: List[SearchResult] = []
+		if len(sshs) == 1:
+			results.append(self._search_single_host(sshs[0], log_path, search_params, 0))
+			parallel = False
+		else:
+			with ThreadPoolExecutor(max_workers=min(len(sshs), 10)) as executor:  # pragma: no cover - concurrency
+				fut_map = {executor.submit(self._search_single_host, cfg, log_path, search_params, i): i for i, cfg in enumerate(sshs)}
+				for fut in as_completed(fut_map):
+					i = fut_map[fut]
+					cfg = sshs[i]
+					try:
+						results.append(fut.result(timeout=30))
+					except Exception as e:
+						logger.error(f"搜索失败 {cfg.get('host')}: {e}")
+						results.append(SearchResult(host=cfg.get('host', 'unknown'), ssh_index=i, results=[f"[{cfg.get('host', 'unknown')}] 搜索失败: {e}"], total_results=1, search_time=0.0, search_result={'content': '', 'file_path': '', 'keyword': search_params.keyword, 'total_lines': 0, 'search_time': 0.0, 'matches': []}, success=False, error=str(e)))
+			parallel = True
+		results.sort(key=lambda r: r.ssh_index)
+		total = sum(r.total_results for r in results if r.success)
+		elapsed = time.time() - start
+		return MultiHostSearchResult(log_name=log_name, keyword=search_params.keyword, search_params={'keyword': search_params.keyword, 'search_mode': search_params.search_mode, 'context_span': search_params.context_span, 'use_regex': search_params.use_regex}, total_hosts=len(sshs), hosts=results, total_results=total, total_search_time=elapsed, parallel_execution=parallel)
+
+	def _search_single_host(self, ssh_config: Dict[str, Any], log_path: str, search_params: SearchParams, ssh_index: int) -> SearchResult:
+		start = time.time()
+		host = ssh_config.get('host', 'unknown')
+		try:
+			command = self._build_search_command(log_path, search_params, ssh_config)
+			conn = self.ssh_manager.get_connection(ssh_config)
+			if not conn:
+				raise RuntimeError("SSH连接失败")
+			stdout, stderr, code = conn.execute_command(command, timeout=30)
+			if code != 0 and stderr:
+				raise RuntimeError(f"搜索命令执行失败: {stderr}")
+			if stdout:
+				try:
+					stdout.encode('utf-8')
+				except Exception:
+					stdout = decode_bytes(stdout.encode('latin-1', errors='ignore'))
+			lines = stdout.strip().split('\n') if stdout.strip() else []
+			results = [l for l in lines if l.strip()]
+			matches = []
+			line_no = 1
+			for ln in results:
+				content = ln
+				if ':' in ln:
+					parts = ln.split(':', 2)
+					if len(parts) >= 2 and parts[0].isdigit():
+						line_no = int(parts[0])
+						content = parts[1] if len(parts) == 2 else ':'.join(parts[1:])
+					elif len(parts) >= 3 and parts[1].isdigit():
+						line_no = int(parts[1])
+						content = parts[2]
+				matches.append({'file_path': log_path, 'line_number': line_no, 'content': content})
+				line_no += 1
+			elapsed = time.time() - start
+			return SearchResult(host=host, ssh_index=ssh_index, results=results, total_results=len(results), search_time=elapsed, search_result={'content': stdout.strip(), 'file_path': log_path, 'keyword': search_params.keyword, 'total_lines': len(results), 'search_time': elapsed, 'matches': matches}, success=True)
+		except Exception as e:
+			elapsed = time.time() - start
+			return SearchResult(host=host, ssh_index=ssh_index, results=[f"[{host}] 搜索失败: {e}"], total_results=1, search_time=elapsed, search_result={'content': '', 'file_path': '', 'keyword': search_params.keyword, 'total_lines': 0, 'search_time': elapsed, 'matches': []}, success=False, error=str(e))
+
+	def _build_search_command(self, log_path: str, search_params: SearchParams, ssh_config: Dict[str, Any]) -> str:
+		reverse_cmd = self._get_reverse_command(ssh_config)
+		if search_params.use_file_filter:
+			host = ssh_config.get('host', 'unknown')
+			if search_params.selected_files and host in search_params.selected_files:
+				file_path = search_params.selected_files[host]
+			elif search_params.selected_file:
+				file_path = search_params.selected_file
+			else:
+				file_path = log_path
+		else:
+			file_path = log_path
+		if any(ph in file_path for ph in ['{YYYY}', '{MM}', '{DD}', '{N}']):
+			try:
+				conn = self.ssh_manager.get_connection(ssh_config)
+				file_path = resolve_log_filename(file_path, ssh_conn=conn)
+			except Exception as e:
+				logger.warning(f"文件名通配符解析失败: {file_path} - {e}")
+		if search_params.search_mode == 'tail':
+			lines = max(100, search_params.context_span)
+			cmd = f"tail -n {lines} '{file_path}'"
+			if search_params.reverse_order:
+				cmd += f" | {reverse_cmd}"
+		else:
+			if not search_params.keyword:
+				cmd = f"tail -n 100 '{file_path}'"
+				if search_params.reverse_order:
+					cmd += f" | {reverse_cmd}"
+			else:
+				grep_cmd = 'grep -nE' if search_params.use_regex else 'grep -nF'
+				if search_params.search_mode == 'context' and search_params.context_span > 0:
+					grep_cmd += f" -C {search_params.context_span}"
+				escaped_keyword = search_params.keyword.replace("'", "'\"'\"'")
+				cmd = f"{grep_cmd} '{escaped_keyword}' '{file_path}'"
+				if search_params.reverse_order:
+					cmd += f" | tail -n 10000 | {reverse_cmd}"
+				else:
+					cmd += " | head -n 10000"
+		return cmd
+
+	def get_log_files(self, ssh_config: Dict[str, Any], log_path: str) -> List[Dict[str, Any]]:
+		try:
+			log_dir = os.path.dirname(log_path) or '.'
+			host = ssh_config.get('host', 'unknown')
+			conn = self.ssh_manager.get_connection(ssh_config)
+			if not conn:
+				raise RuntimeError('SSH连接失败')
+			linux_cmd = f"find '{log_dir}' -maxdepth 1 -type f -printf '%f\t%s\t%TY-%Tm-%Td %TH:%TM:%TS\t%CY-%Cm-%Cd %CH:%CM:%CS\t%p\n' 2>/dev/null"
+			stdout, stderr, code = conn.execute_command(linux_cmd)
+			if code == 0 and stdout.strip():
+				return self._parse_linux_find_output(stdout, host)
+			mac_cmd = f"find '{log_dir}' -maxdepth 1 -type f -exec stat -f '%N|%z|%SB|%Sm|%N' -t '%Y-%m-%d %H:%M:%S' {{}} \\; 2>/dev/null"
+			stdout, stderr, code = conn.execute_command(mac_cmd)
+			if code == 0 and stdout.strip():
+				return self._parse_macos_stat_output(stdout, host)
+			ls_cmd = f"ls -la '{log_dir}' | grep '^-'"
+			stdout, stderr, code = conn.execute_command(ls_cmd)
+			if code == 0 and stdout.strip():
+				return self._parse_ls_output(stdout, log_dir, host)
+			logger.warning(f"[{host}] 无法获取目录 {log_dir} 的文件列表")
+			return []
+		except Exception as e:  # pragma: no cover - network
+			logger.error(f"[{ssh_config.get('host', 'unknown')}] 获取文件列表失败: {e}")
+			return []
+
+	def _parse_linux_find_output(self, stdout: str, host: str) -> List[Dict[str, Any]]:
+		files: List[Dict[str, Any]] = []
+		for line in stdout.strip().split('\n'):
+			if not line.strip():
+				continue
+			parts = line.split('\t')
+			if len(parts) >= 5:
+				try:
+					files.append({'filename': parts[0], 'full_path': parts[4], 'size': int(parts[1]), 'birth_time': parts[3], 'modified_time': parts[2], 'host': host})
+				except Exception:
+					continue
+		return files
+
+	def _parse_macos_stat_output(self, stdout: str, host: str) -> List[Dict[str, Any]]:
+		files: List[Dict[str, Any]] = []
+		for line in stdout.strip().split('\n'):
+			if not line.strip():
+				continue
+			parts = line.split('|')
+			if len(parts) >= 5:
+				try:
+					filename = os.path.basename(parts[0])
+					files.append({'filename': filename, 'full_path': parts[4], 'size': int(parts[1]), 'birth_time': parts[2], 'modified_time': parts[3], 'host': host})
+				except Exception:
+					continue
+		return files
+
+	def _parse_ls_output(self, stdout: str, log_dir: str, host: str) -> List[Dict[str, Any]]:
+		files: List[Dict[str, Any]] = []
+		for line in stdout.strip().split('\n'):
+			if not line.strip():
+				continue
+			parts = line.split()
+			if len(parts) >= 9:
+				filename = parts[-1]
+				size_str = parts[4]
+				try:
+					size = int(size_str)
+				except Exception:
+					size = 0
+				if len(parts) >= 8:
+					month, day, time_or_year = parts[5], parts[6], parts[7]
+					modified = f"{month} {day} {time_or_year}"
+				else:
+					modified = 'unknown'
+				files.append({'filename': filename, 'full_path': os.path.join(log_dir, filename), 'size': size, 'birth_time': modified, 'modified_time': modified, 'host': host})
+		return files
+
+	def close(self):  # pragma: no cover
+		self.ssh_manager.close_all()
+
+__all__ = ['LogSearchService']

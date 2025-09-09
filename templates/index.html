@@ -53,6 +53,7 @@
 </head>
 
 <body>
+    <script>window.APP_PAGE="{{ page|default('') }}";</script>
     <div id="app">
         <div class="app-container">
 
@@ -356,6 +357,12 @@
                 
                 // 添加点击外部关闭菜单的监听
                 document.addEventListener('click', this.handleClickOutside);
+
+                // 如果通过独立页面进入 (sftp / terminals / config)
+                if (window.APP_PAGE && ['sftp','terminals','config'].includes(window.APP_PAGE)) {
+                    // 延迟让组件初始化完成
+                    setTimeout(()=>{ this.navigateToPage(window.APP_PAGE); }, 300);
+                }
             },
 
             beforeUnmount() {

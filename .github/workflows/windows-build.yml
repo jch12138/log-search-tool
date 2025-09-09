@@ -46,13 +46,16 @@ jobs:
             --clean \
             --add-data "templates;templates" \
             --add-data "static;static" \
+            --add-data "build/start_prod.bat;build" \
+            --add-data "build/start_test.bat;build" \
+            --add-data "build/scripts;build/scripts" \
             --additional-hooks-dir pyinstaller-hooks \
             --hidden-import engineio \
             --hidden-import socketio \
             --hidden-import engineio.async_drivers.threading \
             --hidden-import socketio.async_drivers.threading \
             --collect-all paramiko \
-            main.py
+            run.py
 
       - name: Rename onedir folder
         run: |
@@ -68,13 +71,16 @@ jobs:
             --clean \
             --add-data "templates;templates" \
             --add-data "static;static" \
+            --add-data "build/start_prod.bat;build" \
+            --add-data "build/start_test.bat;build" \
+            --add-data "build/scripts;build/scripts" \
             --additional-hooks-dir pyinstaller-hooks \
             --hidden-import engineio \
             --hidden-import socketio \
             --hidden-import engineio.async_drivers.threading \
             --hidden-import socketio.async_drivers.threading \
             --collect-all paramiko \
-            main.py
+            run.py
 
       - name: Move onefile exe
         run: |

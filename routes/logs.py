@@ -33,8 +33,8 @@ def _handle_encoding_conversion(content: str, detected_encoding: str, host: str)
         if not content:
             return content
         
-        # 尝试不同的编码转换策略
-        encodings_to_try = ['utf-8', 'gbk', 'gb2312', 'gb18030', 'latin1']
+        # 尝试不同的编码转换策略，优先GB2312
+        encodings_to_try = ['gb2312', 'gbk', 'gb18030', 'utf-8', 'latin1']
         
         # 如果检测到了特定编码，优先尝试该编码
         if detected_encoding and detected_encoding != 'unknown':
@@ -295,9 +295,9 @@ def download_log_file():
         
         # 根据检测结果调整读取命令
         if 'gbk' in detected_encoding or 'gb2312' in detected_encoding or 'gb18030' in detected_encoding:
-            # 对于中文编码，设置UTF-8环境变量
-            final_command = f"export LANG=zh_CN.UTF-8; export LC_ALL=zh_CN.UTF-8; {command}"
-            logger.info(f"检测到中文编码 {detected_encoding}，使用UTF-8环境变量")
+            # 对于中文编码，使用iconv进行编码转换
+            final_command = f"iconv -f {detected_encoding.upper()} -t UTF-8 '{file_path}' 2>/dev/null || cat '{file_path}'"
+            logger.info(f"检测到中文编码 {detected_encoding}，使用iconv转换为UTF-8")
         else:
             final_command = command
         

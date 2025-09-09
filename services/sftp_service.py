@@ -43,7 +43,30 @@ class SFTPService:
         self.connections: Dict[str, Dict[str, Any]] = {}
         self.connection_info: Dict[str, SFTPConnection] = {}
     
-    def _detect_and_convert_encoding(self, text: str) -> str:
+    def _detect_and_convert_encoding(self, data):
+        """检测并转换编码为UTF-8"""
+        if isinstance(data, str):
+            return data  # 已经是字符串，直接返回
+        
+        if not isinstance(data, bytes):
+            return str(data)  # 转换为字符串
+        
+        # 优先尝试GB2312编码，然后是其他常见编码
+        encodings_to_try = ['gb2312', 'gbk', 'utf-8', 'latin-1']
+        
+        for encoding in encodings_to_try:
+            try:
+                decoded_text = data.decode(encoding)
+                logger.debug(f"成功使用 {encoding} 编码解码文件名")
+                return decoded_text
+            except (UnicodeDecodeError, LookupError):
+                continue
+        
+        # 如果所有编码都失败，使用错误处理方式
+        try:
+            return data.decode('utf-8', errors='replace')
+        except:
+            return str(data, errors='replace')
         """检测并转换文件名编码"""
         if not text:
             return text
@@ -51,6 +74,19 @@ class SFTPService:
         try:
             # 如果已经是有效的UTF-8，直接返回
             text.encode('utf-8')
+            # 检查是否包含中文字符
+            if any(ord(char) > 127 for char in text):
+                # 如果包含非ASCII字符，可能需要转换
+                try:
+                    # 尝试从GBK转换
+                    gbk_bytes = text.encode('latin-1')
+                    correct_text = gbk_bytes.decode('gbk')
+                    # 验证转换结果是否合理（包含中文字符）
+                    if any('\u4e00' <= char <= '\u9fff' for char in correct_text):
+                        logger.debug(f"编码转换成功: {text} -> {correct_text}")
+                        return correct_text
+                except (UnicodeEncodeError, UnicodeDecodeError):
+                    pass
             return text
         except UnicodeEncodeError:
             # 如果不是UTF-8，尝试从GBK转换
@@ -186,28 +222,39 @@ class SFTPService:
                 # 如果路径不存在，回退到home目录
                 remote_path = home_dir
             
-            # 列出目录内容
-            entries = sftp.listdir_attr(remote_path)
+            # 列出目录内容，使用更安全的方式处理编码
+            try:
+                # 尝试正常的listdir_attr
+                entries = sftp.listdir_attr(remote_path)
+            except UnicodeDecodeError as e:
+                logger.warning(f"SFTP目录列表遇到编码问题: {e}")
+                # 如果遇到编码问题，使用SSH命令获取目录列表
+                return self._list_directory_via_ssh(connection_id, remote_path)
+            
             items = []
             
             for item in entries:
-                # 转换文件名编码
-                original_filename = item.filename
-                converted_filename = self._detect_and_convert_encoding(original_filename)
-                
-                logger.debug(f"文件名处理: {original_filename} -> {converted_filename}")
-                
-                file_info = {
-                    'name': converted_filename,
-                    'original_name': original_filename,  # 保留原始文件名用于后续操作
-                    'type': 'directory' if stat.S_ISDIR(item.st_mode) else 'file',
-                    'size': item.st_size if hasattr(item, 'st_size') else 0,
-                    'size_human': self._format_size(item.st_size if hasattr(item, 'st_size') else 0),
-                    'modified_time': datetime.fromtimestamp(item.st_mtime).isoformat() + "Z" if hasattr(item, 'st_mtime') else "",
-                    'permissions': oct(item.st_mode)[-3:] if hasattr(item, 'st_mode') else "",
-                    'is_directory': stat.S_ISDIR(item.st_mode) if hasattr(item, 'st_mode') else False
-                }
-                items.append(file_info)
+                try:
+                    # 转换文件名编码
+                    original_filename = item.filename
+                    converted_filename = self._detect_and_convert_encoding(original_filename)
+                    
+                    logger.debug(f"文件名处理: {original_filename} -> {converted_filename}")
+                    
+                    file_info = {
+                        'name': converted_filename,
+                        'original_name': original_filename,  # 保留原始文件名用于后续操作
+                        'type': 'directory' if stat.S_ISDIR(item.st_mode) else 'file',
+                        'size': item.st_size if hasattr(item, 'st_size') else 0,
+                        'size_human': self._format_size(item.st_size if hasattr(item, 'st_size') else 0),
+                        'modified_time': datetime.fromtimestamp(item.st_mtime).isoformat() + "Z" if hasattr(item, 'st_mtime') else "",
+                        'permissions': oct(item.st_mode)[-3:] if hasattr(item, 'st_mode') else "",
+                        'is_directory': stat.S_ISDIR(item.st_mode) if hasattr(item, 'st_mode') else False
+                    }
+                    items.append(file_info)
+                except Exception as e:
+                    logger.warning(f"处理文件项时出错: {e}, 跳过该文件")
+                    continue
             
             # 排序：目录在前，然后按名称排序
             items.sort(key=lambda x: (not x['is_directory'], x['name'].lower()))
@@ -220,7 +267,85 @@ class SFTPService:
             }
             
         except Exception as e:
+            logger.error(f"列出目录失败: {str(e)}")
             raise Exception(f"列出目录失败: {str(e)}")
+    
+    def _list_directory_via_ssh(self, connection_id: str, remote_path: str) -> Dict[str, Any]:
+        """通过SSH命令列出目录内容（处理编码问题的备用方案）"""
+        ssh = self.connections[connection_id]['ssh']
+        
+        # 使用ls命令获取目录列表，并设置UTF-8环境
+        command = f"export LANG=zh_CN.UTF-8 LC_ALL=zh_CN.UTF-8; ls -la '{remote_path}'"
+        stdin, stdout, stderr = ssh.exec_command(command)
+        
+        output = stdout.read()
+        error = stderr.read()
+        
+        if error:
+            logger.warning(f"SSH ls命令警告: {error.decode('utf-8', errors='ignore')}")
+        
+        # 尝试不同的编码方式解码输出
+        decoded_output = None
+        for encoding in ['utf-8', 'gbk', 'gb2312']:
+            try:
+                decoded_output = output.decode(encoding)
+                logger.info(f"SSH命令输出使用{encoding}编码解码成功")
+                break
+            except UnicodeDecodeError:
+                continue
+        
+        if not decoded_output:
+            decoded_output = output.decode('utf-8', errors='ignore')
+            logger.warning("所有编码尝试失败，使用UTF-8忽略错误模式")
+        
+        items = []
+        lines = decoded_output.strip().split('\n')[1:]  # 跳过第一行（总计）
+        
+        for line in lines:
+            if not line.strip():
+                continue
+            
+            try:
+                parts = line.split()
+                if len(parts) < 9:
+                    continue
+                
+                # 解析ls -la输出
+                permissions = parts[0]
+                size = int(parts[4]) if parts[4].isdigit() else 0
+                filename = ' '.join(parts[8:])  # 文件名可能包含空格
+                
+                # 跳过.和..
+                if filename in ['.', '..']:
+                    continue
+                
+                is_directory = permissions.startswith('d')
+                
+                file_info = {
+                    'name': filename,
+                    'original_name': filename,
+                    'type': 'directory' if is_directory else 'file',
+                    'size': size,
+                    'size_human': self._format_size(size),
+                    'modified_time': "",  # SSH方案暂不解析时间
+                    'permissions': permissions[1:],
+                    'is_directory': is_directory
+                }
+                items.append(file_info)
+                
+            except Exception as e:
+                logger.warning(f"解析ls输出行失败: {line}, 错误: {e}")
+                continue
+        
+        # 排序：目录在前，然后按名称排序
+        items.sort(key=lambda x: (not x['is_directory'], x['name'].lower()))
+        
+        return {
+            'current_path': remote_path,
+            'parent_path': posixpath.dirname(remote_path) if remote_path != '/' else None,
+            'items': items,
+            'total_items': len(items)
+        }
     
     def download_file(self, connection_id: str, remote_path: str) -> Tuple[str, str]:
         """下载文件到临时目录"""

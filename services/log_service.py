@@ -198,19 +198,71 @@ class LogSearchService:
                 logger.debug(f"[{host}] 检测到文件编码: {detected_encoding}")
                 
                 # 如果检测到非UTF-8编码（如GBK、GB2312等），设置UTF-8环境变量
-                if 'gbk' in detected_encoding or 'gb2312' in detected_encoding or 'gb18030' in detected_encoding:
+                if any(enc in detected_encoding for enc in ['gbk', 'gb2312', 'gb18030', 'iso-8859']):
                     use_utf8_env = True
                     logger.info(f"[{host}] 检测到中文编码 {detected_encoding}，将使用UTF-8环境变量")
             else:
                 logger.debug(f"[{host}] 编码检测失败或不支持，使用默认处理")
             
-            # 构建最终的搜索命令（可能包含环境变量设置）
-            if use_utf8_env:
-                # 设置UTF-8环境变量来处理中文编码
-                final_command = f"export LANG=zh_CN.UTF-8; export LC_ALL=zh_CN.UTF-8; {command}"
-                logger.debug(f"[{host}] 使用UTF-8环境变量执行搜索")
+            # 构建最终的搜索命令，处理编码转换
+            if use_utf8_env and any(enc in detected_encoding for enc in ['gbk', 'gb2312', 'gb18030', 'iso-8859']):
+                # 对于中文编码文件，使用iconv进行编码转换
+                logger.info(f"[{host}] 检测到 {detected_encoding} 编码，将使用iconv转换")
+                
+                # 映射检测到的编码到iconv格式
+                if 'gb2312' in detected_encoding or 'iso-8859' in detected_encoding:
+                    iconv_encoding = 'GB2312'
+                elif 'gbk' in detected_encoding:
+                    iconv_encoding = 'GBK'
+                elif 'gb18030' in detected_encoding:
+                    iconv_encoding = 'GB18030'
+                else:
+                    iconv_encoding = 'GB2312'  # 默认使用GB2312
+                
+                # 重新构建命令，加入编码转换
+                if search_params.search_mode == 'tail':
+                    # tail模式：先转换编码再tail
+                    lines = max(100, search_params.context_span)
+                    converted_command = f"iconv -f {iconv_encoding} -t UTF-8 '{log_path}' 2>/dev/null | tail -n {lines}"
+                    if search_params.reverse_order:
+                        reverse_cmd = self._get_reverse_command(ssh_config)
+                        converted_command += f" | {reverse_cmd}"
+                else:
+                    if not search_params.keyword:
+                        # 无关键词，显示最新内容
+                        converted_command = f"iconv -f {iconv_encoding} -t UTF-8 '{log_path}' 2>/dev/null | tail -n 100"
+                        if search_params.reverse_order:
+                            reverse_cmd = self._get_reverse_command(ssh_config)
+                            converted_command += f" | {reverse_cmd}"
+                    else:
+                        # 关键词搜索：先转换编码再搜索
+                        if search_params.use_regex:
+                            grep_cmd = "grep -nE"
+                        else:
+                            grep_cmd = "grep -nF"
+                        
+                        if search_params.search_mode == 'context' and search_params.context_span > 0:
+                            grep_cmd += f" -C {search_params.context_span}"
+                        
+                        escaped_keyword = search_params.keyword.replace("'", "'\"'\"'")
+                        converted_command = f"iconv -f {iconv_encoding} -t UTF-8 '{log_path}' 2>/dev/null | {grep_cmd} '{escaped_keyword}'"
+                        
+                        # 处理逆序和限制
+                        if search_params.reverse_order:
+                            reverse_cmd = self._get_reverse_command(ssh_config)
+                            converted_command += f" | tail -n 10000 | {reverse_cmd}"
+                        else:
+                            converted_command += " | head -n 10000"
+                
+                final_command = converted_command
+                logger.debug(f"[{host}] 使用编码转换命令: {final_command}")
             else:
-                final_command = command
+                # 使用原始命令，可能加上UTF-8环境变量
+                if use_utf8_env:
+                    final_command = f"export LANG=zh_CN.UTF-8; export LC_ALL=zh_CN.UTF-8; {command}"
+                    logger.debug(f"[{host}] 使用UTF-8环境变量执行搜索")
+                else:
+                    final_command = command
             
             logger.debug(f"[{host}] 执行搜索命令: {final_command}")
             stdout, stderr, exit_code = conn.execute_command(final_command, timeout=30)
@@ -375,8 +427,8 @@ class LogSearchService:
     
     def _build_encoding_detection_command(self, file_path: str) -> str:
         """构建编码检测命令"""
-        # 优先使用 file 命令检测编码
-        return f"file -bi '{file_path}' 2>/dev/null || file '{file_path}' 2>/dev/null | grep -o 'charset=[^,]*' | cut -d= -f2 || echo 'unknown'"
+        # 使用多种方法检测编码，优先检测中文编码
+        return f"(file '{file_path}' 2>/dev/null | grep -i 'iso-8859\\|non-iso\\|data' >/dev/null && echo 'gb2312') || (file -bi '{file_path}' 2>/dev/null | grep -o 'charset=[^,]*' | cut -d= -f2) || echo 'unknown'"
     
     def _handle_encoding_conversion(self, content: str, detected_encoding: str, host: str) -> str:
         """处理编码转换"""
@@ -384,8 +436,8 @@ class LogSearchService:
             if not content:
                 return content
             
-            # 尝试不同的编码转换策略
-            encodings_to_try = ['utf-8', 'gbk', 'gb2312', 'gb18030', 'latin1']
+            # 尝试不同的编码转换策略，优先GB2312
+            encodings_to_try = ['gb2312', 'gbk', 'gb18030', 'utf-8', 'latin1']
             
             # 如果检测到了特定编码，优先尝试该编码
             if detected_encoding and detected_encoding != 'unknown':

@@ -1,0 +1,17 @@
+logs:
+  - name: "gb2312_test"
+    group: "编码测试"
+    path: "/Users/chenway/Desktop/log-search-tool/test_gb2312/应用日志.log"
+    sshs:
+      - host: "127.0.0.1"
+        port: 22
+        username: "chenway"
+        # 注意：这里使用本地文件进行测试，实际生产环境请使用真实的SSH配置
+        
+  - name: "chinese_dir_test"
+    group: "编码测试"
+    path: "/Users/chenway/Desktop/log-search-tool/test_gb2312/中文目录/错误日志.log"
+    sshs:
+      - host: "127.0.0.1"
+        port: 22
+        username: "chenway"

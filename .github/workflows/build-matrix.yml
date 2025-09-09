@@ -138,9 +138,9 @@ jobs:
           cd artifacts
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             mv log-search-api.exe log-search-api-onefile-windows.exe
-            # 也把脚本复制到 artifacts 目录，便于与 onefile 一起分发
-            cp -f ../build/start_prod.bat . 2>/dev/null || true
-            cp -f ../build/start_test.bat . 2>/dev/null || true
+            # 把脚本复制并改名为与 onefile 同目录的启动脚本
+            cp -f ../build/start_prod.bat start_prod.bat 2>/dev/null || true
+            cp -f ../build/start_test.bat start_test.bat 2>/dev/null || true
           elif [[ "$RUNNER_OS" == "Linux" ]]; then
             mv log-search-api log-search-api-onefile-linux
           else

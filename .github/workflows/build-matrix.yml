@@ -27,6 +27,12 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Ensure optional data dirs
+        run: |
+          mkdir -p build/scripts || true
+          # 占位文件避免某些工具清理空目录
+          if [ ! -f build/scripts/.keep ]; then echo placeholder > build/scripts/.keep; fi
+
       - name: Upgrade pip
         run: python -m pip install --upgrade pip
 
@@ -45,8 +51,18 @@ jobs:
           set -e
           if [[ "$RUNNER_OS" == "Windows" ]]; then sep=';'; else sep=':'; fi
           EXTRA=""
+          # Windows bat 启动脚本
           if [[ "$RUNNER_OS" == "Windows" ]]; then
-            EXTRA="--add-data build/start_prod.bat${sep}build --add-data build/start_test.bat${sep}build"
+            [[ -f build/start_prod.bat ]] && EXTRA+=" --add-data build/start_prod.bat${sep}build"
+            [[ -f build/start_test.bat ]] && EXTRA+=" --add-data build/start_test.bat${sep}build"
+          else
+            # *nix 平台的 sh 脚本（如果存在）
+            [[ -f build/start_prod.sh ]] && EXTRA+=" --add-data build/start_prod.sh${sep}build"
+            [[ -f build/start_test.sh ]] && EXTRA+=" --add-data build/start_test.sh${sep}build"
+          fi
+          SCRIPTS_ARG=""
+          if [[ -d build/scripts ]]; then
+            SCRIPTS_ARG="--add-data build/scripts${sep}build/scripts"
           fi
           pyinstaller \
             --name log-search-api \
@@ -55,7 +71,7 @@ jobs:
             --clean \
             --add-data "templates${sep}templates" \
             --add-data "static${sep}static" \
-            --add-data "build/scripts${sep}build/scripts" \
+            $SCRIPTS_ARG \
             $EXTRA \
             --hidden-import engineio \
             --hidden-import socketio \
@@ -72,8 +88,16 @@ jobs:
           if [[ "$RUNNER_OS" == "Windows" ]]; then sep=';'; else sep=':'; fi
           EXTRA=""
           if [[ "$RUNNER_OS" == "Windows" ]]; then
-            EXTRA="--add-data build/start_prod.bat${sep}build --add-data build/start_test.bat${sep}build"
+            [[ -f build/start_prod.bat ]] && EXTRA+=" --add-data build/start_prod.bat${sep}build"
+            [[ -f build/start_test.bat ]] && EXTRA+=" --add-data build/start_test.bat${sep}build"
+          else
+            [[ -f build/start_prod.sh ]] && EXTRA+=" --add-data build/start_prod.sh${sep}build"
+            [[ -f build/start_test.sh ]] && EXTRA+=" --add-data build/start_test.sh${sep}build"
           fi
+          SCRIPTS_ARG=""
+            if [[ -d build/scripts ]]; then
+              SCRIPTS_ARG="--add-data build/scripts${sep}build/scripts"
+            fi
           pyinstaller \
             --name log-search-api \
             --onefile \
@@ -81,7 +105,7 @@ jobs:
             --clean \
             --add-data "templates${sep}templates" \
             --add-data "static${sep}static" \
-            --add-data "build/scripts${sep}build/scripts" \
+            $SCRIPTS_ARG \
             $EXTRA \
             --hidden-import engineio \
             --hidden-import socketio \

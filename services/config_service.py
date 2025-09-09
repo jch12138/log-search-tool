@@ -132,11 +132,21 @@ class ConfigService:
         
         return logs
     
-    def get_log_by_name(self, name: str) -> Optional[LogConfig]:
-        """根据名称获取日志配置"""
+    def get_log_by_name(self, name: str, group: Optional[str] = None) -> Optional[LogConfig]:
+        """根据名称和分组获取日志配置"""
         logs = self.get_logs()
         for log in logs:
             if log.name == name:
+                # 如果指定了group，则必须匹配；否则返回第一个匹配name的
+                if group is None or log.group == group:
+                    return log
+        return None
+    
+    def get_log_by_unique_key(self, name: str, group: Optional[str] = None, path: Optional[str] = None) -> Optional[LogConfig]:
+        """根据唯一键获取日志配置（用于避免重复）"""
+        logs = self.get_logs()
+        for log in logs:
+            if log.name == name and log.group == group and (path is None or log.path == path):
                 return log
         return None
     

@@ -390,13 +390,16 @@
         rows.push(`<tr onclick="loadDirectory('${parent}')"><td class='checkbox-cell'></td><td class='name'>..</td><td>—</td><td>返回上级</td><td></td><td></td></tr>`);
       }
       [...dirs, ...files].forEach(f => {
-        const checked = fileSelection.has(joinPath(currentPath, f.name)) ? 'checked' : '';
-        const fullPath = joinPath(currentPath, f.name);
+        // 使用原始文件名进行操作，显示转换后的文件名
+        const originalName = f.original_name || f.name;
+        const displayName = f.name;
+        const checked = fileSelection.has(joinPath(currentPath, originalName)) ? 'checked' : '';
+        const fullPath = joinPath(currentPath, originalName);
         const actions = f.is_directory ? '' : `<button class='btn btn-secondary' onclick="event.stopPropagation();downloadFile('${fullPath}')">下载</button>`;
         const delBtn = `<button class='btn btn-danger' onclick="event.stopPropagation();deleteItem('${fullPath}', ${f.is_directory})">删除</button>`;
         rows.push(`<tr ${f.is_directory?`onclick=\"loadDirectory('${fullPath}')\"`:''} class='${fileSelection.has(fullPath)?'row-selected':''}'>
           <td class='checkbox-cell'><input type='checkbox' ${checked} onclick="toggleSelect(event,'${fullPath}')"></td>
-          <td class='name' title='${f.name}'>${f.is_directory?'<span class=\"tag-dir\">DIR</span> ':''}${f.name}</td>
+          <td class='name' title='${displayName}'>${f.is_directory?'<span class=\"tag-dir\">DIR</span> ':''}${displayName}</td>
           <td>${f.is_directory?'‑':f.size_human||'-'}</td>
           <td>${f.modified_time||''}</td>
           <td>${f.permissions||''}</td>
@@ -423,8 +426,8 @@
     function changeSort(k){ if(sortState.key===k) sortState.dir = sortState.dir==='asc'?'desc':'asc'; else { sortState.key=k; sortState.dir='asc'; } renderTable(); }
 
     function toggleSelect(e, p){ e.stopPropagation(); if(fileSelection.has(p)) fileSelection.delete(p); else fileSelection.add(p); if (connectionStates[currentConnectionId]) connectionStates[currentConnectionId].selection = new Set(fileSelection); renderTable(); }
-    function allVisibleSelected(){ const all = currentItems.map(i => joinPath(currentPath, i.name)); return all.length>0 && all.every(p => fileSelection.has(p)); }
-    function toggleSelectVisible(e){ e.stopPropagation(); const all = currentItems.map(i => joinPath(currentPath, i.name)); if (all.every(p => fileSelection.has(p))) all.forEach(p => fileSelection.delete(p)); else all.forEach(p => fileSelection.add(p)); if (connectionStates[currentConnectionId]) connectionStates[currentConnectionId].selection = new Set(fileSelection); renderTable(); }
+    function allVisibleSelected(){ const all = currentItems.map(i => joinPath(currentPath, i.original_name || i.name)); return all.length>0 && all.every(p => fileSelection.has(p)); }
+    function toggleSelectVisible(e){ e.stopPropagation(); const all = currentItems.map(i => joinPath(currentPath, i.original_name || i.name)); if (all.every(p => fileSelection.has(p))) all.forEach(p => fileSelection.delete(p)); else all.forEach(p => fileSelection.add(p)); if (connectionStates[currentConnectionId]) connectionStates[currentConnectionId].selection = new Set(fileSelection); renderTable(); }
     function updateBatchButtons(){ const hasSel = fileSelection.size>0; ['batch-delete-btn','batch-download-btn','batch-zip-btn'].forEach(id => { const el=document.getElementById(id); if(el) el.disabled = !currentConnectionId || !hasSel; }); }
 
     async function deleteItem(path, isDir){ if(!confirm(`确定要删除这个${isDir?'目录':'文件'}吗?`)) return; try{ await fetchJSON(`${API}/sftp/delete`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ connection_id: currentConnectionId, remote_path: path, is_directory: !!isDir }) }); showMessage('删除成功'); loadDirectory(currentPath); } catch(err){ showMessage(err.message, 'error'); } }

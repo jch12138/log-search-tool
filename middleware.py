@@ -99,11 +99,30 @@ def api_response(func):
                     'data': result
                 })
         except ValueError as e:
+            error_message = str(e)
+            # 判断是否是参数验证错误
+            if "参数验证失败" in error_message:
+                error_code = 'VALIDATION_ERROR'
+                user_message = error_message.replace("参数验证失败: ", "")
+            elif "context_span" in error_message:
+                error_code = 'INVALID_CONTEXT_SPAN'
+                user_message = "上下文行数设置无效，请设置为0-50之间的整数"
+            elif "search_mode" in error_message:
+                error_code = 'INVALID_SEARCH_MODE'
+                user_message = "搜索模式无效，请选择关键词搜索、上下文搜索或尾部搜索"
+            elif "文件过滤" in error_message:
+                error_code = 'INVALID_FILE_FILTER'
+                user_message = "文件过滤设置无效，启用过滤时请指定要搜索的文件"
+            else:
+                error_code = 'INVALID_ARGUMENT'
+                user_message = error_message
+            
             return jsonify({
                 'success': False,
                 'error': {
-                    'code': 'INVALID_ARGUMENT',
-                    'message': str(e)
+                    'code': error_code,
+                    'message': user_message,
+                    'details': error_message  # 保留原始错误信息用于调试
                 }
             }), 400
         except FileNotFoundError as e:
@@ -111,7 +130,8 @@ def api_response(func):
                 'success': False,
                 'error': {
                     'code': 'NOT_FOUND',
-                    'message': str(e)
+                    'message': f"文件或资源不存在: {str(e)}",
+                    'details': str(e)
                 }
             }), 404
         except PermissionError as e:
@@ -119,7 +139,8 @@ def api_response(func):
                 'success': False,
                 'error': {
                     'code': 'PERMISSION_DENIED',
-                    'message': str(e)
+                    'message': f"权限不足: {str(e)}",
+                    'details': str(e)
                 }
             }), 403
         except TimeoutError as e:
@@ -127,16 +148,27 @@ def api_response(func):
                 'success': False,
                 'error': {
                     'code': 'DEADLINE_EXCEEDED',
-                    'message': str(e)
+                    'message': f"操作超时: {str(e)}",
+                    'details': str(e)
                 }
             }), 408
+        except ConnectionError as e:
+            return jsonify({
+                'success': False,
+                'error': {
+                    'code': 'CONNECTION_ERROR',
+                    'message': f"连接失败: {str(e)}",
+                    'details': str(e)
+                }
+            }), 503
         except Exception as e:
             logger.error(f"Unexpected error in {func.__name__}: {e}", exc_info=True)
             return jsonify({
                 'success': False,
                 'error': {
                     'code': 'INTERNAL',
-                    'message': '服务器内部错误'
+                    'message': '服务器内部错误，请稍后重试',
+                    'details': str(e) if logger.isEnabledFor(logging.DEBUG) else None
                 }
             }), 500
     return wrapper

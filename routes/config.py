@@ -57,7 +57,19 @@ def update_config():
 
     # 读取现有配置以合并敏感字段
     existing = config_service.load_config() or {}
-    existing_logs = { (log.get('name') or '', log.get('path') or ''): log for log in existing.get('logs', []) }
+    
+    # 构建现有日志的映射 - 使用name作为主键，path作为辅助匹配
+    existing_logs = {}
+    for log in existing.get('logs', []):
+        name = log.get('name', '').strip()
+        path = log.get('path', '').strip()
+        group = log.get('group', '').strip()
+        # 使用多层键确保唯一性
+        key = f"{name}|{group}|{path}"
+        existing_logs[key] = log
+        # 同时使用name作为简单键，用于处理新增情况
+        if name and name not in existing_logs:
+            existing_logs[name] = log
 
     merged = {
         'settings': incoming.get('settings', existing.get('settings', {})),
@@ -65,35 +77,57 @@ def update_config():
     }
 
     for log in incoming.get('logs', []):
-        # 合并单个日志配置
-        key = (log.get('name') or '', log.get('path') or '')
+        name = log.get('name', '').strip()
+        path = log.get('path', '').strip()
+        group = log.get('group', '').strip()
+        
+        # 尝试匹配现有配置
+        key = f"{name}|{group}|{path}"
         old_log = existing_logs.get(key)
+        
+        # 如果精确匹配失败，尝试按名称匹配（用于处理修改了group或path的情况）
+        if not old_log and name:
+            old_log = existing_logs.get(name)
+        
         new_log = {
-            'name': log.get('name'),
-            'path': log.get('path'),
-            'group': log.get('group'),
+            'name': name,
+            'path': path,
+            'group': group,
             'description': log.get('description'),
             'sshs': []
         }
 
-        # 以 host+port+username 做ssh项的匹配键
+        # 构建SSH映射 - 以 host+port+username 做ssh项的匹配键
         old_ssh_map = {}
         if old_log and isinstance(old_log.get('sshs'), list):
             for s in old_log['sshs']:
-                key_ssh = (s.get('host'), s.get('port'), s.get('username'))
-                old_ssh_map[key_ssh] = s
+                host = s.get('host', '').strip()
+                port = s.get('port', 22)
+                username = s.get('username', '').strip()
+                ssh_key = f"{host}:{port}@{username}"
+                old_ssh_map[ssh_key] = s
 
         for s in log.get('sshs', []) or []:
-            key_ssh = (s.get('host'), s.get('port'), s.get('username'))
-            old_s = old_ssh_map.get(key_ssh, {})
-            merged_pwd = s.get('password') if s.get('password') else old_s.get('password')
+            host = s.get('host', '').strip()
+            port = s.get('port', 22)
+            username = s.get('username', '').strip()
+            ssh_key = f"{host}:{port}@{username}"
+            
+            old_s = old_ssh_map.get(ssh_key, {})
+            
+            # 密码合并逻辑：新密码优先，否则保持旧密码
+            new_password = s.get('password', '').strip()
+            old_password = old_s.get('password', '')
+            merged_password = new_password if new_password else old_password
+            
             ns = {
-                'host': s.get('host'),
-                'port': s.get('port'),
-                'username': s.get('username'),
+                'host': host,
+                'port': port,
+                'username': username,
             }
-            if merged_pwd:
-                ns['password'] = merged_pwd
+            if merged_password:
+                ns['password'] = merged_password
+                
             new_log['sshs'].append(ns)
 
         merged['logs'].append(new_log)

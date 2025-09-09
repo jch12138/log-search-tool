@@ -183,10 +183,44 @@ class LogSearchService:
             if not conn:
                 raise Exception("SSH连接失败")
             
-            stdout, stderr, exit_code = conn.execute_command(command, timeout=30)
+            # 先检测文件编码并设置环境变量
+            encoding_command = self._build_encoding_detection_command(log_path)
+            logger.debug(f"[{host}] 检测文件编码: {encoding_command}")
+            
+            encoding_stdout, encoding_stderr, encoding_exit_code = conn.execute_command(encoding_command, timeout=10)
+            
+            # 根据检测结果决定是否设置UTF-8环境变量
+            use_utf8_env = False
+            detected_encoding = "unknown"
+            
+            if encoding_exit_code == 0 and encoding_stdout.strip():
+                detected_encoding = encoding_stdout.strip().lower()
+                logger.debug(f"[{host}] 检测到文件编码: {detected_encoding}")
+                
+                # 如果检测到非UTF-8编码（如GBK、GB2312等），设置UTF-8环境变量
+                if 'gbk' in detected_encoding or 'gb2312' in detected_encoding or 'gb18030' in detected_encoding:
+                    use_utf8_env = True
+                    logger.info(f"[{host}] 检测到中文编码 {detected_encoding}，将使用UTF-8环境变量")
+            else:
+                logger.debug(f"[{host}] 编码检测失败或不支持，使用默认处理")
+            
+            # 构建最终的搜索命令（可能包含环境变量设置）
+            if use_utf8_env:
+                # 设置UTF-8环境变量来处理中文编码
+                final_command = f"export LANG=zh_CN.UTF-8; export LC_ALL=zh_CN.UTF-8; {command}"
+                logger.debug(f"[{host}] 使用UTF-8环境变量执行搜索")
+            else:
+                final_command = command
+            
+            logger.debug(f"[{host}] 执行搜索命令: {final_command}")
+            stdout, stderr, exit_code = conn.execute_command(final_command, timeout=30)
             
             if exit_code != 0 and stderr:
                 raise Exception(f"搜索命令执行失败: {stderr}")
+            
+            # 如果使用了UTF-8环境变量但仍有乱码，尝试编码转换
+            if use_utf8_env and stdout:
+                stdout = self._handle_encoding_conversion(stdout, detected_encoding, host)
             
             # 处理结果
             lines = stdout.strip().split('\n') if stdout.strip() else []
@@ -339,6 +373,51 @@ class LogSearchService:
         
         return command
     
+    def _build_encoding_detection_command(self, file_path: str) -> str:
+        """构建编码检测命令"""
+        # 优先使用 file 命令检测编码
+        return f"file -bi '{file_path}' 2>/dev/null || file '{file_path}' 2>/dev/null | grep -o 'charset=[^,]*' | cut -d= -f2 || echo 'unknown'"
+    
+    def _handle_encoding_conversion(self, content: str, detected_encoding: str, host: str) -> str:
+        """处理编码转换"""
+        try:
+            if not content:
+                return content
+            
+            # 尝试不同的编码转换策略
+            encodings_to_try = ['utf-8', 'gbk', 'gb2312', 'gb18030', 'latin1']
+            
+            # 如果检测到了特定编码，优先尝试该编码
+            if detected_encoding and detected_encoding != 'unknown':
+                if detected_encoding not in encodings_to_try:
+                    encodings_to_try.insert(0, detected_encoding)
+            
+            for encoding in encodings_to_try:
+                try:
+                    # 尝试用当前编码解码，然后用UTF-8编码
+                    if isinstance(content, str):
+                        # 如果已经是字符串，先编码为字节再解码
+                        decoded = content.encode('latin1').decode(encoding)
+                    else:
+                        # 如果是字节，直接解码
+                        decoded = content.decode(encoding)
+                    
+                    logger.debug(f"[{host}] 成功使用 {encoding} 编码转换内容")
+                    return decoded
+                except (UnicodeDecodeError, UnicodeEncodeError, LookupError):
+                    continue
+            
+            # 如果所有编码都失败，使用错误处理策略
+            logger.warning(f"[{host}] 所有编码转换都失败，使用错误忽略策略")
+            if isinstance(content, str):
+                return content.encode('utf-8', errors='ignore').decode('utf-8')
+            else:
+                return content.decode('utf-8', errors='ignore')
+                
+        except Exception as e:
+            logger.error(f"[{host}] 编码转换异常: {e}")
+            return content  # 返回原始内容
+    
     def get_log_files(self, ssh_config: Dict[str, Any], log_path: str) -> List[Dict[str, Any]]:
         """获取日志目录下的所有文件
         
@@ -355,54 +434,82 @@ class LogSearchService:
             if not log_dir:
                 log_dir = '.'
             
+            host = ssh_config.get('host', 'unknown')
+            logger.debug(f"[{host}] 开始获取日志文件列表")
+            logger.debug(f"[{host}] 原始日志路径: {log_path}")
+            logger.debug(f"[{host}] 提取的目录: {log_dir}")
+            
             conn = self.ssh_manager.get_connection(ssh_config)
             if not conn:
+                logger.error(f"[{host}] SSH连接失败")
                 raise Exception("SSH连接失败")
             
-            host = ssh_config.get('host', 'unknown')
+            logger.debug(f"[{host}] SSH连接成功")
             
             # 首先尝试使用Linux风格的命令
             linux_command = f"find '{log_dir}' -maxdepth 1 -type f -printf '%f\\t%s\\t%TY-%Tm-%Td %TH:%TM:%TS\\t%CY-%Cm-%Cd %CH:%CM:%CS\\t%p\\n' 2>/dev/null"
+            logger.debug(f"[{host}] 尝试Linux命令: {linux_command}")
             
             stdout, stderr, exit_code = conn.execute_command(linux_command)
+            logger.debug(f"[{host}] Linux命令结果 - exit_code: {exit_code}, stdout长度: {len(stdout) if stdout else 0}, stderr: {stderr[:100] if stderr else 'None'}")
             
             if exit_code == 0 and stdout.strip():
                 # Linux命令成功，解析输出
-                return self._parse_linux_find_output(stdout, host)
+                logger.debug(f"[{host}] Linux命令成功，开始解析输出")
+                files = self._parse_linux_find_output(stdout, host)
+                logger.debug(f"[{host}] Linux解析完成，找到 {len(files)} 个文件")
+                return files
             
             # Linux命令失败，尝试macOS风格的命令
-            macos_command = f"find '{log_dir}' -maxdepth 1 -type f -exec stat -f '%N\\t%z\\t%SB\\t%Sm\\t%N' -t '%Y-%m-%d %H:%M:%S' {{}} \\; 2>/dev/null"
+            # 使用管道符作为分隔符避免制表符转义问题
+            macos_command = f"find '{log_dir}' -maxdepth 1 -type f -exec stat -f '%N|%z|%SB|%Sm|%N' -t '%Y-%m-%d %H:%M:%S' {{}} \\; 2>/dev/null"
+            logger.debug(f"[{host}] Linux命令失败，尝试macOS命令: {macos_command}")
             
             stdout, stderr, exit_code = conn.execute_command(macos_command)
+            logger.debug(f"[{host}] macOS命令结果 - exit_code: {exit_code}, stdout长度: {len(stdout) if stdout else 0}, stderr: {stderr[:100] if stderr else 'None'}")
             
             if exit_code == 0 and stdout.strip():
                 # macOS命令成功，解析输出
-                return self._parse_macos_stat_output(stdout, host)
+                logger.debug(f"[{host}] macOS命令成功，开始解析输出")
+                files = self._parse_macos_stat_output(stdout, host)
+                logger.debug(f"[{host}] macOS解析完成，找到 {len(files)} 个文件")
+                return files
             
             # 所有高级命令都失败，使用最基本的ls命令
             ls_command = f"ls -la '{log_dir}' | grep '^-'"
+            logger.debug(f"[{host}] 高级命令都失败，尝试基本ls命令: {ls_command}")
             stdout, stderr, exit_code = conn.execute_command(ls_command)
+            logger.debug(f"[{host}] ls命令结果 - exit_code: {exit_code}, stdout长度: {len(stdout) if stdout else 0}, stderr: {stderr[:100] if stderr else 'None'}")
             
             if exit_code == 0 and stdout.strip():
-                return self._parse_ls_output(stdout, log_dir, host)
+                logger.debug(f"[{host}] ls命令成功，开始解析输出")
+                files = self._parse_ls_output(stdout, log_dir, host)
+                logger.debug(f"[{host}] ls解析完成，找到 {len(files)} 个文件")
+                return files
             
-            logger.warning(f"无法获取目录 {log_dir} 的文件列表")
+            logger.warning(f"[{host}] 无法获取目录 {log_dir} 的文件列表，所有命令都失败")
             return []
             
         except Exception as e:
-            logger.error(f"获取文件列表失败 {ssh_config.get('host', 'unknown')}: {e}")
+            logger.error(f"[{ssh_config.get('host', 'unknown')}] 获取文件列表失败: {e}")
+            logger.debug(f"[{ssh_config.get('host', 'unknown')}] 异常详情", exc_info=True)
             return []
     
     def _parse_linux_find_output(self, stdout: str, host: str) -> List[Dict[str, Any]]:
         """解析Linux find命令的输出"""
         files = []
+        lines = stdout.strip().split('\n')
+        logger.debug(f"[{host}] 开始解析Linux find输出，总行数: {len(lines)}")
         
-        for line in stdout.strip().split('\n'):
+        for i, line in enumerate(lines):
             if not line.strip():
+                logger.debug(f"[{host}] 跳过空行 {i+1}")
                 continue
             
             try:
                 parts = line.split('\t')
+                logger.debug(f"[{host}] 解析第{i+1}行，分割成{len(parts)}部分: {parts}")
+                
                 if len(parts) >= 5:
                     filename = parts[0]
                     size_bytes = int(parts[1])
@@ -410,30 +517,41 @@ class LogSearchService:
                     birth_time = parts[3]
                     full_path = parts[4]
                     
-                    files.append({
+                    file_info = {
                         'filename': filename,
                         'full_path': full_path,
                         'size': size_bytes,
                         'birth_time': birth_time,
                         'modified_time': modified_time,
                         'host': host
-                    })
+                    }
+                    files.append(file_info)
+                    logger.debug(f"[{host}] 成功解析文件: {filename} (大小: {size_bytes})")
+                else:
+                    logger.debug(f"[{host}] 第{i+1}行格式不正确，部分数量不足: {len(parts)}")
             except (ValueError, IndexError) as e:
-                logger.debug(f"解析Linux find输出失败: {line}, 错误: {e}")
+                logger.debug(f"[{host}] 解析Linux find输出失败: {line}, 错误: {e}")
                 continue
         
+        logger.debug(f"[{host}] Linux解析完成，成功解析 {len(files)} 个文件")
         return files
     
     def _parse_macos_stat_output(self, stdout: str, host: str) -> List[Dict[str, Any]]:
         """解析macOS stat命令的输出"""
         files = []
+        lines = stdout.strip().split('\n')
+        logger.debug(f"[{host}] 开始解析macOS stat输出，总行数: {len(lines)}")
         
-        for line in stdout.strip().split('\n'):
+        for i, line in enumerate(lines):
             if not line.strip():
+                logger.debug(f"[{host}] 跳过空行 {i+1}")
                 continue
             
             try:
-                parts = line.split('\t')
+                # 使用管道符分割，避免制表符转义问题
+                parts = line.split('|')
+                logger.debug(f"[{host}] 解析第{i+1}行，分割成{len(parts)}部分: {parts}")
+                
                 if len(parts) >= 5:
                     filename = os.path.basename(parts[0])
                     size_bytes = int(parts[1])
@@ -441,31 +559,41 @@ class LogSearchService:
                     modified_time = parts[3]
                     full_path = parts[4]
                     
-                    files.append({
+                    file_info = {
                         'filename': filename,
                         'full_path': full_path,
                         'size': size_bytes,
                         'birth_time': birth_time,
                         'modified_time': modified_time,
                         'host': host
-                    })
+                    }
+                    files.append(file_info)
+                    logger.debug(f"[{host}] 成功解析文件: {filename} (大小: {size_bytes})")
+                else:
+                    logger.debug(f"[{host}] 第{i+1}行格式不正确，部分数量不足: {len(parts)}")
             except (ValueError, IndexError) as e:
-                logger.debug(f"解析macOS stat输出失败: {line}, 错误: {e}")
+                logger.debug(f"[{host}] 解析macOS stat输出失败: {line}, 错误: {e}")
                 continue
         
+        logger.debug(f"[{host}] macOS解析完成，成功解析 {len(files)} 个文件")
         return files
     
     def _parse_ls_output(self, stdout: str, log_dir: str, host: str) -> List[Dict[str, Any]]:
         """解析ls命令的输出"""
         files = []
+        lines = stdout.strip().split('\n')
+        logger.debug(f"[{host}] 开始解析ls输出，总行数: {len(lines)}")
         
-        for line in stdout.strip().split('\n'):
+        for i, line in enumerate(lines):
             if not line.strip():
+                logger.debug(f"[{host}] 跳过空行 {i+1}")
                 continue
             
             try:
                 # 解析ls -la输出格式
                 parts = line.split()
+                logger.debug(f"[{host}] 解析第{i+1}行，分割成{len(parts)}部分: {parts}")
+                
                 if len(parts) >= 9:
                     filename = parts[-1]
                     size_str = parts[4]
@@ -475,6 +603,7 @@ class LogSearchService:
                     try:
                         size_bytes = int(size_str)
                     except ValueError:
+                        logger.debug(f"[{host}] 无法解析文件大小: {size_str}")
                         size_bytes = 0
                     
                     # 解析修改时间
@@ -487,18 +616,23 @@ class LogSearchService:
                     else:
                         modified_time = "unknown"
                     
-                    files.append({
+                    file_info = {
                         'filename': filename,
                         'full_path': full_path,
                         'size': size_bytes,
                         'birth_time': modified_time,  # ls命令无法获取创建时间
                         'modified_time': modified_time,
                         'host': host
-                    })
+                    }
+                    files.append(file_info)
+                    logger.debug(f"[{host}] 成功解析文件: {filename} (大小: {size_bytes})")
+                else:
+                    logger.debug(f"[{host}] 第{i+1}行格式不正确，部分数量不足: {len(parts)}")
             except (ValueError, IndexError) as e:
-                logger.debug(f"解析ls输出失败: {line}, 错误: {e}")
+                logger.debug(f"[{host}] 解析ls输出失败: {line}, 错误: {e}")
                 continue
         
+        logger.debug(f"[{host}] ls解析完成，成功解析 {len(files)} 个文件")
         return files
     
     def close(self):

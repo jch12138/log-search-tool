@@ -40,6 +40,20 @@
 </head>
 <body>
   <div class="container">
+    <!-- 页面隐藏警告 -->
+    <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 20px; margin-bottom: 30px; text-align: center;">
+      <h3 style="color: #856404; margin: 0 0 10px 0;">⚠️ 访问受限</h3>
+      <p style="color: #856404; margin: 0; font-size: 16px;">
+        此配置页面已被隐藏，不开放给普通用户访问。<br>
+        如需配置日志，请联系系统管理员或通过配置文件直接编辑。
+      </p>
+      <div style="margin-top: 15px;">
+        <button onclick="window.location.href='/'" style="background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">
+          返回首页
+        </button>
+      </div>
+    </div>
+    
     <h2>日志配置编辑</h2>
     <div class="config-info">
       <p style="color: #666; font-size: 14px; text-align: center; margin-bottom: 20px; padding: 10px; background: #f0f8ff; border-radius: 6px; border-left: 4px solid #4f8cff;">

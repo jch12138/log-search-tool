@@ -52,16 +52,25 @@ class SearchParams:
     
     def validate(self):
         """验证参数有效性"""
+        errors = []
+        
+        # 验证 context_span
         if self.context_span < 0 or self.context_span > 50:
-            raise ValueError("context_span 必须在 0-50 之间")
+            errors.append(f"上下文行数必须在 0-50 之间，当前值: {self.context_span}")
         
-        if self.search_mode not in ['keyword', 'context', 'tail']:
-            raise ValueError("search_mode 必须是 keyword、context 或 tail")
+        # 验证 search_mode
+        valid_modes = ['keyword', 'context', 'tail']
+        if self.search_mode not in valid_modes:
+            errors.append(f"搜索模式必须是 {'/'.join(valid_modes)} 中的一种，当前值: {self.search_mode}")
         
+        # 验证文件过滤设置
         if self.use_file_filter:
-            # 优先使用新的 selected_files，如果没有则使用旧的 selected_file
             if not self.selected_files and not self.selected_file:
-                raise ValueError("启用文件过滤时必须指定 selected_file 或 selected_files")
+                errors.append("启用文件过滤时必须指定要搜索的文件")
+        
+        # 如果有错误，抛出包含所有错误信息的异常
+        if errors:
+            raise ValueError("参数验证失败: " + "; ".join(errors))
 
 @dataclass
 class SearchResult:

@@ -465,6 +465,13 @@ const LogSearchResults = {
                     display: flex;
                     align-items: center;
                     gap: 8px;
+                    justify-content: space-between;
+                }
+                
+                .host-left-info {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
                 }
                 
                 .host-icon {
@@ -483,6 +490,62 @@ const LogSearchResults = {
                     background: #f0f2f5;
                     padding: 2px 6px;
                     border-radius: 10px;
+                }
+                
+                .host-actions {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                }
+                
+                .download-btn {
+                    padding: 6px 12px;
+                    font-size: 12px;
+                    border: 1px solid #e4e7ed;
+                    background: #fafbfc;
+                    color: #909399;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 4px;
+                    min-width: 60px;
+                    text-align: center;
+                    font-weight: 400;
+                    line-height: 1;
+                }
+                
+                .download-btn:hover {
+                    background: #f0f2f5;
+                    border-color: #c0c4cc;
+                    color: #606266;
+                    transform: translateY(-1px);
+                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                }
+                
+                .download-btn:active {
+                    background: #e4e7ed;
+                    border-color: #b3b8c3;
+                    transform: translateY(0);
+                    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+                }
+                
+                .download-btn:focus {
+                    outline: none;
+                    border-color: #409eff;
+                    box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
+                }
+                
+                .download-btn i {
+                    font-size: 11px;
+                    margin: 0;
+                }
+                
+                .download-btn span {
+                    margin: 0;
+                    white-space: nowrap;
                 }
                 
                 .host-results {
@@ -685,6 +748,80 @@ const LogSearchResults = {
                 div.textContent = content;
                 return div.innerHTML;
             }
+        },
+        
+        // 下载日志文件
+        async downloadLogFile(hostResult) {
+            if (!hostResult || !hostResult.search_result) {
+                this.$message.error('无法获取日志文件信息');
+                return;
+            }
+            
+            try {
+                const filePath = hostResult.search_result.file_path;
+                const host = hostResult.host;
+                
+                if (!filePath) {
+                    this.$message.error('日志文件路径不存在');
+                    return;
+                }
+                
+                // 显示下载提示
+                this.$message.info(`正在准备下载 ${host} 的日志文件...`);
+                
+                // 构建下载URL参数
+                const params = new URLSearchParams({
+                    host: host,
+                    file_path: filePath
+                });
+                
+                // 如果有日志名称，也传递过去
+                if (this.searchResults && this.searchResults.log_name) {
+                    params.append('log_name', this.searchResults.log_name);
+                }
+                
+                const downloadUrl = `/api/v1/logs/download?${params.toString()}`;
+                
+                // 创建隐藏的下载链接
+                const link = document.createElement('a');
+                link.href = downloadUrl;
+                link.download = `${host}_${this.formatFileName(filePath)}_${this.formatDate(new Date())}.log`;
+                link.style.display = 'none';
+                
+                // 添加到文档并触发下载
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                this.$message.success('下载已开始');
+                
+            } catch (error) {
+                console.error('下载失败:', error);
+                this.$message.error('下载失败: ' + error.message);
+            }
+        },
+        
+        // 格式化文件名
+        formatFileName(filePath) {
+            if (!filePath) return 'log';
+            
+            // 提取文件名（去掉路径）
+            const fileName = filePath.split('/').pop() || filePath.split('\\').pop() || 'log';
+            
+            // 去掉扩展名
+            return fileName.replace(/\.[^/.]+$/, '');
+        },
+        
+        // 格式化日期为文件名友好格式
+        formatDate(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hour = String(date.getHours()).padStart(2, '0');
+            const minute = String(date.getMinutes()).padStart(2, '0');
+            const second = String(date.getSeconds()).padStart(2, '0');
+            
+            return `${year}${month}${day}_${hour}${minute}${second}`;
         }
     },
     
@@ -716,9 +853,16 @@ const LogSearchResults = {
                             <!-- 主机头部 -->
                             <div class="host-header" v-if="showHostGrouping">
                                 <div class="host-info">
-                                    <i class="fas fa-server host-icon"></i>
-                                    <span class="host-name">{{ group.host }}</span>
-                                    <span class="host-count">{{ group.results.length }} 条</span>
+                                    <div class="host-left-info">
+                                        <i class="fas fa-server host-icon"></i>
+                                        <span class="host-name">{{ group.host }}</span>
+                                        <span class="host-count">{{ group.results.length }} 条</span>
+                                    </div>
+                                    <div class="host-actions">
+                                        <button class="download-btn" @click="downloadLogFile(group.hostResult)" title="下载日志文件">
+                                            <span>下载日志</span>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                             

@@ -16,9 +16,12 @@ import shutil
 import time
 import uuid
 import paramiko
+import logging
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, asdict
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -39,6 +42,39 @@ class SFTPService:
     def __init__(self):
         self.connections: Dict[str, Dict[str, Any]] = {}
         self.connection_info: Dict[str, SFTPConnection] = {}
+    
+    def _detect_and_convert_encoding(self, text: str) -> str:
+        """检测并转换文件名编码"""
+        if not text:
+            return text
+        
+        try:
+            # 如果已经是有效的UTF-8，直接返回
+            text.encode('utf-8')
+            return text
+        except UnicodeEncodeError:
+            # 如果不是UTF-8，尝试从GBK转换
+            try:
+                # 假设原始字符串是从GBK错误解码为UTF-8的结果
+                # 先编码为latin-1获取原始字节，再用GBK解码
+                gbk_bytes = text.encode('latin-1')
+                correct_text = gbk_bytes.decode('gbk')
+                logger.debug(f"编码转换成功: {text} -> {correct_text}")
+                return correct_text
+            except (UnicodeEncodeError, UnicodeDecodeError):
+                # 如果GBK转换也失败，尝试其他常见编码
+                for encoding in ['gb2312', 'big5', 'shift_jis']:
+                    try:
+                        gbk_bytes = text.encode('latin-1')
+                        correct_text = gbk_bytes.decode(encoding)
+                        logger.debug(f"编码转换成功({encoding}): {text} -> {correct_text}")
+                        return correct_text
+                    except (UnicodeEncodeError, UnicodeDecodeError):
+                        continue
+                
+                # 所有转换都失败，返回原文
+                logger.warning(f"编码转换失败，保持原文: {text}")
+                return text
     
     def connect(self, host: str, port: int = 22, username: str = "", 
                password: str = "", connection_name: str = "") -> SFTPConnection:
@@ -155,8 +191,15 @@ class SFTPService:
             items = []
             
             for item in entries:
+                # 转换文件名编码
+                original_filename = item.filename
+                converted_filename = self._detect_and_convert_encoding(original_filename)
+                
+                logger.debug(f"文件名处理: {original_filename} -> {converted_filename}")
+                
                 file_info = {
-                    'name': item.filename,
+                    'name': converted_filename,
+                    'original_name': original_filename,  # 保留原始文件名用于后续操作
                     'type': 'directory' if stat.S_ISDIR(item.st_mode) else 'file',
                     'size': item.st_size if hasattr(item, 'st_size') else 0,
                     'size_human': self._format_size(item.st_size if hasattr(item, 'st_size') else 0),
@@ -275,7 +318,7 @@ class SFTPService:
             raise Exception(f"批量下载失败: {str(e)}")
     
     def upload_file(self, connection_id: str, local_file_path: str, 
-                   remote_path: str, filename: str = None) -> Dict[str, Any]:
+                   remote_path: str, filename: Optional[str] = None) -> Dict[str, Any]:
         """上传文件"""
         if connection_id not in self.connections:
             raise ValueError("SFTP连接不存在")

@@ -67,11 +67,11 @@ def register_routes(app: Flask):
         """前端日志搜索页面"""
         return render_template('index.html')
 
-    # 配置编辑页面
-    @app.route('/config')
-    def config_page():
-        """日志配置编辑页面"""
-        return render_template('config.html')
+    # 配置编辑页面 - 已隐藏，不开放给用户手动配置
+    # @app.route('/config')
+    # def config_page():
+    #     """日志配置编辑页面"""
+    #     return render_template('config.html')
     
     # SFTP 文件管理页面
     @app.route('/sftp')

@@ -18,6 +18,7 @@ import uuid
 import paramiko
 import logging
 from datetime import datetime
+from .encoding import decode_bytes
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, asdict
 
@@ -43,74 +44,13 @@ class SFTPService:
         self.connections: Dict[str, Dict[str, Any]] = {}
         self.connection_info: Dict[str, SFTPConnection] = {}
     
-    def _detect_and_convert_encoding(self, data):
-        """检测并转换编码为UTF-8"""
-        if isinstance(data, str):
-            return data  # 已经是字符串，直接返回
-        
-        if not isinstance(data, bytes):
-            return str(data)  # 转换为字符串
-        
-        # 优先尝试GB2312编码，然后是其他常见编码
-        encodings_to_try = ['gb2312', 'gbk', 'utf-8', 'latin-1']
-        
-        for encoding in encodings_to_try:
-            try:
-                decoded_text = data.decode(encoding)
-                logger.debug(f"成功使用 {encoding} 编码解码文件名")
-                return decoded_text
-            except (UnicodeDecodeError, LookupError):
-                continue
-        
-        # 如果所有编码都失败，使用错误处理方式
-        try:
-            return data.decode('utf-8', errors='replace')
-        except:
-            return str(data, errors='replace')
-        """检测并转换文件名编码"""
-        if not text:
-            return text
-        
-        try:
-            # 如果已经是有效的UTF-8，直接返回
-            text.encode('utf-8')
-            # 检查是否包含中文字符
-            if any(ord(char) > 127 for char in text):
-                # 如果包含非ASCII字符，可能需要转换
-                try:
-                    # 尝试从GBK转换
-                    gbk_bytes = text.encode('latin-1')
-                    correct_text = gbk_bytes.decode('gbk')
-                    # 验证转换结果是否合理（包含中文字符）
-                    if any('\u4e00' <= char <= '\u9fff' for char in correct_text):
-                        logger.debug(f"编码转换成功: {text} -> {correct_text}")
-                        return correct_text
-                except (UnicodeEncodeError, UnicodeDecodeError):
-                    pass
-            return text
-        except UnicodeEncodeError:
-            # 如果不是UTF-8，尝试从GBK转换
-            try:
-                # 假设原始字符串是从GBK错误解码为UTF-8的结果
-                # 先编码为latin-1获取原始字节，再用GBK解码
-                gbk_bytes = text.encode('latin-1')
-                correct_text = gbk_bytes.decode('gbk')
-                logger.debug(f"编码转换成功: {text} -> {correct_text}")
-                return correct_text
-            except (UnicodeEncodeError, UnicodeDecodeError):
-                # 如果GBK转换也失败，尝试其他常见编码
-                for encoding in ['gb2312', 'big5', 'shift_jis']:
-                    try:
-                        gbk_bytes = text.encode('latin-1')
-                        correct_text = gbk_bytes.decode(encoding)
-                        logger.debug(f"编码转换成功({encoding}): {text} -> {correct_text}")
-                        return correct_text
-                    except (UnicodeEncodeError, UnicodeDecodeError):
-                        continue
-                
-                # 所有转换都失败，返回原文
-                logger.warning(f"编码转换失败，保持原文: {text}")
-                return text
+    def _decode_filename(self, name: Any) -> str:
+        """统一文件名解码：支持 bytes -> str (UTF-8 优先, GB2312 回退)."""
+        if isinstance(name, str):
+            return name
+        if isinstance(name, bytes):
+            return decode_bytes(name)
+        return str(name)
     
     def connect(self, host: str, port: int = 22, username: str = "", 
                password: str = "", connection_name: str = "") -> SFTPConnection:
@@ -237,7 +177,8 @@ class SFTPService:
                 try:
                     # 转换文件名编码
                     original_filename = item.filename
-                    converted_filename = self._detect_and_convert_encoding(original_filename)
+                    # Paramiko 通常提供 str，但极端情况下仍防御 bytes
+                    converted_filename = self._decode_filename(original_filename)
                     
                     logger.debug(f"文件名处理: {original_filename} -> {converted_filename}")
                     
@@ -286,18 +227,18 @@ class SFTPService:
         
         # 尝试不同的编码方式解码输出
         decoded_output = None
-        for encoding in ['utf-8', 'gbk', 'gb2312']:
+        for encoding in ['utf-8', 'gb2312']:
             try:
                 decoded_output = output.decode(encoding)
                 logger.info(f"SSH命令输出使用{encoding}编码解码成功")
                 break
             except UnicodeDecodeError:
                 continue
-        
+
         if not decoded_output:
             decoded_output = output.decode('utf-8', errors='ignore')
             logger.warning("所有编码尝试失败，使用UTF-8忽略错误模式")
-        
+
         items = []
         lines = decoded_output.strip().split('\n')[1:]  # 跳过第一行（总计）
         

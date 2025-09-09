@@ -16,6 +16,7 @@ from models import SearchParams
 from config import Config
 import tempfile
 import io
+from services.encoding import decode_bytes
 
 # 创建蓝图
 logs_bp = Blueprint('logs', __name__)
@@ -27,45 +28,7 @@ search_service = LogSearchService()
 # 创建logger
 logger = logging.getLogger(__name__)
 
-def _handle_encoding_conversion(content: str, detected_encoding: str, host: str) -> str:
-    """处理编码转换"""
-    try:
-        if not content:
-            return content
-        
-        # 尝试不同的编码转换策略，优先GB2312
-        encodings_to_try = ['gb2312', 'gbk', 'gb18030', 'utf-8', 'latin1']
-        
-        # 如果检测到了特定编码，优先尝试该编码
-        if detected_encoding and detected_encoding != 'unknown':
-            if detected_encoding not in encodings_to_try:
-                encodings_to_try.insert(0, detected_encoding)
-        
-        for encoding in encodings_to_try:
-            try:
-                # 尝试用当前编码解码，然后用UTF-8编码
-                if isinstance(content, str):
-                    # 如果已经是字符串，先编码为字节再解码
-                    decoded = content.encode('latin1').decode(encoding)
-                else:
-                    # 如果是字节，直接解码
-                    decoded = content.decode(encoding)
-                
-                logger.debug(f"[{host}] 成功使用 {encoding} 编码转换内容")
-                return decoded
-            except (UnicodeDecodeError, UnicodeEncodeError, LookupError):
-                continue
-        
-        # 如果所有编码都失败，使用错误处理策略
-        logger.warning(f"[{host}] 所有编码转换都失败，使用错误忽略策略")
-        if isinstance(content, str):
-            return content.encode('utf-8', errors='ignore').decode('utf-8')
-        else:
-            return content.decode('utf-8', errors='ignore')
-            
-    except Exception as e:
-        logger.error(f"[{host}] 编码转换异常: {e}")
-        return content  # 返回原始内容
+## 已统一在 ssh_service 中使用 decode_bytes 处理 UTF-8 / GB2312，不再需要本地转换辅助函数。
 
 @logs_bp.route('/logs', methods=['GET'])
 @api_response
@@ -267,7 +230,7 @@ def download_log_file():
         from services.ssh_service import SSHConnectionManager
         ssh_manager = SSHConnectionManager()
         conn = ssh_manager.get_connection(ssh_config)
-        
+
         if not conn:
             from flask import jsonify
             return jsonify({
@@ -277,34 +240,15 @@ def download_log_file():
                     'message': 'SSH连接失败'
                 }
             }), 500
-        
+
         logger.info(f"SSH连接成功 - Host: {host}")
-        
-        # 执行命令获取文件内容
+
+        # 直接获取文件内容（编码已在 ssh_service 统一回退）
         command = f"cat '{file_path}'"
         logger.info(f"执行命令: {command}")
-        
-        # 先检测文件编码
-        encoding_command = f"file -bi '{file_path}' 2>/dev/null || file '{file_path}' 2>/dev/null | grep -o 'charset=[^,]*' | cut -d= -f2 || echo 'unknown'"
-        encoding_stdout, _, encoding_exit_code = conn.execute_command(encoding_command, timeout=10)
-        
-        detected_encoding = "unknown"
-        if encoding_exit_code == 0 and encoding_stdout.strip():
-            detected_encoding = encoding_stdout.strip().lower()
-            logger.info(f"检测到文件编码: {detected_encoding}")
-        
-        # 根据检测结果调整读取命令
-        if 'gbk' in detected_encoding or 'gb2312' in detected_encoding or 'gb18030' in detected_encoding:
-            # 对于中文编码，使用iconv进行编码转换
-            final_command = f"iconv -f {detected_encoding.upper()} -t UTF-8 '{file_path}' 2>/dev/null || cat '{file_path}'"
-            logger.info(f"检测到中文编码 {detected_encoding}，使用iconv转换为UTF-8")
-        else:
-            final_command = command
-        
-        stdout, stderr, exit_code = conn.execute_command(final_command, timeout=60)
-        
+        stdout, stderr, exit_code = conn.execute_command(command, timeout=60)
         logger.info(f"命令执行结果 - exit_code: {exit_code}, stdout长度: {len(stdout) if stdout else 0}")
-        
+
         if exit_code != 0:
             logger.error(f"命令执行失败 - stderr: {stderr}")
             from flask import jsonify
@@ -315,62 +259,33 @@ def download_log_file():
                     'message': f'读取文件失败: {stderr}'
                 }
             }), 500
-        
+
         if not stdout:
             logger.warning("文件内容为空")
-            stdout = ""  # 允许空文件下载
-        
-        # 处理编码转换（如果需要）
-        if detected_encoding != 'unknown' and ('gbk' in detected_encoding or 'gb2312' in detected_encoding or 'gb18030' in detected_encoding):
-            stdout = _handle_encoding_conversion(stdout, detected_encoding, host)
-        
-        # 生成文件名
-        import os
+            stdout = ""
+
+        # 生成下载文件
         from datetime import datetime
         file_name = os.path.basename(file_path) or 'log'
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         download_filename = f"{host}_{file_name}_{timestamp}"
-        
-        # 确保文件名有扩展名
         if not download_filename.endswith('.log'):
             download_filename += '.log'
-        
-        logger.info(f"准备下载文件: {download_filename}, 大小: {len(stdout)} bytes")
-        
-        # 创建内存文件对象
-        file_obj = io.BytesIO()
-        file_obj.write(stdout.encode('utf-8'))
+
+        file_obj = io.BytesIO(stdout.encode('utf-8'))
         file_obj.seek(0)
-        
-        logger.info(f"文件下载成功 - Host: {host}, File: {file_path}, Size: {len(stdout)} bytes")
-        
-        # 兼容不同版本的Flask
+
         import flask
         flask_version = tuple(map(int, flask.__version__.split('.')))
-        
         if flask_version >= (2, 0, 0):
-            # Flask 2.0+ 使用 download_name
-            return send_file(
-                file_obj,
-                mimetype='text/plain',
-                as_attachment=True,
-                download_name=download_filename
-            )
+            return send_file(file_obj, mimetype='text/plain', as_attachment=True, download_name=download_filename)
         else:
-            # Flask 1.x 使用 attachment_filename
             from flask import Response
-            response = Response(
-                file_obj.getvalue(),
-                mimetype='text/plain',
-                headers={
-                    'Content-Disposition': f'attachment; filename="{download_filename}"'
-                }
-            )
-            return response
-        
+            return Response(file_obj.getvalue(), mimetype='text/plain', headers={'Content-Disposition': f'attachment; filename="{download_filename}"'})
+
     except Exception as e:
         logger.error(f"下载文件失败 - Host: {host}, File: {file_path}, Error: {e}")
-        logger.debug(f"下载文件异常详情", exc_info=True)
+        logger.debug("下载文件异常详情", exc_info=True)
         from flask import jsonify
         return jsonify({
             'success': False,
@@ -380,6 +295,5 @@ def download_log_file():
             }
         }), 500
     finally:
-        # 清理连接
         if 'ssh_manager' in locals():
             ssh_manager.close_all()

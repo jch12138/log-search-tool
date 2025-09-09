@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from models import SearchParams, SearchResult, HostResult
 from .ssh_service import SSHConnectionManager
+from .encoding import decode_bytes
 from .config_service import ConfigService
 from .filename_resolver import resolve_log_filename
 
@@ -183,86 +184,7 @@ class LogSearchService:
             if not conn:
                 raise Exception("SSH连接失败")
             
-            # 先检测文件编码并设置环境变量
-            encoding_command = self._build_encoding_detection_command(log_path)
-            logger.debug(f"[{host}] 检测文件编码: {encoding_command}")
-            
-            encoding_stdout, encoding_stderr, encoding_exit_code = conn.execute_command(encoding_command, timeout=10)
-            
-            # 根据检测结果决定是否设置UTF-8环境变量
-            use_utf8_env = False
-            detected_encoding = "unknown"
-            
-            if encoding_exit_code == 0 and encoding_stdout.strip():
-                detected_encoding = encoding_stdout.strip().lower()
-                logger.debug(f"[{host}] 检测到文件编码: {detected_encoding}")
-                
-                # 如果检测到非UTF-8编码（如GBK、GB2312等），设置UTF-8环境变量
-                if any(enc in detected_encoding for enc in ['gbk', 'gb2312', 'gb18030', 'iso-8859']):
-                    use_utf8_env = True
-                    logger.info(f"[{host}] 检测到中文编码 {detected_encoding}，将使用UTF-8环境变量")
-            else:
-                logger.debug(f"[{host}] 编码检测失败或不支持，使用默认处理")
-            
-            # 构建最终的搜索命令，处理编码转换
-            if use_utf8_env and any(enc in detected_encoding for enc in ['gbk', 'gb2312', 'gb18030', 'iso-8859']):
-                # 对于中文编码文件，使用iconv进行编码转换
-                logger.info(f"[{host}] 检测到 {detected_encoding} 编码，将使用iconv转换")
-                
-                # 映射检测到的编码到iconv格式
-                if 'gb2312' in detected_encoding or 'iso-8859' in detected_encoding:
-                    iconv_encoding = 'GB2312'
-                elif 'gbk' in detected_encoding:
-                    iconv_encoding = 'GBK'
-                elif 'gb18030' in detected_encoding:
-                    iconv_encoding = 'GB18030'
-                else:
-                    iconv_encoding = 'GB2312'  # 默认使用GB2312
-                
-                # 重新构建命令，加入编码转换
-                if search_params.search_mode == 'tail':
-                    # tail模式：先转换编码再tail
-                    lines = max(100, search_params.context_span)
-                    converted_command = f"iconv -f {iconv_encoding} -t UTF-8 '{log_path}' 2>/dev/null | tail -n {lines}"
-                    if search_params.reverse_order:
-                        reverse_cmd = self._get_reverse_command(ssh_config)
-                        converted_command += f" | {reverse_cmd}"
-                else:
-                    if not search_params.keyword:
-                        # 无关键词，显示最新内容
-                        converted_command = f"iconv -f {iconv_encoding} -t UTF-8 '{log_path}' 2>/dev/null | tail -n 100"
-                        if search_params.reverse_order:
-                            reverse_cmd = self._get_reverse_command(ssh_config)
-                            converted_command += f" | {reverse_cmd}"
-                    else:
-                        # 关键词搜索：先转换编码再搜索
-                        if search_params.use_regex:
-                            grep_cmd = "grep -nE"
-                        else:
-                            grep_cmd = "grep -nF"
-                        
-                        if search_params.search_mode == 'context' and search_params.context_span > 0:
-                            grep_cmd += f" -C {search_params.context_span}"
-                        
-                        escaped_keyword = search_params.keyword.replace("'", "'\"'\"'")
-                        converted_command = f"iconv -f {iconv_encoding} -t UTF-8 '{log_path}' 2>/dev/null | {grep_cmd} '{escaped_keyword}'"
-                        
-                        # 处理逆序和限制
-                        if search_params.reverse_order:
-                            reverse_cmd = self._get_reverse_command(ssh_config)
-                            converted_command += f" | tail -n 10000 | {reverse_cmd}"
-                        else:
-                            converted_command += " | head -n 10000"
-                
-                final_command = converted_command
-                logger.debug(f"[{host}] 使用编码转换命令: {final_command}")
-            else:
-                # 使用原始命令，可能加上UTF-8环境变量
-                if use_utf8_env:
-                    final_command = f"export LANG=zh_CN.UTF-8; export LC_ALL=zh_CN.UTF-8; {command}"
-                    logger.debug(f"[{host}] 使用UTF-8环境变量执行搜索")
-                else:
-                    final_command = command
+            final_command = command
             
             logger.debug(f"[{host}] 执行搜索命令: {final_command}")
             stdout, stderr, exit_code = conn.execute_command(final_command, timeout=30)
@@ -270,9 +192,15 @@ class LogSearchService:
             if exit_code != 0 and stderr:
                 raise Exception(f"搜索命令执行失败: {stderr}")
             
-            # 如果使用了UTF-8环境变量但仍有乱码，尝试编码转换
-            if use_utf8_env and stdout:
-                stdout = self._handle_encoding_conversion(stdout, detected_encoding, host)
+            # 统一使用 decode_bytes 进行 UTF-8 / GB2312 回退
+            if stdout:
+                try:
+                    # 将当前字符串视为原始字节猜测解码可能错误，先尝试直接utf-8验证
+                    stdout.encode('utf-8')
+                except Exception:
+                    # 退回到字节再解码策略
+                    candidate_bytes = stdout.encode('latin-1', errors='ignore')
+                    stdout = decode_bytes(candidate_bytes)
             
             # 处理结果
             lines = stdout.strip().split('\n') if stdout.strip() else []
@@ -425,50 +353,7 @@ class LogSearchService:
         
         return command
     
-    def _build_encoding_detection_command(self, file_path: str) -> str:
-        """构建编码检测命令"""
-        # 使用多种方法检测编码，优先检测中文编码
-        return f"(file '{file_path}' 2>/dev/null | grep -i 'iso-8859\\|non-iso\\|data' >/dev/null && echo 'gb2312') || (file -bi '{file_path}' 2>/dev/null | grep -o 'charset=[^,]*' | cut -d= -f2) || echo 'unknown'"
-    
-    def _handle_encoding_conversion(self, content: str, detected_encoding: str, host: str) -> str:
-        """处理编码转换"""
-        try:
-            if not content:
-                return content
-            
-            # 尝试不同的编码转换策略，优先GB2312
-            encodings_to_try = ['gb2312', 'gbk', 'gb18030', 'utf-8', 'latin1']
-            
-            # 如果检测到了特定编码，优先尝试该编码
-            if detected_encoding and detected_encoding != 'unknown':
-                if detected_encoding not in encodings_to_try:
-                    encodings_to_try.insert(0, detected_encoding)
-            
-            for encoding in encodings_to_try:
-                try:
-                    # 尝试用当前编码解码，然后用UTF-8编码
-                    if isinstance(content, str):
-                        # 如果已经是字符串，先编码为字节再解码
-                        decoded = content.encode('latin1').decode(encoding)
-                    else:
-                        # 如果是字节，直接解码
-                        decoded = content.decode(encoding)
-                    
-                    logger.debug(f"[{host}] 成功使用 {encoding} 编码转换内容")
-                    return decoded
-                except (UnicodeDecodeError, UnicodeEncodeError, LookupError):
-                    continue
-            
-            # 如果所有编码都失败，使用错误处理策略
-            logger.warning(f"[{host}] 所有编码转换都失败，使用错误忽略策略")
-            if isinstance(content, str):
-                return content.encode('utf-8', errors='ignore').decode('utf-8')
-            else:
-                return content.decode('utf-8', errors='ignore')
-                
-        except Exception as e:
-            logger.error(f"[{host}] 编码转换异常: {e}")
-            return content  # 返回原始内容
+    # 删除复杂的编码检测与转换辅助函数，仅保留UTF-8/GB2312回退机制
     
     def get_log_files(self, ssh_config: Dict[str, Any], log_path: str) -> List[Dict[str, Any]]:
         """获取日志目录下的所有文件

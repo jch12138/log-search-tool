@@ -11,6 +11,7 @@ import threading
 import time
 import uuid
 import codecs
+from .encoding import decode_bytes
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 import paramiko
@@ -274,20 +275,12 @@ class TerminalService:
                     data = channel.recv(8192)
                     if not data:
                         break
-                    
+
                     try:
                         text = decoder.decode(data)
                     except Exception:
-                        # 动态回退到 GBK（常见中文编码）
-                        try:
-                            text = data.decode('gbk')
-                            # 切换会话编码与解码器
-                            session_data['encoding'] = 'gbk'
-                            decoder = codecs.getincrementaldecoder('gbk')()
-                            session_data['decoder'] = decoder
-                        except Exception:
-                            # 最后兜底：UTF-8 替换错误字符
-                            text = data.decode('utf-8', errors='replace')
+                        # 使用统一 decode_bytes 回退策略
+                        text = decode_bytes(data)
                     
                     with session_data['lock']:
                         session_data['buffer'].append(text)

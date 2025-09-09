@@ -21,6 +21,7 @@ import time
 import logging
 from typing import Dict, Any, Optional
 from concurrent.futures import ThreadPoolExecutor, Future
+from .encoding import decode_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -79,9 +80,11 @@ class SSHConnection:
             try:
                 stdin, stdout, stderr = self.client.exec_command(command, timeout=timeout)
                 
-                # 读取输出
-                stdout_data = stdout.read().decode('utf-8', errors='ignore')
-                stderr_data = stderr.read().decode('utf-8', errors='ignore')
+                # 读取输出并统一使用 decode_bytes (仅 UTF-8 / GB2312 回退)
+                raw_out = stdout.read() or b""
+                raw_err = stderr.read() or b""
+                stdout_data = decode_bytes(raw_out)
+                stderr_data = decode_bytes(raw_err)
                 exit_code = stdout.channel.recv_exit_status()
                 
                 self.last_used = time.time()

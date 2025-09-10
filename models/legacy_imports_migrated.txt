@@ -1,2 +1,0 @@
-Models have been migrated to app/models/__init__.py.
-Legacy imports should be updated to: from app.models import <Symbol>.

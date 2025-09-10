@@ -313,31 +313,45 @@ class LogSearchService:
                 if search_params.reverse_order:
                     command += f" | {reverse_cmd}"
             else:
-                # 关键词搜索
-                if search_params.use_regex:
-                    grep_cmd = "grep -nE"  # 添加 -n 显示行号
-                else:
-                    grep_cmd = "grep -nF"  # 添加 -n 显示行号
-                
-                # 根据搜索模式设置上下文行数
-                if search_params.search_mode == 'context' and search_params.context_span > 0:
-                    # context模式：显示匹配行的前后context_span行
-                    grep_cmd += f" -C {search_params.context_span}"
-                elif search_params.search_mode == 'keyword':
-                    # keyword模式：只显示匹配行，不显示上下文
-                    pass  # 不添加-C参数
-                
-                # 构建完整命令
                 escaped_keyword = search_params.keyword.replace("'", "'\"'\"'")
-                command = f"{grep_cmd} '{escaped_keyword}' '{file_path}'"
-                
-                # 关键词搜索的逆序和限制处理
-                if search_params.reverse_order:
-                    # 对于逆序，我们需要先取足够的行，然后逆序 - 使用跨平台的方案
-                    command += f" | tail -n 10000 | {reverse_cmd}"
+                if search_params.use_regex:
+                    grep_base = "grep -nE"  # 显示行号，正则
                 else:
-                    # 正序时直接限制行数
-                    command += " | head -n 10000"
+                    grep_base = "grep -nF"  # 显示行号，固定字符串
+
+                if search_params.search_mode == 'context':
+                    # 连续区域：从第一次出现到最后一次出现，外加前后 N 行
+                    N = max(0, int(search_params.context_span))
+                    # 计算首尾匹配行号，并用 awk 输出带行号的连续区间
+                    # 注意：保持输出格式为 "line:content" 以便前端解析
+                    cmd_parts = []
+                    cmd_parts.append(
+                        f"first=$({grep_base} '{escaped_keyword}' '{file_path}' | head -n1 | cut -d: -f1); "
+                    )
+                    cmd_parts.append(
+                        f"last=$({grep_base} '{escaped_keyword}' '{file_path}' | tail -n1 | cut -d: -f1); "
+                    )
+                    cmd_parts.append('if [ -z "$first" ]; then exit 0; fi; ')
+                    cmd_parts.append(
+                        f"start=$(( first - {N} )); if [ $start -lt 1 ]; then start=1; fi; "
+                    )
+                    cmd_parts.append(f"end=$(( last + {N} )); ")
+                    cmd_parts.append(
+                        "awk -v s=\"$start\" -v e=\"$end\" 'NR>=s && NR<=e {print NR \":\" $0}' '" + file_path + "'"
+                    )
+                    command = "".join(cmd_parts)
+                    # 逆序与限制
+                    if search_params.reverse_order:
+                        command += f" | tail -n 10000 | {reverse_cmd}"
+                    else:
+                        command += " | head -n 10000"
+                else:
+                    # 关键词模式：仅匹配行，不拼接连续上下文
+                    command = f"{grep_base} '{escaped_keyword}' '{file_path}'"
+                    if search_params.reverse_order:
+                        command += f" | tail -n 10000 | {reverse_cmd}"
+                    else:
+                        command += " | head -n 10000"
         
         return command
     

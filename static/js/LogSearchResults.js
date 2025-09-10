@@ -79,7 +79,7 @@ const LogSearchResults = {
         },
         fontSize: {
             type: String,
-            default: '16px'  // 调整为适中的字体大小
+            default: '14px'  // 调整为适中的字体大小
         },
         fontFamily: {
             type: String,
@@ -586,7 +586,7 @@ const LogSearchResults = {
                 .result-content {
                     padding: 8px 16px;
                     font-family: 'Microsoft YaHei', '微软雅黑', 'Fira Code', 'SF Mono', 'Monaco', 'Cascadia Code', 'Roboto Mono', monospace;
-                    font-size: 16px;  /* 稍微调小字体 */
+                    font-size: 14px;  /* 稍微调小字体 */
                     font-weight: 400;  /* 标准字重 */
                     line-height: 1.6;  /* 增加行高提升可读性 */
                     white-space: pre-wrap;

@@ -5,23 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>日志聚合搜索</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Ctext%20x%3D%2750%25%27%20y%3D%2750%25%27%20text-anchor%3D%27middle%27%20dominant-basel                // 页面导航
-                navigateToPage(page) {
-                    this.showMoreMenu = false; // 关闭菜单
-                    
-                    // 页面配置
-                    const pageConfig = {
-                        /*
-                        'config': {
-                            url: '/config',
-                            title: '日志配置',
-                            icon: '⚙️'
-                        },
-                        */
-                        'sftp': {
-                            url: '/sftp',
-                            title: '文件管理',
-                            icon: '📁'l%27%20font-size%3D%2752%27%3E%F0%9F%94%8D%3C/text%3E%3C/svg%3E" />
+    <link rel="icon" href="/static/icons/favicon-search.svg" />
 
     <!-- 本地资源 -->
     <!-- Element Plus CSS -->
@@ -34,6 +18,8 @@
     <link rel="stylesheet" href="/static/css/groups.css" />
     <link rel="stylesheet" href="/static/css/search.css" />
     <link rel="stylesheet" href="/static/css/results.css" />
+    <!-- 紧凑样式覆盖，缩小整体字号与间距约10% -->
+    <link rel="stylesheet" href="/static/css/compact.css" />
     
     <!-- 本地JavaScript库 -->
     <script src="/static/js/vendor/vue.global.js"></script>
@@ -224,21 +210,19 @@
                             </div>
                         </div>
 
-                        <!-- 使用日志搜索结果组件 -->
-                        <log-search-results :search-results="searchResults" :search-keyword="searchForm.keyword"
-                            :use-regex="searchForm.use_regex" :height="searchResultsHeight" :max-results="5000"
-                            :show-search-stats="false" :show-host-grouping="true" :enabled-highlighters="{
-                                logLevels: true,
-                                timestamps: true,
-                                network: true,
-                                xml: true,
-                                sql: true,
-                                json: true,
-                                filePaths: true,
-                                urls: true,
-                                emails: true,
-                                uuids: true
-                            }" empty-message="未找到匹配的日志记录" />
+                        <!-- 使用日志搜索结果组件（仅在搜索完成后进行高亮） -->
+                        <log-search-results
+                            :key="resultsVersion"
+                            :search-results="searchResults"
+                            :search-keyword="highlightKeyword"
+                            :use-regex="searchForm.use_regex"
+                            :height="searchResultsHeight"
+                            :max-results="5000"
+                            :show-search-stats="false"
+                            :show-host-grouping="true"
+                            :enabled-highlighters="effectiveHighlighters"
+                            empty-message="未找到匹配的日志记录"
+                        />
                     </div>
                 </div>
             </div>
@@ -261,6 +245,8 @@
                     logsLoading: false,
                     searching: false,
                     hasSearched: false,
+                    resultsVersion: 0, // 每次搜索递增以重建结果组件，释放内存
+                    highlightKeyword: '', // 仅在搜索完成后用于高亮的关键词
                     searchInputFocused: false,
                     availableFiles: [], // 可用文件列表
                     filesLoading: false, // 文件列表加载状态
@@ -268,7 +254,7 @@
                     showMoreMenu: false, // 更多菜单显示状态
                     searchForm: {
                         keyword: '',
-                        search_mode: 'keyword', // keyword 或 context
+                        search_mode: 'context', // keyword 或 context
                         context_span: 5,
                         use_regex: false,
                         reverse_order: false,
@@ -321,10 +307,40 @@
                     }));
                 },
 
+                // 高亮器开关：仅在搜索完成后启用
+                effectiveHighlighters() {
+                    if (!this.hasSearched || this.searching || !this.searchResults) {
+                        return {
+                            logLevels: false,
+                            timestamps: false,
+                            network: false,
+                            xml: false,
+                            sql: false,
+                            json: false,
+                            filePaths: false,
+                            urls: false,
+                            emails: false,
+                            uuids: false
+                        };
+                    }
+                    return {
+                        logLevels: true,
+                        timestamps: true,
+                        network: true,
+                        xml: true,
+                        sql: true,
+                        json: true,
+                        filePaths: true,
+                        urls: true,
+                        emails: true,
+                        uuids: true
+                    };
+                },
+
                 // 动态计算搜索结果框高度
                 searchResultsHeight() {
                     // 基础高度：100vh - 顶部固定区域高度
-                    let baseOffset = 220;
+                    let baseOffset = 200;
 
                     // 如果启用了文件过滤，需要额外减去文件过滤器的高度
                     if (this.searchForm.use_file_filter && this.groupedFiles.length > 0) {
@@ -547,6 +563,7 @@
                     this.selectedLog = log;
                     this.searchResults = null;
                     this.hasSearched = false;
+                    this.highlightKeyword = '';
 
                     // 只清理文件选择，保持搜索关键词和搜索设置
                     this.searchForm.selected_file = '';
@@ -655,6 +672,14 @@
                         }
                     }
 
+                    // 清空上一次搜索占用的内存：
+                    // 1) 断开对旧结果的引用
+                    this.searchResults = null;
+                    this.highlightKeyword = '';
+                    // 2) 递增版本号，强制卸载并重建结果组件，释放旧DOM
+                    this.resultsVersion += 1;
+                    await this.$nextTick();
+
                     this.searching = true;
                     this.hasSearched = true;
 
@@ -666,6 +691,8 @@
 
                         if (response.data.success) {
                             this.searchResults = response.data.data;
+                            // 搜索完成后才更新高亮关键词
+                            this.highlightKeyword = this.searchForm.keyword || '';
                             if (this.searchResults.total_matches === 0) {
                                 ElMessage.info('未找到匹配的日志记录');
                             } else {
@@ -674,11 +701,13 @@
                         } else {
                             this.handleApiError({ response: { data: response.data } }, '搜索失败');
                             this.searchResults = null;
+                            this.highlightKeyword = '';
                         }
                     } catch (error) {
                         this.handleApiError(error, '搜索请求失败');
                         console.error('搜索失败:', error);
                         this.searchResults = null;
+                        this.highlightKeyword = '';
                     } finally {
                         this.searching = false;
                     }

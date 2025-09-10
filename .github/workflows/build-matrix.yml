@@ -87,6 +87,9 @@ jobs:
             # 额外复制脚本到 onedir 根目录，方便用户直接使用
             cp -f build/start_prod.bat artifacts/log-search-api-onedir/ 2>/dev/null || true
             cp -f build/start_test.bat artifacts/log-search-api-onedir/ 2>/dev/null || true
+            # 同步放一份一键 start.bat
+            echo @echo off > artifacts/log-search-api-onedir/start.bat
+            echo call start_prod.bat >> artifacts/log-search-api-onedir/start.bat
           fi
 
       - name: Build onefile
@@ -141,6 +144,11 @@ jobs:
             # 把脚本复制并改名为与 onefile 同目录的启动脚本
             cp -f ../build/start_prod.bat start_prod.bat 2>/dev/null || true
             cp -f ../build/start_test.bat start_test.bat 2>/dev/null || true
+            # 生成简化 start.bat 入口
+            if [ -f log-search-api-onefile-windows.exe ]; then
+              echo @echo off > start.bat
+              echo call start_prod.bat >> start.bat
+            fi
           elif [[ "$RUNNER_OS" == "Linux" ]]; then
             mv log-search-api log-search-api-onefile-linux
           else

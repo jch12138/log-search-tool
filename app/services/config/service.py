@@ -58,7 +58,8 @@ class ConfigService:
 		for i, log in enumerate(logs):
 			if not isinstance(log, dict):
 				raise ValueError(f"logs[{i}] 必须是字典")
-			for field in ['name', 'path']:
+			# 顶层 path 不再强制；但保留兼容（如果存在则允许）
+			for field in ['name']:
 				if field not in log:
 					raise ValueError(f"logs[{i}] 缺少必需字段: {field}")
 			sshs = log.get('sshs', [])
@@ -70,6 +71,9 @@ class ConfigService:
 				for field in ['host', 'port', 'username']:
 					if field not in ssh:
 						raise ValueError(f"logs[{i}].sshs[{j}] 缺少必需字段: {field}")
+				# 新要求：每个 ssh 项必须包含 path
+				if 'path' not in ssh and 'path' not in log:
+					raise ValueError(f"logs[{i}].sshs[{j}] 缺少必需字段: path（请将路径移动到对应的ssh配置中）")
 
 	def _backup_config(self):  # pragma: no cover - I/O
 		ts = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -108,9 +112,15 @@ class ConfigService:
 	def get_log_summary(self) -> List[Dict[str, Any]]:
 		summary = []
 		for log in self.get_logs():
+			# 为兼容旧数据，summary 中的 path 如果顶层没有，则展示第一个 ssh 的 path
+			first_path = None
+			for ssh in (log.sshs or []):
+				if isinstance(ssh, dict) and ssh.get('path'):
+					first_path = ssh['path']
+					break
 			summary.append({
 				'name': log.name,
-				'path': log.path,
+				'path': log.path or first_path or '',
 				'ssh_count': len(log.sshs),
 				'description': log.description,
 				'group': log.group
@@ -129,7 +139,7 @@ class ConfigService:
 			ssh_configs.append(sc)
 		return {
 			'name': log.name,
-			'path': log.path,
+			'path': log.path,  # 兼容字段
 			'description': log.description,
 			'group': log.group,
 			'ssh_configs': ssh_configs,

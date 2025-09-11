@@ -100,7 +100,7 @@
     let currentSettings = {}; // 保留后端返回的 settings，保存时一并提交
 
     // --- UI Rendering ---
-    function createSshItem(ssh = { host: '', port: 22, username: '', password: '' }) {
+  function createSshItem(ssh = { host: '', port: 22, username: '', password: '', path: '' }) {
       const div = document.createElement('div');
       div.className = 'ssh-config-item';
       const pwdValue = ssh.password ? ssh.password : '';
@@ -109,13 +109,14 @@
         <input type="text" placeholder="主机" value="${ssh.host || ''}" data-key="host">
         <input type="number" placeholder="端口" value="${ssh.port || 22}" data-key="port">
         <input type="text" placeholder="用户名" value="${ssh.username || ''}" data-key="username">
+    <input type="text" placeholder="日志路径（该主机）" value="${ssh.path || ''}" data-key="path">
         <input type="password" placeholder="密码（不修改则留空）" value="${isMasked ? '' : (pwdValue || '')}" data-key="password">
         <button type="button" class="btn btn-danger" onclick="this.parentElement.remove()">删除</button>
       `;
       return div;
     }
 
-    function createLogConfigItem(log = { name: '', path: '', description: '', group: '', sshs: [] }) {
+  function createLogConfigItem(log = { name: '', description: '', group: '', sshs: [] }) {
       const div = document.createElement('div');
       div.className = 'log-config-item';
       div.innerHTML = `
@@ -137,12 +138,6 @@
             <input type="text" placeholder="例如：服务A关键日志" value="${log.description || ''}" data-key="description">
           </div>
         </div>
-        <div class="form-grid">
-          <div class="form-group">
-            <label>路径 (Path)</label>
-            <input type="text" placeholder="例如：/path/to/YYYYMMDD.N.log" value="${log.path || ''}" data-key="path">
-          </div>
-        </div>
         <h4>SSH 连接</h4>
         <div class="ssh-configs-container"></div>
         <button type="button" class="btn btn-success" style="font-size:12px; padding: 6px 12px; margin-top:10px;" onclick="this.previousElementSibling.appendChild(createSshItem())">+ 添加SSH连接</button>
@@ -150,7 +145,7 @@
       const sshContainer = div.querySelector('.ssh-configs-container');
       (log.sshs || []).forEach(ssh => sshContainer.appendChild(createSshItem(ssh)));
       if (!log.sshs || log.sshs.length === 0) {
-        sshContainer.appendChild(createSshItem());
+    sshContainer.appendChild(createSshItem());
       }
       return div;
     }
@@ -166,7 +161,7 @@
     }
 
     function addLogConfig() {
-      container.appendChild(createLogConfigItem({ name: '', path: '', description: '', group: '', sshs: [{ host: '', port: 22, username: '', password: '' }] }));
+      container.appendChild(createLogConfigItem({ name: '', description: '', group: '', sshs: [{ host: '', port: 22, username: '', password: '', path: '' }] }));
     }
 
     // --- Data Handling & API Calls ---
@@ -192,7 +187,6 @@
         document.querySelectorAll('.log-config-item').forEach(logItem => {
           const log = {
             name: logItem.querySelector('[data-key="name"]').value.trim(),
-            path: logItem.querySelector('[data-key="path"]').value.trim(),
             group: logItem.querySelector('[data-key="group"]').value.trim(),
             description: logItem.querySelector('[data-key="description"]').value.trim(),
             sshs: []
@@ -203,6 +197,7 @@
               host: sshItem.querySelector('[data-key="host"]').value.trim(),
               port: parseInt(sshItem.querySelector('[data-key="port"]').value, 10) || 22,
               username: sshItem.querySelector('[data-key="username"]').value.trim(),
+              path: sshItem.querySelector('[data-key="path"]').value.trim()
             };
             // 只有在用户填写了密码时才提交密码字段，留空表示不修改（服务器端会合并旧密码）
             if (pwd) ssh.password = pwd;
@@ -214,7 +209,10 @@
         // 基本校验
         for (const [i, log] of logs.entries()) {
           if (!log.name) throw new Error(`第 ${i + 1} 个配置缺少名称`);
-          if (!log.path) throw new Error(`第 ${i + 1} 个配置缺少路径`);
+          // 校验每个 SSH 必须提供 path
+          (log.sshs || []).forEach((ssh, j) => {
+            if (!ssh.path) throw new Error(`第 ${i + 1} 个配置的第 ${j + 1} 个SSH缺少路径`);
+          });
         }
 
         const payload = { logs, settings: currentSettings };

@@ -35,7 +35,7 @@ def list_logs():
 						'port': ssh_config.get('port', 22),
 						'username': ssh_config.get('username', ''),
 						'password': '***',
-						'log_path': log_config.path,
+						'log_path': ssh_config.get('path') or getattr(log_config, 'path', ''),
 						'ssh_index': idx,
 						'group': log_config.group
 					})
@@ -61,7 +61,10 @@ def get_log_files(log_name: str):
 	all_files = []
 	for ssh_config in log_config.sshs:
 		try:
-			files = search_service.get_log_files(ssh_config, log_config.path)
+			log_path = ssh_config.get('path') or getattr(log_config, 'path', '') or ''
+			if not log_path:
+				continue
+			files = search_service.get_log_files(ssh_config, log_path)
 			all_files.extend(files)
 		except Exception:
 			continue
@@ -125,6 +128,14 @@ def download_log_file():
 		if not conn:
 			from flask import jsonify
 			return jsonify({'success': False,'error': {'code': 'CONNECTION_ERROR','message': 'SSH连接失败'}}), 500
+		# 若 file_path 包含占位符，先进行解析
+		from app.services.utils.filename_resolver import resolve_log_filename
+		if any(ph in file_path for ph in ['{YYYY}', '{MM}', '{DD}', '{N}']):
+			try:
+				resolved = resolve_log_filename(file_path, ssh_conn=conn)
+				file_path = resolved
+			except Exception as _e:  # noqa
+				logger.warning(f"下载前解析文件名占位符失败: {file_path} - {_e}")
 		command = f"cat '{file_path}'"
 		stdout, stderr, exit_code = conn.execute_command(command, timeout=60)
 		if exit_code != 0:

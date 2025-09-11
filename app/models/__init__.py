@@ -7,25 +7,29 @@ from typing import List, Dict, Any, Optional
 @dataclass
 class LogConfig:
     name: str
-    path: str
+    # 顶层 path 改为可选，仅用于向后兼容；实际应在每个 ssh 配置下提供 path
+    path: Optional[str] = None
     description: str = ""
     group: Optional[str] = None
     sshs: List[Dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        data = {
             'name': self.name,
-            'path': self.path,
             'description': self.description,
             'group': self.group,
             'sshs': self.sshs
         }
+        # 仅当提供了顶层 path（兼容旧配置）时才写回
+        if self.path is not None:
+            data['path'] = self.path
+        return data
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'LogConfig':
         return cls(
             name=data['name'],
-            path=data['path'],
+            path=data.get('path'),
             description=data.get('description', ''),
             group=data.get('group'),
             sshs=data.get('sshs', [])

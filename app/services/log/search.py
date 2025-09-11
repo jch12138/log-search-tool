@@ -43,15 +43,18 @@ class LogSearchService:
 		if not sshs:
 			raise ValueError("日志配置中没有SSH主机")
 		log_name = log_config['name']
-		log_path = log_config['path']
+		# 顶层路径用于兼容，优先使用每个 ssh 下的 path
+		legacy_path = log_config.get('path')
 		start = time.time()
 		results: List[SearchResult] = []
 		if len(sshs) == 1:
-			results.append(self._search_single_host(sshs[0], log_path, search_params, 0))
+			ssh0 = sshs[0]
+			log_path0 = ssh0.get('path') or legacy_path or ''
+			results.append(self._search_single_host(ssh0, log_path0, search_params, 0))
 			parallel = False
 		else:
 			with ThreadPoolExecutor(max_workers=min(len(sshs), 10)) as executor:  # pragma: no cover - concurrency
-				fut_map = {executor.submit(self._search_single_host, cfg, log_path, search_params, i): i for i, cfg in enumerate(sshs)}
+				fut_map = {executor.submit(self._search_single_host, cfg, (cfg.get('path') or legacy_path or ''), search_params, i): i for i, cfg in enumerate(sshs)}
 				for fut in as_completed(fut_map):
 					i = fut_map[fut]
 					cfg = sshs[i]
@@ -70,7 +73,8 @@ class LogSearchService:
 		start = time.time()
 		host = ssh_config.get('host', 'unknown')
 		try:
-			command = self._build_search_command(log_path, search_params, ssh_config)
+			# 同时获取解析后的实际文件路径，避免下载时仍然携带占位符
+			command, resolved_file_path = self._build_search_command(log_path, search_params, ssh_config)
 			conn = self.ssh_manager.get_connection(ssh_config)
 			if not conn:
 				raise RuntimeError("SSH连接失败")
@@ -96,15 +100,15 @@ class LogSearchService:
 					elif len(parts) >= 3 and parts[1].isdigit():
 						line_no = int(parts[1])
 						content = parts[2]
-				matches.append({'file_path': log_path, 'line_number': line_no, 'content': content})
+				matches.append({'file_path': resolved_file_path, 'line_number': line_no, 'content': content})
 				line_no += 1
 			elapsed = time.time() - start
-			return SearchResult(host=host, ssh_index=ssh_index, results=results, total_results=len(results), search_time=elapsed, search_result={'content': stdout.strip(), 'file_path': log_path, 'keyword': search_params.keyword, 'total_lines': len(results), 'search_time': elapsed, 'matches': matches}, success=True)
+			return SearchResult(host=host, ssh_index=ssh_index, results=results, total_results=len(results), search_time=elapsed, search_result={'content': stdout.strip(), 'file_path': resolved_file_path, 'keyword': search_params.keyword, 'total_lines': len(results), 'search_time': elapsed, 'matches': matches}, success=True)
 		except Exception as e:
 			elapsed = time.time() - start
 			return SearchResult(host=host, ssh_index=ssh_index, results=[f"[{host}] 搜索失败: {e}"], total_results=1, search_time=elapsed, search_result={'content': '', 'file_path': '', 'keyword': search_params.keyword, 'total_lines': 0, 'search_time': elapsed, 'matches': []}, success=False, error=str(e))
 
-	def _build_search_command(self, log_path: str, search_params: SearchParams, ssh_config: Dict[str, Any]) -> str:
+	def _build_search_command(self, log_path: str, search_params: SearchParams, ssh_config: Dict[str, Any]):
 		reverse_cmd = self._get_reverse_command(ssh_config)
 		if search_params.use_file_filter:
 			host = ssh_config.get('host', 'unknown')
@@ -142,7 +146,8 @@ class LogSearchService:
 					cmd += f" | tail -n 10000 | {reverse_cmd}"
 				else:
 					cmd += " | head -n 10000"
-		return cmd
+		# 返回命令和解析后的实际文件路径
+		return cmd, file_path
 
 	def get_log_files(self, ssh_config: Dict[str, Any], log_path: str) -> List[Dict[str, Any]]:
 		try:

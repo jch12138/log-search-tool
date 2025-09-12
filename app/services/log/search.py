@@ -140,14 +140,24 @@ class LogSearchService:
 				file_path = resolve_log_filename(file_path, ssh_conn=conn)
 			except Exception as e:
 				logger.warning(f"文件名通配符解析失败: {file_path} - {e}")
+		# 对 .gz 压缩日志进行特殊处理：先解压再 grep / tail，避免乱码
+		is_gz = file_path.endswith('.gz')
+		decompress = f"gzip -dc '{file_path}'" if is_gz else None
 		if search_params.search_mode == 'tail':
 			lines = max(100, search_params.context_span)
-			cmd = f"tail -n {lines} '{file_path}'"
+			if is_gz:
+				cmd = f"{decompress} | tail -n {lines}"
+			else:
+				cmd = f"tail -n {lines} '{file_path}'"
 			if search_params.reverse_order:
 				cmd += f" | {reverse_cmd}"
 		else:
 			if not search_params.keyword:
-				cmd = f"tail -n 100 '{file_path}'"
+				# 仅展示最近 100 行
+				if is_gz:
+					cmd = f"{decompress} | tail -n 100"
+				else:
+					cmd = f"tail -n 100 '{file_path}'"
 				if search_params.reverse_order:
 					cmd += f" | {reverse_cmd}"
 			else:
@@ -155,7 +165,11 @@ class LogSearchService:
 				if search_params.search_mode == 'context' and search_params.context_span > 0:
 					grep_cmd += f" -C {search_params.context_span}"
 				escaped_keyword = search_params.keyword.replace("'", "'\"'\"'")
-				cmd = f"{grep_cmd} '{escaped_keyword}' '{file_path}'"
+				if is_gz:
+					# 管道方式：解压 -> grep -> (限制/反转)
+					cmd = f"{decompress} | {grep_cmd} '{escaped_keyword}'"
+				else:
+					cmd = f"{grep_cmd} '{escaped_keyword}' '{file_path}'"
 				if search_params.reverse_order:
 					cmd += f" | tail -n 10000 | {reverse_cmd}"
 				else:

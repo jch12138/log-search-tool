@@ -7,6 +7,12 @@ const LogSearchResults = {
         await this.loadDependencies();
         this.injectStyles();
     },
+    mounted() {
+        window.addEventListener('keydown', this.handleKeyDown);
+    },
+    beforeUnmount() {
+        window.removeEventListener('keydown', this.handleKeyDown);
+    },
     
     props: {
         // 数据相关参数
@@ -130,11 +136,30 @@ const LogSearchResults = {
     data() {
         return {
             // 依赖加载状态
-            dependenciesLoaded: false
+            dependenciesLoaded: false,
+            fullscreenHost: null
         };
     },
     
     methods: {
+        toggleFullscreen(host){
+            if(this.fullscreenHost === host){
+                this.fullscreenHost = null;
+                document.body.classList.remove('fullscreen-log-freeze');
+            } else {
+                this.fullscreenHost = host;
+                document.body.classList.add('fullscreen-log-freeze');
+            }
+            this.$nextTick(()=>{
+                const el = document.querySelector('.host-result-box.fullscreen-active .host-results');
+                if(el){ el.scrollTop = el.scrollTop; }
+            });
+        },
+        handleKeyDown(e){
+            if(e.key === 'Escape' && this.fullscreenHost){
+                this.toggleFullscreen(this.fullscreenHost);
+            }
+        },
         // 动态加载依赖
         async loadDependencies() {
             try {
@@ -358,6 +383,9 @@ const LogSearchResults = {
                     height: 100%;
                     min-height: 0; /* 关键：使内部 .host-results 可滚动 */
                 }
+                .host-result-box.fullscreen-active { position:fixed; inset:12px 14px 14px 14px; z-index:9999; background:#ffffff; border:1px solid #e4e7ed; border-radius:10px; box-shadow:0 12px 32px rgba(0,0,0,0.45); width:auto!important; height:auto!important; max-width:none; max-height:none; }
+                .host-result-box.fullscreen-active .host-results { background:#282c34; }
+                body.fullscreen-log-freeze { overflow:hidden; }
                 
                 /* 只在有足够空间时设置最小宽度 */
                 @media (min-width: 768px) { .results-hosts-row > .host-result-box { min-width: 300px; } }
@@ -420,6 +448,10 @@ const LogSearchResults = {
                     align-items: center;
                     gap: 6px;
                 }
+                .fullscreen-btn { padding:6px 12px; font-size:12px; border:1px solid #e4e7ed; background:#fafbfc; color:#909399; border-radius:6px; cursor:pointer; transition:all .2s; display:flex; align-items:center; gap:4px; line-height:1; font-weight:400; }
+                .fullscreen-btn:hover { background:#f0f2f5; border-color:#c0c4cc; color:#606266; transform:translateY(-1px); box-shadow:0 2px 4px rgba(0,0,0,0.1); }
+                .fullscreen-btn:active { background:#e4e7ed; border-color:#b3b8c3; transform:translateY(0); box-shadow:0 1px 2px rgba(0,0,0,0.1); }
+                .fullscreen-btn.is-active { background:#409eff; color:#fff; border-color:#409eff; box-shadow:0 2px 6px rgba(64,158,255,0.35); }
                 
                 .download-btn {
                     padding: 6px 12px;
@@ -773,7 +805,7 @@ const LogSearchResults = {
             <!-- 显示主机结果盒：有匹配结果 或 处于占位预搜索状态 -->
             <template v-if="searchResults && searchResults.hosts && searchResults.hosts.length && (searchResults.total_matches > 0 || searchResults.pre_search)">
                 <div class="results-hosts-row">
-                <div class="host-result-box" v-for="group in groupedResults" :key="group.host">
+                <div class="host-result-box" :class="{ 'fullscreen-active': fullscreenHost === group.host }" v-for="group in groupedResults" :key="group.host">
                     <!-- 主机头部 -->
                     <div class="host-header" v-if="showHostGrouping">
                         <div class="host-info">
@@ -787,6 +819,9 @@ const LogSearchResults = {
                                 </span>
                             </div>
                             <div class="host-actions">
+                                <button class="fullscreen-btn" :class="{ 'is-active': fullscreenHost === group.host }" @click="toggleFullscreen(group.host)" :title="fullscreenHost === group.host ? '退出全屏 (Esc)' : '放大查看'">
+                                    <span style="font-size:12px; letter-spacing:1px;">{{ fullscreenHost === group.host ? '还原' : '放大' }}</span>
+                                </button>
                                 <button class="download-btn" @click="downloadLogFile(group.hostResult)" title="下载日志文件">
                                     <span>下载日志</span>
                                 </button>

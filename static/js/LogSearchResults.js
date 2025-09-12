@@ -596,23 +596,26 @@ const LogSearchResults = {
                 .log-status-200 { color: #98c379; font-weight: bold; }
                 .log-status-error { color: #e06c75; font-weight: bold; }
                 
-                /* 主机无结果样式 */
+                /* 主机无结果/占位样式（深色背景融合） */
                 .host-no-results {
                     flex: 1;
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    padding: 40px 20px;
-                    /* 无结果提示保持浅色背景 */
-                    background: #fafafa;
-                    border-radius: 6px;
-                    margin: 10px;
+                    padding: 36px 16px;
+                    background: transparent;
+                    margin: 0;
                 }
-                
                 .no-results-message {
                     text-align: center;
                     font-size: 14px;
+                    color: #ffffffb3;
+                    background: rgba(255,255,255,0.03);
+                    padding: 12px 16px 14px;
+                    border-radius: 4px;
+                    backdrop-filter: blur(2px);
                 }
+                .no-results-message i { opacity: .85; }
                 
                 /* 截断提示样式 */
                 .truncation-notice {
@@ -767,7 +770,8 @@ const LogSearchResults = {
         
         <!-- 有结果：直接渲染 host-result-box 作为外层 results-section 的直接子元素 -->
         <template v-else>
-            <template v-if="searchResults && searchResults.total_matches > 0">
+            <!-- 显示主机结果盒：有匹配结果 或 处于占位预搜索状态 -->
+            <template v-if="searchResults && searchResults.hosts && searchResults.hosts.length && (searchResults.total_matches > 0 || searchResults.pre_search)">
                 <div class="results-hosts-row">
                 <div class="host-result-box" v-for="group in groupedResults" :key="group.host">
                     <!-- 主机头部 -->
@@ -807,8 +811,16 @@ const LogSearchResults = {
                             </div>
                         </div>
                         <div v-else class="host-no-results">
+                            <!-- 占位预搜索提示 -->
+                            <div v-if="searchResults.pre_search" class="no-results-message" style="background:transparent;">
+                                <i class="fas fa-clock" style="color: #ffffff80; margin-right: 8px;"></i>
+                                <span style="color: #ffffffb3; font-weight:400;">等待搜索</span>
+                                <div style="margin-top: 4px; color: #ffffff40; font-size: 12px; letter-spacing:.5px;">
+                                    输入关键词并点击 “搜索”
+                                </div>
+                            </div>
                             <!-- 搜索失败的情况 -->
-                            <div v-if="group.hostResult && !group.hostResult.success" class="no-results-message">
+                            <div v-else-if="group.hostResult && !group.hostResult.success" class="no-results-message">
                                 <i class="fas fa-exclamation-triangle" style="color: #f56c6c; margin-right: 8px;"></i>
                                 <span style="color: #f56c6c;">搜索失败</span>
                                 <div style="margin-top: 4px; color: #f56c6c; font-size: 12px;">
@@ -830,7 +842,7 @@ const LogSearchResults = {
             </template>
             
             <!-- 空结果提示 -->
-            <div v-else-if="searchResults && searchResults.total_matches === 0" class="empty-results">
+            <div v-else-if="searchResults && searchResults.total_matches === 0 && !searchResults.pre_search" class="empty-results">
                 <div class="el-empty">
                     <div class="el-empty__image">
                         <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" width="120" height="120">

@@ -50,11 +50,17 @@ class LogSearchService:
 		if len(sshs) == 1:
 			ssh0 = sshs[0]
 			log_path0 = ssh0.get('path') or legacy_path or ''
+			# 注入 ssh_index 以便前端使用 host|index 进行区分
+			ssh0['ssh_index'] = 0
 			results.append(self._search_single_host(ssh0, log_path0, search_params, 0))
 			parallel = False
 		else:
 			with ThreadPoolExecutor(max_workers=min(len(sshs), 10)) as executor:  # pragma: no cover - concurrency
-				fut_map = {executor.submit(self._search_single_host, cfg, (cfg.get('path') or legacy_path or ''), search_params, i): i for i, cfg in enumerate(sshs)}
+				fut_map = {}
+				for i, cfg in enumerate(sshs):
+					cfg['ssh_index'] = i
+					fut = executor.submit(self._search_single_host, cfg, (cfg.get('path') or legacy_path or ''), search_params, i)
+					fut_map[fut] = i
 				for fut in as_completed(fut_map):
 					i = fut_map[fut]
 					cfg = sshs[i]
@@ -112,8 +118,16 @@ class LogSearchService:
 		reverse_cmd = self._get_reverse_command(ssh_config)
 		if search_params.use_file_filter:
 			host = ssh_config.get('host', 'unknown')
-			if search_params.selected_files and host in search_params.selected_files:
-				file_path = search_params.selected_files[host]
+			# 允许使用 "host|ssh_index" 形式的键来区分同 IP 的多条 SSH 配置
+			host_key = f"{host}|{ssh_config.get('ssh_index', ssh_config.get('index', ''))}"
+			selected_files = search_params.selected_files or {}
+			if selected_files:
+				if host_key in selected_files:
+					file_path = selected_files[host_key]
+				elif host in selected_files:
+					file_path = selected_files[host]
+				else:
+					file_path = log_path
 			elif search_params.selected_file:
 				file_path = search_params.selected_file
 			else:

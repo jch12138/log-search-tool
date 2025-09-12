@@ -193,19 +193,64 @@
                             <transition name="file-filter" @after-enter="updateResultsHeight" @after-leave="updateResultsHeight">
                                 <div v-if="searchForm.use_file_filter" style="margin-top:12px;">
                                     <div style="display:flex; gap:16px; flex-wrap:wrap;">
-                                        <div v-for="group in groupedFiles" :key="group.host" style="flex:1; min-width:300px;">
-                                            <div style="font-size:14px; font-weight:bold; color:#409eff; margin-bottom:8px; display:flex; align-items:center;">
-                                                [[ group.host ]] ([[ group.files.length ]] 个文件)
+                                        <div v-for="group in groupedFiles" :key="group.key" style="flex:1; min-width:380px; display:flex; flex-direction:column; gap:6px;">
+                                            <div style="display:flex; align-items:center; gap:10px;">
+                                                <span style="font-size:13px; font-weight:600; color:#409eff; white-space:nowrap;">[[ group.host ]]</span>
+                                                <div class="selected-file-box" :class="{ empty: !searchForm.selected_files[group.key] }" style="position:relative; flex:1; padding:6px 34px 6px 10px; border:1px solid #dcdfe6; border-radius:6px; background:#fff; font-size:12px; min-height:34px; display:flex; align-items:center; line-height:1.4; overflow:hidden;">
+                                                    <template v-if="searchForm.selected_files[group.key]">
+                                                        <span style="word-break:break-all;">[[ formatDisplayPath(searchForm.selected_files[group.key]) ]]</span>
+                                                        <span class="clear-icon" @click.stop="clearSelectedFile(group)" style="position:absolute; right:30px; top:50%; transform:translateY(-50%); cursor:pointer; font-size:14px; color:#b1b3b8; line-height:1; padding:2px;" title="清除">×</span>
+                                                    </template>
+                                                    <template v-else>
+                                                        <span style="color:#909399;">未选择文件</span>
+                                                    </template>
+                                                </div>
+                                                <el-button size="small" type="primary" plain style="white-space:nowrap; height:34px; padding:0 14px; display:flex; align-items:center; border-radius:6px;" @click="openSftpBrowser(group)" :disabled="!selectedLog || browsing.loading[group.originalHost]">
+                                                    浏览
+                                                </el-button>
                                             </div>
-                                            <el-select v-model="searchForm.selected_files[group.host]" :placeholder="`选择 ${group.host} 上的文件`" size="default" filterable clearable :loading="filesLoading" style="width:100%;" :disabled="!selectedLog">
-                                                <el-option v-for="fileItem in group.files" :key="fileItem.full_path" :label="fileItem.filename" :value="fileItem.full_path">
-                                                    [[ fileItem.filename ]]
-                                                </el-option>
-                                            </el-select>
                                         </div>
                                     </div>
                                 </div>
                             </transition>
+                            <!-- SFTP 浏览对话框 -->
+                            <el-dialog v-model="browsing.visible" title="远程文件浏览" width="720px" :close-on-click-modal="false" @close="closeBrowser">
+                                <div v-if="browsing.currentHost" style="margin-bottom:8px; font-size:13px; color:#606266; display:flex; flex-wrap:wrap; gap:12px; align-items:center;">
+                                    <span>主机: <strong>[[ browsing.currentHost ]]</strong></span>
+                                    <span>路径: <code style="font-size:12px; background:#f4f4f5; padding:2px 6px; border-radius:4px;">[[ browsing.currentPath || '/' ]]</code></span>
+                                    <el-button size="small" @click="refreshCurrent" :loading="isBrowsingLoading">刷新</el-button>
+                                </div>
+                                <el-skeleton v-if="isBrowsingLoading" :rows="4" animated></el-skeleton>
+                                <div v-else style="max-height:360px; overflow:auto; border:1px solid #ebeef5; border-radius:6px;">
+                                    <el-table :key="browsing.currentPath + '_' + browsing.items.length" :data="browsing.items" size="small" @row-dblclick="handleBrowserDblClick" style="width:100%;" height="300" :row-key="row => row.name + '_' + row.type">
+                                        <el-table-column label="名称" prop="name">
+                                            <template #default="scope">
+                                                <span v-if="scope.row.is_directory">📁 [[ scope.row.name ]]</span>
+                                                <span v-else>📄 [[ scope.row.name ]]</span>
+                                            </template>
+                                        </el-table-column>
+                                        <el-table-column label="类型" width="70" prop="type" />
+                                        <el-table-column label="大小" width="100">
+                                            <template #default="scope">[[ scope.row.size_human ]]</template>
+                                        </el-table-column>
+                                        <el-table-column label="修改时间" width="180">
+                                            <template #default="scope">[[ formatFileTime(scope.row.modified_time) ]]</template>
+                                        </el-table-column>
+                                    </el-table>
+                                    <div v-if="!browsing.items.length" style="padding:12px; text-align:center; color:#909399; font-size:13px;">目录为空或无权限</div>
+                                    <div v-else style="padding:4px 8px; font-size:12px; color:#606266;">共 [[ browsing.items.length ]] 项</div>
+                                </div>
+                                <template #footer>
+                                    <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                                        <div>
+                                            <el-button size="small" @click="goParent" :disabled="!browsing.parentPath">上级目录</el-button>
+                                        </div>
+                                        <div>
+                                            <el-button size="small" @click="closeBrowser">关闭</el-button>
+                                        </div>
+                                    </div>
+                                </template>
+                            </el-dialog>
                         </el-form>
                     </div>
 
@@ -250,7 +295,17 @@
                     resultsVersion: 0, // 每次搜索递增以重建结果组件，释放内存
                     highlightKeyword: '', // 仅在搜索完成后用于高亮的关键词
                     searchInputFocused: false,
-                    availableFiles: [], // 可用文件列表
+                    availableFiles: [], // 可用文件列表 (基于日志配置返回)
+                    browsing: {
+                        visible: false,
+                        currentHost: '',
+                        currentHostIndex: -1,
+                        currentPath: '',
+                        parentPath: null,
+                        items: [],
+                        connectionIds: {}, // host -> connection_id
+                        loading: {}
+                    },
                     filesLoading: false, // 文件列表加载状态
                     collapsedGroups: new Set(), // 折叠的分组
                     showMoreMenu: false, // 更多菜单显示状态
@@ -293,21 +348,38 @@
                     });
                 },
                 
-                // 按主机分组的文件列表
+                // 按主机(含重复IP)分组的文件列表，区分同一IP的多个 SSH 配置
                 groupedFiles() {
-                    const groups = {};
-                    this.availableFiles.forEach(file => {
-                        const host = file.host || 'unknown';
-                        if (!groups[host]) {
-                            groups[host] = [];
+                    if (!this.selectedLog || !this.selectedLog.sshs || !this.selectedLog.sshs.length) {
+                        return [];
+                    }
+                    const sshs = this.selectedLog.sshs;
+                    const hostCount = {};
+                    sshs.forEach(s => { const h = s.host || 'unknown'; hostCount[h] = (hostCount[h] || 0) + 1; });
+                    const groups = [];
+                    sshs.forEach((s, idx) => {
+                        const host = s.host || 'unknown';
+                        const displayHost = hostCount[host] > 1 ? `${host}#${idx + 1}` : host;
+                        const key = `${host}|${idx}`; // 传给后端的唯一键
+                        let files = [];
+                        // 若当前浏览窗口指向该 ssh index，合并浏览目录中的文件（非目录）
+                        if (this.browsing.currentHost === host && this.browsing.currentHostIndex === idx && this.browsing.items.length) {
+                            const fileItems = this.browsing.items.filter(i => !i.is_directory).map(i => ({
+                                host,
+                                filename: i.name,
+                                full_path: (this.browsing.currentPath === '/' ? '/' : this.browsing.currentPath + '/') + i.name
+                            }));
+                            const existing = new Set(files.map(f => f.full_path));
+                            fileItems.forEach(f => { if (!existing.has(f.full_path)) files.push(f); });
                         }
-                        groups[host].push(file);
+                        files.sort((a, b) => a.filename.localeCompare(b.filename));
+                        groups.push({ key, host: displayHost, originalHost: host, sshIndex: idx, files });
                     });
-
-                    return Object.keys(groups).map(host => ({
-                        host: host,
-                        files: groups[host].sort((a, b) => a.filename.localeCompare(b.filename))
-                    }));
+                    return groups;
+                },
+                isBrowsingLoading() {
+                    if (!this.browsing || !this.browsing.currentHost) return false;
+                    return !!this.browsing.loading[this.browsing.currentHost];
                 },
 
                 // 高亮器开关：仅在搜索完成后启用
@@ -345,9 +417,7 @@
 
                 // 检查是否所有必需的文件都已选择
                 isFileFilterValid() {
-                    if (!this.searchForm.use_file_filter) {
-                        return true; // 如果没有启用文件过滤，总是有效
-                    }
+                    // 不再自动加载文件列表，改为纯 SFTP 浏览选择
 
                     // 检查每个主机是否都选择了文件
                     return this.groupedFiles.every(group =>
@@ -557,7 +627,6 @@
 
                 selectLog(log) {
                     this.selectedLog = log;
-                    this.searchResults = null;
                     this.hasSearched = false;
                     this.highlightKeyword = '';
 
@@ -566,8 +635,34 @@
                     this.searchForm.selected_files = {};
 
                     // 如果文件过滤已启用，自动加载文件列表
-                    if (this.searchForm.use_file_filter) {
-                        this.loadAvailableFiles();
+                    // 立即构建占位主机结果框
+                    this.buildPlaceholderResults();
+                    // 异步补全 SSH 详细信息后刷新占位
+                    this.ensureLogDetail(log);
+                },
+
+                // 确保 selectedLog 拥有 sshs（与后端 detail 接口字段 ssh_configs 对齐）
+                async ensureLogDetail(log) {
+                    if (!log || log.sshs || !log.name) return;
+                    try {
+                        const resp = await axios.get(`/api/v1/logs/${log.name}`);
+                        if (resp.data.success && resp.data.data) {
+                            const detail = resp.data.data;
+                            // 后端返回 ssh_configs；前端统一使用 sshs
+                            const sshs = detail.ssh_configs || [];
+                            // 将 sshs 挂到原 log 对象上，保持引用一致
+                            log.sshs = sshs; // Vue3 直接赋值即可触发响应
+                            // 如果当前 selectedLog 指向该对象，确保属性可用
+                            if (this.selectedLog === log) {
+                                this.selectedLog.sshs = sshs;
+                                if (!this.hasSearched) {
+                                    this.buildPlaceholderResults();
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        // 静默失败，只在用户真正需要时再提示
+                        console.warn('获取日志详细配置失败', e);
                     }
                 },
 
@@ -582,8 +677,7 @@
                 toggleFileFilter() {
                     this.searchForm.use_file_filter = !this.searchForm.use_file_filter;
                     if (this.searchForm.use_file_filter) {
-                        ElMessage.info('已启用文件过滤，正在加载文件列表...');
-                        this.loadAvailableFiles();
+                        ElMessage.info('已启用文件过滤，可通过“浏览”选择文件');
                     } else {
                         this.searchForm.selected_file = '';
                         this.searchForm.selected_files = {};
@@ -594,30 +688,122 @@
                 },
 
                 // 加载可用文件列表
-                async loadAvailableFiles() {
+                // （废弃）loadAvailableFiles 已移除，文件来源统一通过 SFTP 浏览器
+
+                // 打开浏览器（支持同IP多实例，参数为分组对象或原 host 字符串）
+                async openSftpBrowser(groupOrHost) {
                     if (!this.selectedLog) {
-                        ElMessage.warning('请先选择一个日志配置');
+                        ElMessage.error('请先选择一个日志配置');
                         return;
                     }
-
-                    this.filesLoading = true;
-                    try {
-                        const response = await axios.get(`/api/v1/logs/${this.selectedLog.name}/files`);
-                        if (response.data.success) {
-                            this.availableFiles = response.data.data.files || [];
-                            ElMessage.success(`加载了 ${this.availableFiles.length} 个文件`);
-                            this.$nextTick(() => this.updateResultsHeight());
-                        } else {
-                            this.handleApiError({ response: { data: response.data } }, '加载文件列表失败');
-                            this.availableFiles = [];
-                        }
-                    } catch (error) {
-                        this.handleApiError(error, '加载文件列表请求失败');
-                        console.error('加载文件列表失败:', error);
-                        this.availableFiles = [];
-                    } finally {
-                        this.filesLoading = false;
+                    // 若还没有 sshs，尝试加载一次
+                    if (!this.selectedLog.sshs) {
+                        await this.ensureLogDetail(this.selectedLog);
                     }
+                    if (!this.selectedLog.sshs) {
+                        ElMessage.error('当前日志配置缺少 SSH 信息');
+                        return;
+                    }
+                    let sshIndex, host;
+                    if (typeof groupOrHost === 'string') {
+                        host = groupOrHost;
+                        sshIndex = this.selectedLog.sshs.findIndex(s => s.host === host);
+                    } else {
+                        host = groupOrHost.originalHost;
+                        sshIndex = groupOrHost.sshIndex;
+                    }
+                    if (sshIndex == null || sshIndex < 0 || sshIndex >= this.selectedLog.sshs.length) {
+                        ElMessage.error('未找到对应主机 SSH 配置');
+                        return;
+                    }
+                    this.browsing.currentHost = host;
+                    this.browsing.currentHostIndex = sshIndex;
+                    this.browsing.visible = true;
+                    await this.ensureSftpConnection(host, sshIndex);
+                    // 计算初始目录 = ssh 配置中的 path（去掉文件名或占位符部分）
+                    try {
+                        const sshCfg = this.selectedLog.sshs[sshIndex] || {};
+                        let rawPath = sshCfg.path || this.selectedLog.path || '/';
+                        if (!rawPath) rawPath = '/';
+                        // 如果包含占位符，截取到占位符前
+                        const phIdx = rawPath.search(/\{[A-Z]+\}/);
+                        if (phIdx !== -1) {
+                            rawPath = rawPath.slice(0, phIdx);
+                        }
+                        // 若不是以 / 结尾，视为文件，取其所在目录
+                        if (!rawPath.endsWith('/')) {
+                            const lastSlash = rawPath.lastIndexOf('/');
+                            rawPath = lastSlash > 0 ? rawPath.slice(0, lastSlash) : '/';
+                        }
+                        // 清理多余斜杠
+                        rawPath = rawPath.replace(/\/+/g, '/').replace(/\/+$/,'');
+                        if (rawPath === '') rawPath = '/';
+                        this.listRemotePath(host, rawPath);
+                    } catch (e) {
+                        console.warn('解析初始目录失败，回退到根目录', e);
+                        this.listRemotePath(host, '.');
+                    }
+                },
+                async ensureSftpConnection(host, sshIndex) {
+                    if (this.browsing.connectionIds[host]) return;
+                    this.browsing.loading[host] = true;
+                    try {
+                        const resp = await axios.post('/api/v1/sftp/connect-by-config', { log_name: this.selectedLog.name, ssh_index: sshIndex });
+                        if (resp.data.success) {
+                            this.browsing.connectionIds[host] = resp.data.data.connection_id;
+                        } else {
+                            this.handleApiError({ response: { data: resp.data } }, 'SFTP连接失败');
+                        }
+                    } catch (e) {
+                        this.handleApiError(e, 'SFTP连接请求失败');
+                    } finally {
+                        this.browsing.loading[host] = false;
+                    }
+                },
+                async listRemotePath(host, path) {
+                    const cid = this.browsing.connectionIds[host];
+                    if (!cid) return;
+                    this.browsing.loading[host] = true;
+                    try {
+                        const resp = await axios.post('/api/v1/sftp/list', { connection_id: cid, path });
+                        if (resp.data.success) {
+                            const data = resp.data.data;
+                            this.browsing.currentPath = data.current_path;
+                            this.browsing.parentPath = data.parent_path;
+                            this.browsing.items = data.items || [];
+                        } else {
+                            this.handleApiError({ response: { data: resp.data } }, '列出目录失败');
+                        }
+                    } catch (e) {
+                        this.handleApiError(e, '列出目录请求失败');
+                    } finally {
+                        this.browsing.loading[host] = false;
+                    }
+                },
+        handleBrowserDblClick(row) {
+                    if (!row) return;
+                    if (row.is_directory) {
+                        const p = (this.browsing.currentPath === '/' ? '' : this.browsing.currentPath) + '/' + row.name;
+                        this.listRemotePath(this.browsing.currentHost, p);
+                    } else {
+                        // 选中文件并关闭
+                        const full = (this.browsing.currentPath === '/' ? '/' : this.browsing.currentPath + '/') + row.name;
+            const key = `${this.browsing.currentHost}|${this.browsing.currentHostIndex}`;
+            this.searchForm.selected_files[key] = full;
+                        ElMessage.success('已选择文件: ' + row.name);
+                        this.closeBrowser();
+                    }
+                },
+                goParent() {
+                    if (!this.browsing.parentPath) return;
+                    this.listRemotePath(this.browsing.currentHost, this.browsing.parentPath);
+                },
+                closeBrowser() {
+                    this.browsing.visible = false;
+                },
+                refreshCurrent() {
+                    if (!this.browsing.currentHost) return;
+                    this.listRemotePath(this.browsing.currentHost, this.browsing.currentPath || '.');
                 },
 
                 // 格式化文件大小显示
@@ -648,6 +834,18 @@
                         return timeStr;
                     }
                 },
+                formatDisplayPath(p) {
+                    if (!p) return '';
+                    // 简单截断过长路径中间部分
+                    if (p.length > 80) {
+                        return p.slice(0, 35) + ' ... ' + p.slice(-35);
+                    }
+                    return p;
+                },
+                clearSelectedFile(group) {
+                    if (!group) return;
+                    this.$delete ? this.$delete(this.searchForm.selected_files, group.key) : (delete this.searchForm.selected_files[group.key]);
+                },
 
                 async executeSearch() {
                     if (!this.selectedLog) {
@@ -656,39 +854,31 @@
                     }
 
                     // 验证文件过滤设置
+                    // 若开启文件过滤但未为所有主机选文件，允许继续：未选择的主机 fallback 到默认配置路径
                     if (this.searchForm.use_file_filter) {
-                        const missingHosts = [];
-                        this.groupedFiles.forEach(group => {
-                            if (!this.searchForm.selected_files[group.host]) {
-                                missingHosts.push(group.host);
-                            }
-                        });
-
-                        if (missingHosts.length > 0) {
-                            ElMessage.error(`请为以下主机选择文件: ${missingHosts.join(', ')}`);
-                            return;
+                        const totalHosts = this.groupedFiles.length;
+                        const chosen = Object.keys(this.searchForm.selected_files || {}).length;
+                        if (chosen === 0) {
+                            ElMessage.info('未选择任何文件，将使用配置默认路径');
+                        } else if (chosen < totalHosts) {
+                            ElMessage.info(`部分主机未选文件（${chosen}/${totalHosts}），未选的将用默认路径`);
                         }
                     }
 
-                    // 清空上一次搜索占用的内存：
-                    // 1) 断开对旧结果的引用
-                    this.searchResults = null;
+                    // 进入搜索：先展示占位框避免闪烁
+                    this.buildPlaceholderResults();
                     this.highlightKeyword = '';
-                    // 2) 递增版本号，强制卸载并重建结果组件，释放旧DOM
-                    this.resultsVersion += 1;
                     await this.$nextTick();
 
                     this.searching = true;
                     this.hasSearched = true;
 
                     try {
-                        const response = await axios.post(
-                            `/api/v1/logs/${this.selectedLog.name}/search`,
-                            this.searchForm
-                        );
+                        const response = await axios.post(`/api/v1/logs/${this.selectedLog.name}/search`, this.searchForm);
 
                         if (response.data.success) {
                             this.searchResults = response.data.data;
+                            if (this.searchResults) this.searchResults.pre_search = false;
                             // 搜索完成后才更新高亮关键词
                             this.highlightKeyword = this.searchForm.keyword || '';
                             if (this.searchResults.total_matches === 0) {
@@ -710,6 +900,36 @@
                         this.searching = false;
                         this.$nextTick(() => this.updateResultsHeight());
                     }
+                },
+                // 构建占位结果框（显示每个主机空容器）
+        buildPlaceholderResults() {
+                    if (!this.selectedLog || !this.selectedLog.sshs || !this.selectedLog.sshs.length) {
+                        this.searchResults = null;
+                        this.resultsVersion += 1;
+                        return;
+                    }
+                    const hosts = this.selectedLog.sshs.map((s, idx) => ({
+                        host: s.host || 'unknown',
+                        ssh_index: idx,
+                        results: [],
+                        total_results: 0,
+                        search_time: 0,
+                        search_result: { content: '', file_path: '', keyword: '', total_lines: 0, search_time: 0, matches: [] },
+                        success: true
+                    }));
+                    this.searchResults = {
+                        log_name: this.selectedLog.name,
+                        keyword: '',
+                        search_params: {},
+                        total_hosts: hosts.length,
+                        hosts,
+                        total_results: 0,
+            total_matches: 0,
+                        total_search_time: 0,
+            parallel_execution: false,
+            pre_search: true
+                    };
+                    this.resultsVersion += 1;
                 }
                 ,
                 updateResultsHeight() {

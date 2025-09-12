@@ -54,8 +54,7 @@ class SearchParams:
         valid_modes = ['keyword', 'context', 'tail']
         if self.search_mode not in valid_modes:
             errors.append(f"搜索模式必须是 {'/'.join(valid_modes)} 之一，当前值: {self.search_mode}")
-        if self.use_file_filter and not (self.selected_files or self.selected_file):
-            errors.append("启用文件过滤时必须指定要搜索的文件")
+    # 放宽文件过滤约束：允许未指定文件时后端使用默认路径
         if errors:
             raise ValueError("参数验证失败: " + "; ".join(errors))
 

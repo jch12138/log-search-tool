@@ -70,6 +70,7 @@ body {
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    height: calc(100vh - 40px); /* 与右侧统一高度 */
     max-height: calc(100vh - 40px);
     /* 设置最大高度，留出上下边距 */
 }
@@ -141,6 +142,7 @@ body {
     /* 关键：让flex子元素正确计算高度 */
     overflow: hidden;
     /* 防止内容溢出 */
+    height: calc(100vh - 40px); /* 与左侧保持底部对齐 */
 }
 
 /* 搜索区域 */
@@ -162,8 +164,7 @@ body {
     flex-direction: column;
     min-height: 400px;
     /* 降低最小高度 */
-    max-height: calc(100vh - 120px);
-    /* 调整最大高度，减少顶部空间 */
+    /* 移除 max-height 限制以便填满父容器剩余空间 */
     width: 100%;
     max-width: 100%; /* 限制最大宽度以居中显示 */
     margin-left: 0;

@@ -96,83 +96,34 @@ const LogSearchResults = {
     },
     
     computed: {
-        // 按主机分组搜索结果
+        // 按主机分组搜索结果（逻辑保持不变）
         groupedResults() {
-            if (!this.searchResults || !this.searchResults.hosts) {
-                return [];
-            }
-            
+            if (!this.searchResults || !this.searchResults.hosts) return [];
             if (!this.showHostGrouping) {
-                // 如果不显示主机分组，合并所有主机的结果
                 const allResults = [];
-                this.searchResults.hosts.forEach(hostResult => {
-                    if (hostResult && hostResult.success && Array.isArray(hostResult.results)) {
-                        allResults.push(...hostResult.results);
-                    }
+                this.searchResults.hosts.forEach(h => {
+                    if (h && h.success && Array.isArray(h.results)) allResults.push(...h.results);
                 });
-                return [{
-                    host: 'all',
-                    results: allResults.slice(0, this.maxResults)
-                }];
+                return [{ host: 'all', results: allResults.slice(0, this.maxResults) }];
             }
-            
-            // 直接使用后端返回的主机分组数据
             const groups = [];
-            let totalMatchesCount = 0;
-            
-            console.log('调试 - searchResults.hosts:', this.searchResults.hosts);
-            
             this.searchResults.hosts.forEach(hostResult => {
-                let hostResults = (hostResult && hostResult.success && Array.isArray(hostResult.results))
-                    ? hostResult.results
-                    : [];
-                
+                let hostResults = (hostResult && hostResult.success && Array.isArray(hostResult.results)) ? hostResult.results : [];
                 const originalCount = hostResults.length;
-                totalMatchesCount += originalCount;
-                
-                // 如果该主机结果过多，进行截断
                 let isTruncated = false;
                 if (this.maxResults && hostResults.length > this.maxResults) {
                     hostResults = hostResults.slice(0, this.maxResults);
                     isTruncated = true;
                 }
-                
-                console.log(`调试 - 主机 ${hostResult.host}: 成功=${hostResult.success}, 原始匹配数=${originalCount}, 显示匹配数=${hostResults.length}`);
-                
                 groups.push({
                     host: hostResult.host,
                     results: hostResults,
                     hostResult: hostResult,
-                    originalCount: originalCount,
-                    isTruncated: isTruncated
+                    originalCount,
+                    isTruncated
                 });
             });
-            
-            console.log('调试 - 返回的分组数量:', groups.length);
-            console.log('调试 - 总匹配数量:', totalMatchesCount);
-            
             return groups;
-        },
-        
-        // 动态样式
-        containerStyle() {
-            return {
-                height: this.height,
-                fontSize: this.fontSize,
-                fontFamily: this.fontFamily,
-                lineHeight: this.lineHeight
-            };
-        },
-        
-        // 主机容器样式 - 动态高度
-        hostsContainerStyle() {
-            // 计算可用高度 (减去统计信息的高度)
-            const hasStats = this.showSearchStats && this.searchResults && this.searchResults.total_matches > 0;
-            const statsHeight = hasStats ? '60px' : '0px';
-            
-            return {
-                height: `calc(${this.height} - ${statsHeight})`
-            };
         }
     },
     
@@ -371,14 +322,7 @@ const LogSearchResults = {
             const style = document.createElement('style');
             style.id = 'log-search-results-styles';
             style.textContent = `
-                /* 日志搜索结果组件样式 */
-                .log-search-results-component {
-                    width: 100%;
-                    height: 100%;
-                    display: flex;
-                    flex-direction: column;
-                }
-                
+                /* 简化层级后样式：直接在 results-section 下渲染 host-result-box */
                 .loading-dependencies {
                     flex: 1;
                     display: flex;
@@ -387,69 +331,39 @@ const LogSearchResults = {
                     min-height: 200px;
                 }
                 
-                .search-stats {
-                    padding: 12px 0;
-                    border-bottom: 1px solid #ebeef5;
-                    margin-bottom: 16px;
-                }
-                
-                .results-container {
-                    flex: 1;
-                    margin-top: 10px;
+                /* 独立容器，避免影响全局 .results-section 布局 */
+                .results-hosts-row {
                     display: flex;
-                    flex-direction: column;
-                    /* 背景由内部区域控制，避免影响外层卡片底色 */
-                }
-                
-                .hosts-container {
-                    display: flex;
+                    flex-direction: row;
                     gap: 20px;
-                    /* height由动态样式控制，不再固定 */
+                    align-items: stretch;
+                    padding: 0; /* 去掉底部内边距 */
+                    box-sizing: border-box;
+                    flex-wrap: nowrap;
+                    width: 100%;
+                    flex: 1;             /* 占满父容器高度 */
+                    min-height: 0;       /* 允许内部滚动 */
                 }
-                
-                .hosts-container.hosts-1 {
-                    flex-direction: row;
-                }
-                
-                .hosts-container.hosts-2 {
-                    flex-direction: row;
-                }
+                .results-hosts-row > .host-result-box { flex:1; }
                 
                 .host-result-box {
                     flex: 1;
-                    min-width: 0; /* 移除固定最小宽度，让容器能够收缩 */
+                    min-width: 0; /* 允许收缩 */
                     border: 1px solid #e4e7ed;
                     border-radius: 8px;
                     overflow: hidden;
-                    /* 外层容器保持浅色，与页面卡片风格一致 */
                     background: white;
                     display: flex;
                     flex-direction: column;
                     height: 100%;
+                    min-height: 0; /* 关键：使内部 .host-results 可滚动 */
                 }
                 
                 /* 只在有足够空间时设置最小宽度 */
-                @media (min-width: 768px) {
-                    .host-result-box {
-                        min-width: 300px;
-                    }
-                    
-                    .hosts-container.hosts-1 .host-result-box {
-                        min-width: 0;
-                    }
-                }
-                
-                /* 小屏幕上垂直排列 */
+                @media (min-width: 768px) { .results-hosts-row > .host-result-box { min-width: 300px; } }
                 @media (max-width: 767px) {
-                    .hosts-container {
-                        flex-direction: column !important;
-                        gap: 10px;
-                    }
-                    
-                    .host-result-box {
-                        min-height: 200px;
-                        max-height: 300px;
-                    }
+                    .results-hosts-row { flex-direction: column !important; gap:10px; flex-wrap: nowrap; }
+                    .results-hosts-row > .host-result-box { min-height:200px; max-height:300px; }
                 }
                 
                 .host-header {
@@ -491,6 +405,15 @@ const LogSearchResults = {
                     padding: 2px 6px;
                     border-radius: 10px;
                 }
+
+                /* 复用 el-tag 风格的主机信息标签 */
+                .host-tags { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+                .host-tags .el-tag { margin: 0; display: inline-flex; align-items: center; max-width: 220px; }
+                .host-tags .el-tag .el-tag__content { display: inline-flex; align-items: center; }
+                .host-path-tag { max-width: 320px; font-family: 'Fira Code','SF Mono',monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                @media (max-width: 1400px){ .host-path-tag { max-width: 240px; } }
+                @media (max-width: 1100px){ .host-path-tag { max-width: 180px; } }
+                @media (max-width: 900px){ .host-path-tag { display:none; } }
                 
                 .host-actions {
                     display: flex;
@@ -552,8 +475,9 @@ const LogSearchResults = {
                     flex: 1;
                     overflow-y: auto;
                     padding: 0;
-                    /* 仅滚动日志区域使用深色背景，未填满时也保持一致 */
                     background: #282c34;
+                    padding-bottom: 12px;
+                    min-height: 0; /* 防止 flex 子元素撑开父级导致不滚动 */
                 }
                 
                 .host-results::-webkit-scrollbar {
@@ -823,133 +747,124 @@ const LogSearchResults = {
             
             return `${year}${month}${day}_${hour}${minute}${second}`;
         }
+        ,
+        // 截断显示路径（保留文件名，路径过长时省略前半部分，仅展示末尾若干目录 + 文件名）
+        formatHostPath(fullPath) {
+            if (!fullPath) return '';
+            const parts = fullPath.split(/[/\\]/).filter(Boolean);
+            if (parts.length === 0) return fullPath;
+            const fileName = parts[parts.length - 1];
+            // 若没有目录结构就直接返回文件名
+            if (parts.length === 1) return fileName;
+            // 按需求显示为 ../文件名
+            return `../${fileName}`;
+        }
     },
     
     template: `
-        <div class="log-search-results-component" :class="[customClass, theme]" :style="containerStyle">
-            <!-- 依赖加载中 -->
-            <div v-if="!dependenciesLoaded" class="loading-dependencies" v-loading="true" element-loading-text="正在加载语法高亮组件..." style="min-height: 100px;">
+        <!-- 依赖加载中 -->
+        <div v-if="!dependenciesLoaded" class="loading-dependencies" v-loading="true" element-loading-text="正在加载语法高亮组件..." style="min-height: 100px;"></div>
+        
+        <!-- 有结果：直接渲染 host-result-box 作为外层 results-section 的直接子元素 -->
+        <template v-else>
+            <template v-if="searchResults && searchResults.total_matches > 0">
+                <div class="results-hosts-row">
+                <div class="host-result-box" v-for="group in groupedResults" :key="group.host">
+                    <!-- 主机头部 -->
+                    <div class="host-header" v-if="showHostGrouping">
+                        <div class="host-info">
+                            <div class="host-left-info host-tags">
+                                <i class="fas fa-server host-icon" style="color:#409eff;"></i>
+                                <span class="el-tag el-tag--primary el-tag--light el-tag--small" :title="'主机: '+group.host">{{ group.host }}</span>
+                                <span class="el-tag el-tag--info el-tag--light el-tag--small" :title="'匹配条数'">{{ group.results.length }} 条</span>
+                                <span class="el-tag el-tag--warning el-tag--light el-tag--small host-path-tag" v-if="group.hostResult && group.hostResult.search_result && group.hostResult.search_result.file_path"
+                                      :title="group.hostResult.search_result.file_path">
+                                    {{ formatHostPath(group.hostResult.search_result.file_path) }}
+                                </span>
+                            </div>
+                            <div class="host-actions">
+                                <button class="download-btn" @click="downloadLogFile(group.hostResult)" title="下载日志文件">
+                                    <span>下载日志</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 主机结果列表 -->
+                    <div class="host-results">
+                        <div v-if="group.results.length > 0">
+                            <div class="result-line" v-for="(line, index) in group.results" :key="index">
+                                <div class="result-content" v-html="highlightContent(line)"></div>
+                            </div>
+                            <!-- 截断提示 -->
+                            <div v-if="group.isTruncated" class="truncation-notice">
+                                <div class="truncation-message">
+                                    <i class="fas fa-info-circle" style="color: #409eff; margin-right: 8px;"></i>
+                                    <span style="color: #606266;">结果过多，已显示前 {{ group.results.length }} 条</span>
+                                    <div style="margin-top: 4px; color: #909399; font-size: 12px;">
+                                        原始匹配数: {{ group.originalCount }} 条，请使用更具体的关键词缩小搜索范围
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div v-else class="host-no-results">
+                            <!-- 搜索失败的情况 -->
+                            <div v-if="group.hostResult && !group.hostResult.success" class="no-results-message">
+                                <i class="fas fa-exclamation-triangle" style="color: #f56c6c; margin-right: 8px;"></i>
+                                <span style="color: #f56c6c;">搜索失败</span>
+                                <div style="margin-top: 4px; color: #f56c6c; font-size: 12px;">
+                                    错误: {{ group.hostResult.error || '连接失败' }}
+                                </div>
+                            </div>
+                            <!-- 搜索成功但无匹配结果的情况 -->
+                            <div v-else class="no-results-message">
+                                <i class="fas fa-check-circle" style="color: #67c23a; margin-right: 8px;"></i>
+                                <span style="color: #909399;">搜索完成，未找到匹配内容</span>
+                                <div style="margin-top: 4px; color: #c0c4cc; font-size: 12px;">
+                                    该主机已成功搜索，但没有找到包含关键词的日志
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                </div>
+            </template>
+            
+            <!-- 空结果提示 -->
+            <div v-else-if="searchResults && searchResults.total_matches === 0" class="empty-results">
+                <div class="el-empty">
+                    <div class="el-empty__image">
+                        <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" width="120" height="120">
+                            <g fill="none" stroke="#dcdfe6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="25" cy="25" r="20"/>
+                                <path d="m40 40 15 15"/>
+                                <path d="m18 18 14 14m0-14L18 32" stroke="#f56c6c" stroke-width="2.5"/>
+                            </g>
+                        </svg>
+                    </div>
+                    <div class="el-empty__description">{{ emptyMessage }}</div>
+                </div>
             </div>
             
-            <!-- 组件内容 -->
-            <div v-else>
-                <!-- 搜索统计信息 -->
-                <div v-if="showSearchStats && searchResults" class="search-stats">
-                    <span class="el-tag el-tag--info el-tag--small">
-                        共找到 {{ searchResults.total_matches }} 个匹配项
-                    </span>
-                    <span class="el-tag el-tag--success el-tag--small" style="margin-left: 8px;">
-                        搜索耗时: {{ searchResults.search_time }}s
-                    </span>
-                    <span class="el-tag el-tag--warning el-tag--small" style="margin-left: 8px;">
-                        主机数: {{ searchResults.hosts_searched }}
-                    </span>
-                </div>
-                
-                <!-- 搜索结果 -->
-                <div class="results-container" v-if="searchResults && searchResults.total_matches > 0">
-                    <div class="hosts-container" :class="'hosts-' + groupedResults.length" :style="hostsContainerStyle">
-                        <div class="host-result-box" v-for="group in groupedResults" :key="group.host">
-                            <!-- 主机头部 -->
-                            <div class="host-header" v-if="showHostGrouping">
-                                <div class="host-info">
-                                    <div class="host-left-info">
-                                        <i class="fas fa-server host-icon"></i>
-                                        <span class="host-name">{{ group.host }}</span>
-                                        <span class="host-count">{{ group.results.length }} 条</span>
-                                    </div>
-                                    <div class="host-actions">
-                                        <button class="download-btn" @click="downloadLogFile(group.hostResult)" title="下载日志文件">
-                                            <span>下载日志</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- 主机结果列表 -->
-                            <div class="host-results">
-                                <div v-if="group.results.length > 0">
-                                    <div class="result-line" v-for="(line, index) in group.results" :key="index">
-                                        <div class="result-content" v-html="highlightContent(line)"></div>
-                                    </div>
-                                    <!-- 截断提示 -->
-                                    <div v-if="group.isTruncated" class="truncation-notice">
-                                        <div class="truncation-message">
-                                            <i class="fas fa-info-circle" style="color: #409eff; margin-right: 8px;"></i>
-                                            <span style="color: #606266;">结果过多，已显示前 {{ group.results.length }} 条</span>
-                                            <div style="margin-top: 4px; color: #909399; font-size: 12px;">
-                                                原始匹配数: {{ group.originalCount }} 条，请使用更具体的关键词缩小搜索范围
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div v-else class="host-no-results">
-                                    <!-- 搜索失败的情况 -->
-                                    <div v-if="group.hostResult && !group.hostResult.success" class="no-results-message">
-                                        <i class="fas fa-exclamation-triangle" style="color: #f56c6c; margin-right: 8px;"></i>
-                                        <span style="color: #f56c6c;">搜索失败</span>
-                                        <div style="margin-top: 4px; color: #f56c6c; font-size: 12px;">
-                                            错误: {{ group.hostResult.error || '连接失败' }}
-                                        </div>
-                                    </div>
-                                    <!-- 搜索成功但无匹配结果的情况 -->
-                                    <div v-else class="no-results-message">
-                                        <i class="fas fa-check-circle" style="color: #67c23a; margin-right: 8px;"></i>
-                                        <span style="color: #909399;">搜索完成，未找到匹配内容</span>
-                                        <div style="margin-top: 4px; color: #c0c4cc; font-size: 12px;">
-                                            该主机已成功搜索，但没有找到包含关键词的日志
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+            <!-- 无数据状态 -->
+            <div v-else class="no-data">
+                <div class="el-empty">
+                    <div class="el-empty__image">
+                        <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" width="120" height="120">
+                            <g fill="none" stroke="#dcdfe6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 8h24l8 8v36a4 4 0 0 1-4 4H14a4 4 0 0 1-4-4V12a4 4 0 0 1 4-4z"/>
+                                <path d="M38 8v8h8"/>
+                                <line x1="18" y1="24" x2="42" y2="24"/>
+                                <line x1="18" y1="32" x2="42" y2="32"/>
+                                <line x1="18" y1="40" x2="30" y2="40"/>
+                                <circle cx="35" cy="45" r="6" stroke="#909399"/>
+                                <path d="m39 49 4 4" stroke="#909399"/>
+                            </g>
+                        </svg>
                     </div>
-                </div>
-                
-                <!-- 空结果提示 -->
-                <div v-else-if="searchResults && searchResults.total_matches === 0" class="empty-results">
-                    <div class="el-empty">
-                        <div class="el-empty__image">
-                            <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" width="120" height="120">
-                                <g fill="none" stroke="#dcdfe6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <!-- 放大镜圆圈 -->
-                                    <circle cx="25" cy="25" r="20"/>
-                                    <!-- 放大镜手柄 -->
-                                    <path d="m40 40 15 15"/>
-                                    <!-- X 标记表示未找到 -->
-                                    <path d="m18 18 14 14m0-14L18 32" stroke="#f56c6c" stroke-width="2.5"/>
-                                </g>
-                            </svg>
-                        </div>
-                        <div class="el-empty__description">{{ emptyMessage }}</div>
-                    </div>
-                </div>
-                
-                <!-- 无数据状态 -->
-                <div v-else class="no-data">
-                    <div class="el-empty">
-                        <div class="el-empty__image">
-                            <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" width="120" height="120">
-                                <g fill="none" stroke="#dcdfe6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <!-- 文档轮廓 -->
-                                    <path d="M14 8h24l8 8v36a4 4 0 0 1-4 4H14a4 4 0 0 1-4-4V12a4 4 0 0 1 4-4z"/>
-                                    <!-- 文档折角 -->
-                                    <path d="M38 8v8h8"/>
-                                    <!-- 文档内容线条 -->
-                                    <line x1="18" y1="24" x2="42" y2="24"/>
-                                    <line x1="18" y1="32" x2="42" y2="32"/>
-                                    <line x1="18" y1="40" x2="30" y2="40"/>
-                                    <!-- 搜索图标 -->
-                                    <circle cx="35" cy="45" r="6" stroke="#909399"/>
-                                    <path d="m39 49 4 4" stroke="#909399"/>
-                                </g>
-                            </svg>
-                        </div>
-                        <div class="el-empty__description">请执行搜索以查看结果</div>
-                    </div>
+                    <div class="el-empty__description">请执行搜索以查看结果</div>
                 </div>
             </div>
-        </div>
+        </template>
     `
 };
 

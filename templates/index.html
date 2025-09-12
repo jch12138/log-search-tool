@@ -20,6 +20,26 @@
     <link rel="stylesheet" href="/static/css/results.css" />
     <!-- 紧凑样式覆盖，缩小整体字号与间距约10% -->
     <link rel="stylesheet" href="/static/css/compact.css" />
+    <style>
+        /* 文件过滤器展开/折叠过渡动画 */
+        .file-filter-enter-from,
+        .file-filter-leave-to {
+            max-height: 0;
+            opacity: 0;
+            transform: translateY(-4px);
+        }
+        .file-filter-enter-to,
+        .file-filter-leave-from {
+            max-height: 800px; /* 允许足够高度 */
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .file-filter-enter-active,
+        .file-filter-leave-active {
+            overflow: hidden;
+            transition: max-height .28s ease, opacity .25s ease, transform .28s ease;
+        }
+    </style>
     
     <!-- 本地JavaScript库 -->
     <script src="/static/js/vendor/vue.global.js"></script>
@@ -169,46 +189,28 @@
                                 </button>
                             </div>
 
-                            <!-- 文件过滤器 (当启用指定文件搜索时显示) -->
-                            <div v-if="searchForm.use_file_filter" style="margin-top: 12px;">
-                                <div style="display: flex; gap: 16px; flex-wrap: wrap;">
-                                    <div v-for="group in groupedFiles" :key="group.host"
-                                        style="flex: 1; min-width: 300px;">
-                                        <div
-                                            style="font-size: 14px; font-weight: bold; color: #409eff; margin-bottom: 8px; display: flex; align-items: center;">
-                                            [[ group.host ]] ([[ group.files.length ]] 个文件)
+                            <!-- 文件过滤器 (带过渡) -->
+                            <transition name="file-filter" @after-enter="updateResultsHeight" @after-leave="updateResultsHeight">
+                                <div v-if="searchForm.use_file_filter" style="margin-top:12px;">
+                                    <div style="display:flex; gap:16px; flex-wrap:wrap;">
+                                        <div v-for="group in groupedFiles" :key="group.host" style="flex:1; min-width:300px;">
+                                            <div style="font-size:14px; font-weight:bold; color:#409eff; margin-bottom:8px; display:flex; align-items:center;">
+                                                [[ group.host ]] ([[ group.files.length ]] 个文件)
+                                            </div>
+                                            <el-select v-model="searchForm.selected_files[group.host]" :placeholder="`选择 ${group.host} 上的文件`" size="default" filterable clearable :loading="filesLoading" style="width:100%;" :disabled="!selectedLog">
+                                                <el-option v-for="fileItem in group.files" :key="fileItem.full_path" :label="fileItem.filename" :value="fileItem.full_path">
+                                                    [[ fileItem.filename ]]
+                                                </el-option>
+                                            </el-select>
                                         </div>
-                                        <el-select v-model="searchForm.selected_files[group.host]"
-                                            :placeholder="`选择 ${group.host} 上的文件`" size="default" filterable clearable
-                                            :loading="filesLoading" style="width: 100%;" :disabled="!selectedLog">
-                                            <el-option v-for="fileItem in group.files" :key="fileItem.full_path"
-                                                :label="fileItem.filename" :value="fileItem.full_path">
-                                                [[ fileItem.filename ]]
-                                            </el-option>
-                                        </el-select>
                                     </div>
                                 </div>
-                            </div>
+                            </transition>
                         </el-form>
                     </div>
 
                     <!-- 搜索结果区域 -->
-                    <div class="results-section">
-                        <div style="display: flex; align-items: center; margin-bottom: 10px;">
-                            <h3 style="margin: 0; color: #303133;">搜索结果</h3>
-                            <div v-if="searchResults && searchResults.total_matches > 0"
-                                style="margin-left: 16px; display: flex; align-items: center; gap: 8px;">
-                                <span class="el-tag el-tag--info el-tag--small">
-                                    共找到 [[ searchResults.total_matches ]] 个匹配项
-                                </span>
-                                <span class="el-tag el-tag--success el-tag--small">
-                                    搜索耗时: [[ Number(searchResults.search_time).toFixed(3) ]]s
-                                </span>
-                                <span class="el-tag el-tag--warning el-tag--small">
-                                    主机数: [[ searchResults.hosts_searched ]]
-                                </span>
-                            </div>
-                        </div>
+                    <div class="results-section" ref="resultsWrapper">
 
                         <!-- 使用日志搜索结果组件（仅在搜索完成后进行高亮） -->
                         <log-search-results
@@ -252,6 +254,7 @@
                     filesLoading: false, // 文件列表加载状态
                     collapsedGroups: new Set(), // 折叠的分组
                     showMoreMenu: false, // 更多菜单显示状态
+                    dynamicResultsHeight: '400px', // 动态结果高度
                     searchForm: {
                         keyword: '',
                         search_mode: 'context', // keyword 或 context
@@ -337,20 +340,8 @@
                     };
                 },
 
-                // 动态计算搜索结果框高度
-                searchResultsHeight() {
-                    // 基础高度：100vh - 顶部固定区域高度
-                    let baseOffset = 200;
-
-                    // 如果启用了文件过滤，需要额外减去文件过滤器的高度
-                    if (this.searchForm.use_file_filter && this.groupedFiles.length > 0) {
-                        // 每个主机行大约80px（标题+下拉框+间距）
-                        const filterHeight = this.groupedFiles.length * 40 + 20; // 20px额外间距
-                        baseOffset += filterHeight;
-                    }
-
-                    return `calc(100vh - ${baseOffset}px)`;
-                },
+                // 结果高度由测量驱动
+                searchResultsHeight() { return this.dynamicResultsHeight; },
 
                 // 检查是否所有必需的文件都已选择
                 isFileFilterValid() {
@@ -374,6 +365,10 @@
                 // 添加点击外部关闭菜单的监听
                 document.addEventListener('click', this.handleClickOutside);
 
+                // 初次计算高度
+                this.$nextTick(() => this.updateResultsHeight());
+                window.addEventListener('resize', this.updateResultsHeight, { passive: true });
+
                 // 如果通过独立页面进入 (sftp / terminals / config)
                 if (window.APP_PAGE && ['sftp','terminals','config'].includes(window.APP_PAGE)) {
                     // 延迟让组件初始化完成
@@ -385,6 +380,7 @@
                 // 清理事件监听器
                 document.removeEventListener('keydown', this.handleGlobalKeydown);
                 document.removeEventListener('click', this.handleClickOutside);
+                window.removeEventListener('resize', this.updateResultsHeight);
             },
 
             methods: {
@@ -594,6 +590,7 @@
                         this.availableFiles = [];
                         ElMessage.info('已关闭文件过滤');
                     }
+                    this.$nextTick(() => this.updateResultsHeight());
                 },
 
                 // 加载可用文件列表
@@ -609,6 +606,7 @@
                         if (response.data.success) {
                             this.availableFiles = response.data.data.files || [];
                             ElMessage.success(`加载了 ${this.availableFiles.length} 个文件`);
+                            this.$nextTick(() => this.updateResultsHeight());
                         } else {
                             this.handleApiError({ response: { data: response.data } }, '加载文件列表失败');
                             this.availableFiles = [];
@@ -710,7 +708,63 @@
                         this.highlightKeyword = '';
                     } finally {
                         this.searching = false;
+                        this.$nextTick(() => this.updateResultsHeight());
                     }
+                }
+                ,
+                updateResultsHeight() {
+                    try {
+                        const wrapper = this.$refs.resultsWrapper;
+                        if (!wrapper) return;
+                        const wrapperRect = wrapper.getBoundingClientRect();
+                        // 以 right-panel 容器底部为界限（避免窗口内其它 padding 影响）
+                        const parentPanel = wrapper.closest('.right-panel');
+                        let availableHeight;
+                        if (parentPanel) {
+                            const panelRect = parentPanel.getBoundingClientRect();
+                            // 留出与底部统一间距
+                            const bottomGap = 16;
+                            // 减去自身 padding-bottom，防止撑出父容器
+                            const wrapperStyles = window.getComputedStyle(wrapper);
+                            const paddingBottom = parseInt(wrapperStyles.paddingBottom) || 0;
+                            availableHeight = panelRect.bottom - wrapperRect.top - bottomGap - paddingBottom;
+                        } else {
+                            const bottomGap = 16;
+                            availableHeight = window.innerHeight - wrapperRect.top - bottomGap;
+                        }
+                        // 减去头部高度（标题与统计标签区域）
+                        const headerEl = wrapper.querySelector('.results-section-header');
+                        let headerH = 0;
+                        if (headerEl) {
+                            const hr = headerEl.getBoundingClientRect();
+                            headerH = hr.height + 4; // 额外留 4px 间距
+                        }
+                        availableHeight -= headerH;
+                        if (availableHeight < 120) availableHeight = 120; // 保底
+                        // 若有文件过滤器处于展开状态，其动画可能尚未结束，稍做补偿再次刷新
+                        const minH = 200;
+                        this.dynamicResultsHeight = Math.max(minH, availableHeight) + 'px';
+                        // 动画过程中再次测量（避免首次高度算大/算小）
+                        requestAnimationFrame(() => {
+                            const w2 = this.$refs.resultsWrapper;
+                            if (!w2) return;
+                            const wr2 = w2.getBoundingClientRect();
+                            const pp2 = w2.closest('.right-panel');
+                            if (pp2) {
+                                const pr2 = pp2.getBoundingClientRect();
+                                const gap = 16;
+                                const w2Styles = window.getComputedStyle(w2);
+                                const padB2 = parseInt(w2Styles.paddingBottom) || 0;
+                                const avail2 = pr2.bottom - wr2.top - gap - padB2;
+                                const header2 = w2.querySelector('.results-section-header');
+                                if (header2) {
+                                    const h2 = header2.getBoundingClientRect().height + 4;
+                                    avail2 -= h2;
+                                }
+                                this.dynamicResultsHeight = Math.max(minH, avail2) + 'px';
+                            }
+                        });
+                    } catch(e) { /* ignore */ }
                 }
             }
         });

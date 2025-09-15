@@ -39,6 +39,53 @@
             overflow: hidden;
             transition: max-height .28s ease, opacity .25s ease, transform .28s ease;
         }
+
+        /* 日志结果标签栏：整体白底圆角容器 + 单个标签白色/选中浅蓝 */
+        .log-tabs-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 10px;
+            padding: 16px 16px 16px 16px; /* 与 search-section 统一的内边距风格 */
+            background: #fff;
+            border-radius: 8px; /* 统一圆角 */
+            /* box-shadow: 0 2px 12px rgba(0,0,0,0.1); 同 search-section */
+            margin: 0 0 0 0;
+        }
+        .log-tab-item {
+            user-select: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            max-width: 240px;
+            padding: 8px 18px;
+            font-size: 14px;
+            line-height: 1.25;
+            border-radius: 8px;
+            background: #fff;
+            color: var(--el-text-color-regular);
+            cursor: pointer;
+            position: relative;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08), inset 0 0 0 1px var(--el-border-color-extra-light);
+            transition: background .15s ease, color .15s ease, box-shadow .18s ease, transform .16s ease;
+        }
+    .log-tab-item:hover { background: #f5f7fa; }
+        .log-tab-item.active {
+            background: #ecf5ff; /* 浅蓝，与整体风格协调 */
+            color: var(--el-color-primary);
+            font-weight: 600;
+            box-shadow: 0 1px 4px rgba(64,158,255,0.25), inset 0 0 0 1px var(--el-color-primary-light-5);
+        }
+    .log-tab-item .tab-title { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:center; }
+    .log-tab-item .close { font-size:14px; line-height:1; color:var(--el-text-color-placeholder); padding:2px; border-radius:3px; transition:background .15s ease, color .15s ease; opacity:1; }
+    .log-tab-item:hover .close { opacity:1; }
+    .log-tab-item .close:hover { color:var(--el-color-danger); background:var(--el-fill-color); }
+    .log-tab-item .tab-badge { font-size:10px; line-height:16px; min-width:20px; padding:0 6px; border-radius:10px; background:#eef2f6; color:var(--el-text-color-secondary); text-align:center; font-weight:500; }
+    .log-tab-item.active .tab-badge { background:#d3e9ff; color:var(--el-color-primary); }
+    .log-tab-item .tab-badge.spinning { animation:tabPulse 1s linear infinite; }
+    @keyframes tabPulse { 0% {opacity:.35;} 50% {opacity:1;} 100% {opacity:.35;} }
+    .results-section { margin-top:0; }
+    /* .right-panel { background:var(--el-bg-color); } */
+    .search-section { border-bottom:1px solid var(--el-border-color-light); }
     </style>
     
     <!-- 本地JavaScript库 -->
@@ -97,7 +144,8 @@
                     </div>
                     
                     <!-- 更多功能按钮 -->
-                    <div class="more-actions">
+                    <!-- 临时隐藏更多工具入口: 用户请求 "暂时隐藏更多工具入口" -->
+                    <div class="more-actions" style="display:none;" aria-hidden="true">
                         <button class="more-button" @click="toggleMoreMenu" :class="{ active: showMoreMenu }">
                             <span class="more-icon">⚙️</span>
                             <span class="more-text">更多功能</span>
@@ -254,14 +302,25 @@
                         </el-form>
                     </div>
 
+                    <!-- 日志结果标签栏 -->
+                    <div class="log-tabs-bar" v-if="tabs.length">
+                    <div v-for="tab in tabs" :key="tab.id" @click="activateTab(tab.id)"
+                        :class="['log-tab-item', { active: tab.id === activeTabId }]">
+                            <span class="tab-title" :title="tab.title">[[ tab.title ]]</span>
+                            <span v-if="tab.searching" class="tab-badge spinning" title="搜索中">··</span>
+                            <span v-else-if="tab.hasSearched && tab.searchResults" class="tab-badge" :title="'匹配: '+(tab.searchResults.total_matches||0)">[[ tab.searchResults.total_matches ]]</span>
+                            <span class="close" @click.stop="closeTab(tab.id)" title="关闭">×</span>
+                        </div>
+                    </div>
+
                     <!-- 搜索结果区域 -->
                     <div class="results-section" ref="resultsWrapper">
 
                         <!-- 使用日志搜索结果组件（仅在搜索完成后进行高亮） -->
                         <log-search-results
-                            :key="resultsVersion"
-                            :search-results="searchResults"
-                            :search-keyword="highlightKeyword"
+                            :key="activeTab ? activeTab.resultsVersion : resultsVersion"
+                            :search-results="activeTab ? activeTab.searchResults : searchResults"
+                            :search-keyword="activeTab ? activeTab.highlightKeyword : highlightKeyword"
                             :use-regex="searchForm.use_regex"
                             :height="searchResultsHeight"
                             :max-results="5000"
@@ -321,7 +380,11 @@
                         selected_files: {},  // 新增：主机到文件的映射
                         max_lines: 2000 // 每次搜索的最大行数
                     },
-                    searchResults: null
+                    searchResults: null,
+                    // 多标签管理
+                    tabs: [],
+                    activeTabId: null,
+                    nextTabSeq: 1
                 };
             },
 
@@ -383,9 +446,13 @@
                     return !!this.browsing.loading[this.browsing.currentHost];
                 },
 
-                // 高亮器开关：仅在搜索完成后启用
+                // 当前激活标签
+                activeTab() { return this.tabs.find(t => t.id === this.activeTabId) || null; },
+
+                // 高亮器开关：仅在搜索完成后启用（按当前标签）
                 effectiveHighlighters() {
-                    if (!this.hasSearched || this.searching || !this.searchResults) {
+                    const tab = this.activeTab;
+                    if (!tab || !tab.hasSearched || tab.searching || !tab.searchResults) {
                         return {
                             logLevels: false,
                             timestamps: false,
@@ -627,19 +694,22 @@
                 },
 
                 selectLog(log) {
-                    this.selectedLog = log;
-                    this.hasSearched = false;
-                    this.highlightKeyword = '';
-
-                    // 只清理文件选择，保持搜索关键词和搜索设置
-                    this.searchForm.selected_file = '';
-                    this.searchForm.selected_files = {};
-
-                    // 如果文件过滤已启用，自动加载文件列表
-                    // 立即构建占位主机结果框
-                    this.buildPlaceholderResults();
-                    // 异步补全 SSH 详细信息后刷新占位
-                    this.ensureLogDetail(log);
+                    if (!log) return;
+                    // 若已有对应标签则激活
+                    const exist = this.tabs.find(t => t.logName === log.name);
+                    if (exist) { this.activateTab(exist.id); return; }
+                    // 创建新标签
+                    const tab = this._createTabForLog(log);
+                    this.tabs.push(tab);
+                    this.activeTabId = tab.id;
+                    this._syncActiveTabToRoot();
+                    // 构建占位 & 拉取详情
+                    this.buildPlaceholderResults(tab);
+                    this.ensureLogDetail(log).then(()=>{
+                        if (tab.searchResults && tab.searchResults.pre_search) {
+                            this.buildPlaceholderResults(tab); // 更新 sshs
+                        }
+                    });
                 },
 
                 // 确保 selectedLog 拥有 sshs（与后端 detail 接口字段 ssh_configs 对齐）
@@ -849,7 +919,8 @@
                 },
 
                 async executeSearch() {
-                    if (!this.selectedLog) {
+                    const tab = this.activeTab;
+                    if (!tab || !this.selectedLog) {
                         ElMessage.warning('请先选择一个日志配置');
                         return;
                     }
@@ -867,49 +938,53 @@
                     }
 
                     // 进入搜索：先展示占位框避免闪烁
-                    this.buildPlaceholderResults();
-                    this.highlightKeyword = '';
+                    this.buildPlaceholderResults(tab);
+                    tab.highlightKeyword = '';
                     await this.$nextTick();
 
-                    this.searching = true;
-                    this.hasSearched = true;
+                    tab.searching = true;
+                    tab.hasSearched = true;
 
                     try {
                         const response = await axios.post(`/api/v1/logs/${this.selectedLog.name}/search`, this.searchForm);
 
                         if (response.data.success) {
-                            this.searchResults = response.data.data;
-                            if (this.searchResults) this.searchResults.pre_search = false;
-                            // 搜索完成后才更新高亮关键词
-                            this.highlightKeyword = this.searchForm.keyword || '';
-                            if (this.searchResults.total_matches === 0) {
+                            tab.searchResults = response.data.data;
+                            if (tab.searchResults) tab.searchResults.pre_search = false;
+                            tab.highlightKeyword = this.searchForm.keyword || '';
+                            tab.resultsVersion += 1;
+                            if (tab.searchResults.total_matches === 0) {
                                 ElMessage.info('未找到匹配的日志记录');
                             } else {
-                                ElMessage.success(`找到 ${this.searchResults.total_matches} 个匹配项`);
+                                ElMessage.success(`找到 ${tab.searchResults.total_matches} 个匹配项`);
                             }
                         } else {
                             this.handleApiError({ response: { data: response.data } }, '搜索失败');
-                            this.searchResults = null;
-                            this.highlightKeyword = '';
+                            tab.searchResults = null;
+                            tab.highlightKeyword = '';
                         }
                     } catch (error) {
                         this.handleApiError(error, '搜索请求失败');
                         console.error('搜索失败:', error);
-                        this.searchResults = null;
-                        this.highlightKeyword = '';
+                        tab.searchResults = null;
+                        tab.highlightKeyword = '';
                     } finally {
-                        this.searching = false;
+                        tab.searching = false;
                         this.$nextTick(() => this.updateResultsHeight());
                     }
                 },
                 // 构建占位结果框（显示每个主机空容器）
-        buildPlaceholderResults() {
-                    if (!this.selectedLog || !this.selectedLog.sshs || !this.selectedLog.sshs.length) {
-                        this.searchResults = null;
-                        this.resultsVersion += 1;
+                buildPlaceholderResults(tab = null) {
+                    tab = tab || this.activeTab;
+                    if (!tab) return;
+                    const logRef = tab.selectedLog || this.selectedLog;
+                    if (!logRef || !logRef.sshs || !logRef.sshs.length) {
+                        tab.searchResults = null;
+                        tab.resultsVersion += 1;
+                        if (tab.id === this.activeTabId) { this.searchResults = null; this.resultsVersion = tab.resultsVersion; }
                         return;
                     }
-                    const hosts = this.selectedLog.sshs.map((s, idx) => ({
+                    const hosts = logRef.sshs.map((s, idx) => ({
                         host: s.host || 'unknown',
                         ssh_index: idx,
                         results: [],
@@ -918,8 +993,8 @@
                         search_result: { content: '', file_path: '', keyword: '', total_lines: 0, search_time: 0, matches: [] },
                         success: true
                     }));
-                    this.searchResults = {
-                        log_name: this.selectedLog.name,
+                    tab.searchResults = {
+                        log_name: logRef.name,
                         keyword: '',
                         search_params: {},
                         total_hosts: hosts.length,
@@ -930,8 +1005,79 @@
             parallel_execution: false,
             pre_search: true
                     };
-                    this.resultsVersion += 1;
-                }
+                    tab.resultsVersion += 1;
+                    if (tab.id === this.activeTabId) {
+                        this.searchResults = tab.searchResults;
+                        this.resultsVersion = tab.resultsVersion;
+                    }
+                },
+                // 创建标签对象
+                _createTabForLog(log) {
+                    return {
+                        id: 'tab_' + (this.nextTabSeq++),
+                        logName: log.name,
+                        title: log.name,
+                        selectedLog: log,
+                        searchForm: JSON.parse(JSON.stringify(this._defaultSearchForm())),
+                        searchResults: null,
+                        highlightKeyword: '',
+                        hasSearched: false,
+                        searching: false,
+                        resultsVersion: 0
+                    };
+                },
+                _defaultSearchForm() {
+                    return {
+                        keyword: '',
+                        search_mode: 'context',
+                        context_span: 5,
+                        use_regex: false,
+                        reverse_order: false,
+                        use_file_filter: false,
+                        selected_file: '',
+                        selected_files: {},
+                        max_lines: 2000
+                    };
+                },
+                activateTab(id) {
+                    if (this.activeTabId === id) return;
+                    const tab = this.tabs.find(t => t.id === id);
+                    if (!tab) return;
+                    this.activeTabId = id;
+                    this._syncActiveTabToRoot();
+                    this.$nextTick(() => this.updateResultsHeight());
+                },
+                closeTab(id) {
+                    const idx = this.tabs.findIndex(t => t.id === id);
+                    if (idx === -1) return;
+                    const closingActive = this.tabs[idx].id === this.activeTabId;
+                    this.tabs.splice(idx,1);
+                    if (!this.tabs.length) {
+                        // 重置全局
+                        this.selectedLog = null;
+                        this.activeTabId = null;
+                        this.searchForm = this._defaultSearchForm();
+                        this.searchResults = null;
+                        this.highlightKeyword='';
+                        this.hasSearched=false;
+                    } else if (closingActive) {
+                        const newTab = this.tabs[Math.max(0, idx-1)];
+                        this.activeTabId = newTab.id;
+                        this._syncActiveTabToRoot();
+                    }
+                },
+                _syncActiveTabToRoot() {
+                    const tab = this.activeTab;
+                    if (!tab) return;
+                    this.selectedLog = tab.selectedLog;
+                    this.searchForm = tab.searchForm;
+                    this.searchResults = tab.searchResults;
+                    this.highlightKeyword = tab.highlightKeyword;
+                    this.hasSearched = tab.hasSearched;
+                    this.searching = tab.searching;
+                    this.resultsVersion = tab.resultsVersion;
+                },
+                tabStyle() { return {}; }
                 ,
                 updateResultsHeight() {
                     try {

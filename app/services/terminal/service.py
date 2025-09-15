@@ -5,6 +5,7 @@ import time
 import uuid
 import codecs
 from datetime import datetime
+import logging
 from dataclasses import dataclass, asdict
 from typing import Dict, List, Optional, Any
 import paramiko
@@ -33,6 +34,7 @@ class TerminalSession:
 
 class TerminalService:
 	def __init__(self, idle_timeout: int | None = None, check_interval: int = 30):
+		self._logger = logging.getLogger(__name__)
 		self.sessions: Dict[str, Dict[str, Any]] = {}
 		self.session_info: Dict[str, TerminalSession] = {}
 		self._lock = threading.Lock()
@@ -84,6 +86,8 @@ class TerminalService:
 				'created_at': datetime.now(),
 			}
 			self.session_info[terminal_id] = session
+		# 连接日志
+		self._logger.info("[terminal] session created: %s (session=%s) user=%s host=%s port=%s", terminal_id, session_id, username, host, port)
 		threading.Thread(target=self._output_reader, args=(terminal_id,), daemon=True).start()
 		try:
 			channel.send("export LANG=C.UTF-8 LC_ALL=C.UTF-8\n")
@@ -125,6 +129,7 @@ class TerminalService:
 			'session_duration': str(duration).split('.')[0],
 			'commands_executed': si.command_count
 		}
+		self._logger.info("[terminal] session closed: %s user=%s host=%s duration=%s commands=%s", terminal_id, si.username, si.host, payload['session_duration'], si.command_count)
 		for cb in list(self._close_listeners):  # fire events
 			try:
 				cb(payload)

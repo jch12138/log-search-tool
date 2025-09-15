@@ -1,1 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><style>.a{fill:#0ea5e9}.b{fill:#fff;opacity:.95}</style></defs><rect width="64" height="64" rx="12" class="a"/><path class="b" d="M14 18h36a2 2 0 0 1 2 2v24a2 2 0 0 1-2 2H14a2 2 0 0 1-2-2V20a2 2 0 0 1 2-2Zm5 8 7 6-7 6-3-3 4-3-4-3Zm11 9h15v4H30Z"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Terminal">
+	<defs>
+		<style>
+			.bg { fill:#0ea5e9; }
+			.icon { fill:none; stroke:#ffffff; stroke-linecap:round; stroke-linejoin:round; }
+		</style>
+	</defs>
+	<rect class="bg" width="64" height="64" rx="12"/>
+	<!-- Terminal symbol scaled -->
+	<g transform="translate(3.2 3.2) scale(2.4)">
+		<path class="icon" stroke-width="1.2" d="M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/>
+		<path class="icon" stroke-width="1.4" d="m7 9 3.5 3L7 15"/>
+		<path class="icon" stroke-width="1.4" d="M11.5 15H17"/>
+	</g>
+</svg>

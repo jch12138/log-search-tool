@@ -42,6 +42,10 @@ def connect_sftp():
 			connection_name=data.get('connection_name',''))
 		return jsonify({'success': True,'data': {
 			'connection_id': info.connection_id,
+			'host': info.host,
+			'port': info.port,
+			'username': info.username,
+			'connection_name': info.connection_name,
 			'message': f'成功连接到 {info.host}:{info.port}',
 			'connected_at': info.connected_at
 		}})
@@ -80,6 +84,10 @@ def connect_sftp_by_config():
 		)
 		return jsonify({'success': True,'data': {
 			'connection_id': info.connection_id,
+			'host': info.host,
+			'port': info.port,
+			'username': info.username,
+			'connection_name': info.connection_name,
 			'message': f'成功连接到 {info.host}:{info.port}',
 			'connected_at': info.connected_at
 		}})

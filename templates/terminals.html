@@ -4,128 +4,25 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>在线终端</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Ctext%20x%3D%2750%25%27%20y%3D%2750%25%27%20text-anchor%3D%27middle%27%20dominant-baseline%3D%27central%27%20font-size%3D%2752%27%3E%F0%9F%92%BB%3C/text%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="/static/fonts/microsoft-yahei.css" />
+  <link rel="icon" type="image/svg+xml" href="/static/icons/favicon-terminal.svg" />
   <link rel="stylesheet" href="/static/fonts/source-code-pro.css" />
-  <link rel="stylesheet" href="/static/css/xterm.css">
+  <link rel="stylesheet" href="/static/css/xterm.css" />
   <style>
-    /* Minimal container layout, adapted to app look */
-  /* Prefer JetBrains Mono for Latin; fallback to 黑体 family for Chinese */
-  body { margin:0; height:100vh; overflow:hidden; font-family: 'JetBrains Mono', 'SimHei', 'Heiti SC', 'PingFang SC', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, monospace, sans-serif; background:#f6f8fb; font-size:15px; }
-    .container { display:flex; flex-direction:column; height:100vh; }
-  .header { background:#fff; border-bottom:1px solid #e5e7eb; padding:12px 20px; display:flex; justify-content:space-between; align-items:center; }
-    .header h1 { margin:0; font-size:16px; }
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      height: 36px; /* unify height */
-      padding: 0 16px; /* horizontal padding only */
-      border:1px solid #e5e7eb;
-      background:#fff;
-      border-radius:8px;
-      cursor:pointer;
-      font-size:14px;
-      box-sizing: border-box;
-    }
-  .btn:hover { background:#f9fafb; border-color:#d1d5db; }
-  .btn:focus-visible { outline: 2px solid #93c5fd; outline-offset: 1px; }
-    .btn-primary { background:#2563eb; border-color:#2563eb; color:#fff; }
-  .btn-primary:hover { background:#1d4ed8; border-color:#1d4ed8; }
-    .btn-danger { background:#dc2626; border-color:#dc2626; color:#fff; }
-  .btn-danger:hover { background:#b91c1c; border-color:#b91c1c; }
-    /* Use a UI sans-serif stack for non-terminal UI text */
-    .header, .topbar, .sidebar, .section-header, .list, .item, .btn, .current {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', Arial, sans-serif;
-    }
-    .layout { flex:1; display:flex; min-height:0; }
-    .sidebar { width:320px; background:#fff; border-right:1px solid #e5e7eb; display:flex; flex-direction:column; }
-    .section { display:flex; flex-direction:column; min-height:0; }
-  .section-header { padding:12px 16px; border-bottom:1px solid #e5e7eb; background:#f8fafc; display:flex; justify-content:space-between; align-items:center; font-size:14px; font-weight:600; }
-  .list { flex:1; overflow:auto; padding:10px; }
-  .item { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:10px; margin-bottom:8px; display:flex; align-items:center; justify-content:space-between; cursor:default; }
-  .item.clickable { cursor:pointer; }
-  .item.clickable:hover { border-color:#2563eb; box-shadow:0 2px 8px rgba(37,99,235,.08); }
-  .item .info { display:flex; flex-direction:column; gap:2px; min-width:0; }
-  .item .title { font-weight:600; font-size:15px; line-height:1.25; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .item .meta { font-size:12px; color:#6b7280; line-height:1.25; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .item .actions { display:flex; align-items:center; gap:8px; }
-    .main { flex:1; display:flex; flex-direction:column; min-width:0; background:#0a0e1a; }
-    .topbar { background:#fff; border-bottom:1px solid #e5e7eb; padding:10px 16px; display:flex; align-items:center; gap:8px; }
-  .current { flex:1; font-size:14px; }
-    .viewport { flex:1; padding:12px; overflow:hidden; display:flex; min-height:0; }
-    .panel { flex:1; border:1px solid #1e293b; background:#0f172a; border-radius:10px; overflow:hidden; display:flex; position:relative; }
-    .term { 
-      flex:1; 
-      display:none; 
-      width:100%; 
-      height:100%; 
-      position:absolute;
-      top:0;
-      left:0;
-      right:0;
-      bottom:0;
-    }
-    .term.active { display:flex; }
-
-    /* 确保 xterm 容器正确填充父容器 */
-    .term .xterm {
-      width: 100% !important;
-      height: 100% !important;
-    }
-
-    /* Xterm viewport scrollbar: semi-transparent black */
-    .xterm .xterm-viewport {
-      scrollbar-color: rgba(0,0,0,0.35) transparent; /* Firefox */
-      scrollbar-width: thin;
-    }
-    .xterm .xterm-viewport::-webkit-scrollbar {
-      width: 8px;
-      height: 8px;
-    }
-    .xterm .xterm-viewport::-webkit-scrollbar-track {
-      background: transparent;
-    }
-    .xterm .xterm-viewport::-webkit-scrollbar-thumb {
-      background: rgba(0,0,0,0.35);
-      border-radius: 8px;
-    }
-    .xterm .xterm-viewport::-webkit-scrollbar-thumb:hover {
-      background: rgba(0,0,0,0.5);
-    }
+    html,body { margin:0; padding:0; height:100%; width:100%; background:#0a0e1a; font-family: 'Source Code Pro','Consolas','Monaco','Menlo',monospace; }
+    body { display:flex; }
+    .viewport { flex:1; display:flex; padding:0; margin:0; overflow:hidden; }
+    #panel { flex:1; display:flex; position:relative; }
+    .term { flex:1; width:100%; height:100%; }
+    .placeholder { color:#64748b; margin:auto; font-size:14px; letter-spacing:.5px; text-align:center; line-height:1.6; }
+    .xterm .xterm-viewport::-webkit-scrollbar { width:8px; height:8px; }
+    .xterm .xterm-viewport::-webkit-scrollbar-thumb { background:rgba(255,255,255,.15); border-radius:8px; }
+    .xterm .xterm-viewport::-webkit-scrollbar-thumb:hover { background:rgba(255,255,255,.28); }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <h1>在线终端</h1>
-      <div>
-        <button class="btn" id="btn-home">返回主页</button>
-        <button class="btn btn-primary" id="btn-refresh">刷新服务器</button>
-      </div>
-    </div>
-    <div class="layout">
-      <aside class="sidebar">
-        <div class="section" style="flex:1;">
-          <div class="section-header">活跃连接 <span id="active-count"></span></div>
-          <div class="list" id="active-list"><div class="item" style="text-align:center;cursor:default;">暂无活跃连接</div></div>
-        </div>
-        <div class="section" style="flex:1;">
-          <div class="section-header">可用服务器 <span id="available-count"></span></div>
-          <div class="list" id="avail-list"><div class="item" style="text-align:center;cursor:default;">正在加载服务器...</div></div>
-        </div>
-      </aside>
-      <main class="main">
-        <div class="topbar">
-          <div class="current" id="current-label">未选择会话</div>
-          <button class="btn" id="btn-clear" disabled>清空</button>
-          <button class="btn" id="btn-reconnect" disabled>重连</button>
-          <button class="btn" id="btn-disconnect" disabled>断开</button>
-        </div>
-        <div class="viewport">
-          <div class="panel" id="panel"></div>
-        </div>
-      </main>
+  <div class="viewport">
+    <div id="panel">
+      <div class="placeholder" id="placeholder">等待连接<br/>请通过 URL 指定 ?log_name=xxx&ssh_index=N 或 single 模式</div>
     </div>
   </div>
 
@@ -134,305 +31,121 @@
   <script src="/static/js/vendor/socket.io.min.js"></script>
   <script>
     const API = '/api/v1';
-  const state = { sessions:{}, current:null, servers:[], socket:null };
-    const $ = (id)=>document.getElementById(id);
+    const state = { current:null, sessions:{}, socket:null };
 
-    document.addEventListener('DOMContentLoaded', ()=>{
-  // 首页按钮统一风格并绑定跳转
-  const homeBtn = document.getElementById('btn-home');
-  if (homeBtn) homeBtn.addEventListener('click', ()=>{ window.location.href = '/'; });
-      $('btn-refresh').addEventListener('click', loadServers);
-      $('btn-clear').addEventListener('click', ()=>{ if(state.current) state.sessions[state.current].term.clear(); });
-      $('btn-reconnect').addEventListener('click', ()=>{ 
-        if(state.current){ 
-          const s = state.sessions[state.current]; 
-          if (s.server.log_name && s.server.ssh_index !== undefined) {
-            connectByConfig(s.server.log_name, s.server.ssh_index, s.server); 
-          } else {
-            connectToServer(s.server);
-          }
-        }
-      });
-      $('btn-disconnect').addEventListener('click', ()=>{ if(state.current) closeSession(state.current); });
-      // 建立Socket连接
-      state.socket = io('/', { path: '/socket.io', transports: ['websocket'] });
-      state.socket.on('connect', ()=>{/* connected */});
-      state.socket.on('output', (msg)=>{
-        const { terminal_id, data } = msg || {}; if(!terminal_id || !state.sessions[terminal_id]) return;
-        const term = state.sessions[terminal_id].term; if(data){ term.write(String(data).replace(/\n/g,'\r\n')); }
-      });
-      state.socket.on('error', (msg)=>{ /* optionally show */ });
-      loadServers();
-      refreshActive();
-  // Resize fit - 改进窗口大小变化处理
-  let resizeTimeout;
-  window.addEventListener('resize', () => {
-    clearTimeout(resizeTimeout);
-    resizeTimeout = setTimeout(() => {
-      if (state.current && state.sessions[state.current]) {
-        const session = state.sessions[state.current];
-        if (session.fitAddon) {
-          try {
-            session.fitAddon.fit();
-            // 通知服务器终端尺寸变化
-            if (state.socket) {
-              const { cols, rows } = session.term;
-              state.socket.emit('resize', { 
-                terminal_id: state.current, 
-                cols: cols, 
-                rows: rows 
-              });
-            }
-          } catch (e) {
-            console.warn('窗口大小调整失败:', e);
-          }
-        }
-      }
-    }, 250); // 防抖延迟
-  });
-    });
+    function $(id){ return document.getElementById(id); }
 
-    async function loadServers(){
-      $('avail-list').innerHTML = '<div class="item" style="text-align:center;cursor:default;">加载中...</div>';
-      try{
-        const r = await fetch(`${API}/servers?type=terminal`);
-        const j = await r.json();
-        if(!j.success) throw new Error(j.error?.message||'加载失败');
-        const servers = j.data?.servers || [];
-        state.servers = servers;
-        renderServers();
-        renderActive();
-      }catch(e){ 
-        $('avail-list').innerHTML = `<div class="item" style="text-align:center;cursor:default;">加载失败：${e.message}</div>`; 
+    function updateTitle(u,h){ if(u&&h){ document.title = `${u}@${h}`; } }
+
+    function showError(msg){
+      const panel = document.getElementById('panel');
+      let ph = document.getElementById('placeholder');
+      if(!ph){
+        ph = document.createElement('div');
+        ph.id = 'placeholder';
+        ph.className = 'placeholder';
+        panel.appendChild(ph);
       }
+      ph.textContent = msg;
     }
 
-    function renderServers(){
-      const c = $('avail-list'); c.innerHTML = '';
-      // 只显示当前未连接的服务器
-      const available = state.servers.filter(server => !isActiveServer(server.server_id));
-      $('available-count').textContent = available.length;
-      
-      if(available.length === 0){
-        c.innerHTML = '<div class="item" style="text-align:center;cursor:default;">暂无可用服务器</div>';
-        return;
-      }
-      
-      available.forEach((server, i) => {
-        const el = document.createElement('div'); 
-        el.className = 'item';
-        
-        el.innerHTML = `
-          <div class="info">
-            <div class="title">${server.username}@${server.host}</div>
-            <div class="meta">端口: ${server.port}</div>
-          </div>
-          <div class="actions">
-            <button class="btn btn-primary btn-connect" data-server-id="${server.server_id}">连接</button>
-          </div>
-        `;
-        
-        // 连接按钮点击处理
-        const btn = el.querySelector('.btn-connect');
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          connectToServer(server);
-        });
-        
-        c.appendChild(el);
-      });
-    }
-
-    function isActiveServer(serverId){
-      const ids = Object.keys(state.sessions);
-      return ids.some(id => {
-        const s = state.sessions[id];
-        return s && s.server && s.server.server_id === serverId;
-      });
-    }
-
-    async function connectToServer(server) {
-      // 直接连接服务器，使用第一个可用的日志配置（如果有的话）
-      const firstLog = server.log_configs && server.log_configs.length > 0 ? server.log_configs[0] : null;
-      
-      if (firstLog) {
-        await connectByConfig(firstLog.log_name, firstLog.ssh_index, server);
-      } else {
-        // 使用服务器信息直接连接
-        await connectByConfig('', 0, server);
-      }
-    }
-
-    async function connectByConfig(logName, sshIndex, server = null) {
-      try{
-        const requestData = logName ? 
-          { log_name: logName, ssh_index: sshIndex } :
-          { 
-            host: server.host,
-            port: server.port,
-            username: server.username,
-            // 注意：这里需要后端支持直接通过服务器信息连接
-            server_id: server.server_id
-          };
-
-        const r = await fetch(`${API}/terminals`, { 
-          method:'POST', 
-          headers:{'Content-Type':'application/json'}, 
-          body: JSON.stringify(requestData) 
-        });
-        
+    async function connectByConfig(logName, sshIndex){
+      try {
+        const payload = { log_name: logName, ssh_index: sshIndex };
+        const r = await fetch(`${API}/terminals`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
         const j = await r.json();
         if(!j.success) throw new Error(j.error?.message||'连接失败');
-        
-        const d = j.data; 
-        const sid = d.terminal_id;
-        // Create xterm
+        const d = j.data;
+        updateTitle(d.username, d.host);
+
+        // init terminal
         const term = new window.Terminal({
           cursorBlink:true,
-          rendererType:'canvas',
-          allowProposedApi:true,
           convertEol:true,
-          fontFamily: "'Source Code Pro','Consolas','Monaco','Menlo','Ubuntu Mono','SimHei','Heiti SC','PingFang SC','Microsoft YaHei','Noto Sans CJK SC','WenQuanYi Micro Hei',monospace",
+          fontFamily:"'Source Code Pro','Consolas','Monaco','Menlo',monospace",
           fontSize:14,
-          lineHeight:1.2,
-          letterSpacing:0,
-          theme:{ background:'#0f172a', foreground:'#e2e8f0' },
-          scrollback:10000,
-          cols: 80,  // 默认列数
-          rows: 24   // 默认行数
+          theme:{ background:'#0a0e1a', foreground:'#e2e8f0' },
+          scrollback:10000
         });
-        const fitAddon = new window.FitAddon.FitAddon(); 
+        const fitAddon = new window.FitAddon.FitAddon();
         term.loadAddon(fitAddon);
-        
-        const termEl = document.createElement('div'); 
-        termEl.className='term'; 
-        termEl.id = `term-${sid}`; 
-        $('panel').appendChild(termEl);
-        
-        term.open(termEl); 
-        
-        // 确保容器有正确的尺寸后再调整
-        setTimeout(() => {
-          try {
-            fitAddon.fit();
-            // 强制刷新终端尺寸
-            term.refresh(0, term.rows - 1);
-          } catch (e) {
-            console.warn('终端尺寸调整失败:', e);
-          }
-        }, 100);
-  // 初始提示
-  if (d.initial_prompt) {
-          term.write(d.initial_prompt.replace(/\n/g, '\r\n'));
-        }
-        // 输入通过Socket实时发送
-        term.onData(data => { if(state.socket){ state.socket.emit('input', { terminal_id: sid, data }); }});
-        // 加入该终端房间，接收输出
-        if(state.socket){ state.socket.emit('join', { terminal_id: sid }); }
-        
-        // 保存会话信息
-        const serverInfo = server || { 
-          server_id: `${logName}_${sshIndex}`,
-          server_name: logName,
-          log_name: logName, 
-          ssh_index: sshIndex 
-        };
-        
-        state.sessions[sid] = { 
-          term, 
-          fitAddon, 
-          server: serverInfo, 
-          el: termEl 
-        };
-        
-        switchTo(sid);
-        term.focus();
-        
-        // 刷新列表
-        renderServers();
-        renderActive();
-      }catch(e){ 
-        alert('连接失败：'+e.message); 
-      }
+        const el = document.createElement('div');
+        el.className='term';
+        el.id = `term-${d.terminal_id}`;
+        const panel = document.getElementById('panel');
+        // 清空仅在成功后
+        panel.innerHTML='';
+        panel.appendChild(el);
+        term.open(el);
+        setTimeout(()=>{ try{ fitAddon.fit(); }catch(e){} }, 50);
+        if(d.initial_prompt){ term.write(d.initial_prompt.replace(/\n/g,'\r\n')); }
+        term.onData(data => { if(state.socket){ state.socket.emit('input', { terminal_id: d.terminal_id, data }); }});
+        if(state.socket){ state.socket.emit('join', { terminal_id: d.terminal_id }); }
+        state.sessions[d.terminal_id] = { term, fitAddon };
+        state.current = d.terminal_id;
+        window.addEventListener('resize', ()=>{ if(fitAddon) { try{ fitAddon.fit(); }catch(e){} } });
+      } catch(e){ showError('连接失败: '+e.message); }
     }
 
-    function switchTo(sid){
-      Object.keys(state.sessions).forEach(id=>{ state.sessions[id].el.classList.remove('active'); });
-      state.sessions[sid].el.classList.add('active');
-      state.current = sid; 
-      updateToolbar();
-      $('current-label').textContent = `${state.sessions[sid].server.server_name || state.sessions[sid].server.log_name} (${sid.slice(-6)})`;
-      
-      // 延迟调整尺寸，确保 DOM 更新完成
-      setTimeout(() => {
-        const session = state.sessions[sid];
-        if (session && session.fitAddon) {
-          try {
-            session.fitAddon.fit();
-            session.term.focus();
-            // 通知服务器终端尺寸
-            if (state.socket) {
-              const { cols, rows } = session.term;
-              state.socket.emit('resize', { 
-                terminal_id: sid, 
-                cols: cols, 
-                rows: rows 
-              });
-            }
-          } catch (e) {
-            console.warn('切换终端时尺寸调整失败:', e);
-          }
-        }
-      }, 100);
-      
-      renderActive();
+    async function connectByServerId(serverId){
+      try {
+        const payload = { server_id: serverId };
+        const r = await fetch(`${API}/terminals/connect-by-config`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        const j = await r.json();
+        if(!j.success) throw new Error(j.error?.message||'连接失败');
+        const d = j.data;
+        updateTitle(d.username, d.host);
+        const term = new window.Terminal({
+          cursorBlink:true,
+          convertEol:true,
+          fontFamily:"'Source Code Pro','Consolas','Monaco','Menlo',monospace",
+            fontSize:14,
+            theme:{ background:'#0a0e1a', foreground:'#e2e8f0' },
+            scrollback:10000
+          });
+        const fitAddon = new window.FitAddon.FitAddon();
+        term.loadAddon(fitAddon);
+        const el = document.createElement('div');
+        el.className='term';
+        el.id = `term-${d.terminal_id}`;
+        const panel = document.getElementById('panel');
+        panel.innerHTML='';
+        panel.appendChild(el);
+        term.open(el);
+        setTimeout(()=>{ try{ fitAddon.fit(); }catch(e){} }, 50);
+        if(d.initial_prompt){ term.write(d.initial_prompt.replace(/\n/g,'\r\n')); }
+        term.onData(data => { if(state.socket){ state.socket.emit('input', { terminal_id: d.terminal_id, data }); }});
+        if(state.socket){ state.socket.emit('join', { terminal_id: d.terminal_id }); }
+        state.sessions[d.terminal_id] = { term, fitAddon };
+        state.current = d.terminal_id;
+        window.addEventListener('resize', ()=>{ if(fitAddon){ try{ fitAddon.fit(); }catch(e){} } });
+      } catch(e) { showError('连接失败: '+e.message); }
     }
 
-    async function closeSession(sid){
-      try{ await fetch(`${API}/terminals/${sid}`, { method:'DELETE' }); }catch(e){}
-  if(state.sessions[sid]){ if(state.socket){ try{ state.socket.emit('leave', { terminal_id: sid }); }catch(e){} } state.sessions[sid].term.dispose(); state.sessions[sid].el.remove(); delete state.sessions[sid]; }
-      if(state.current===sid){ const ks=Object.keys(state.sessions); state.current = ks[0] || null; if(state.current){ switchTo(state.current); } else { $('current-label').textContent = '未选择会话'; updateToolbar(); } }
-  renderActive();
-  // refresh servers list to re-enable the Connect button
-  renderServers();
-    }
-
-    function updateToolbar(){ const has = !!state.current; $('btn-clear').disabled=!has; $('btn-reconnect').disabled=!has; $('btn-disconnect').disabled=!has; }
-
-    function renderActive(){
-      const c = $('active-list'); const ids = Object.keys(state.sessions);
-      $('active-count').textContent = ids.length; c.innerHTML = '';
-      if(ids.length===0){ c.innerHTML = '<div class="item" style="text-align:center;cursor:default;">暂无活跃连接</div>'; return; }
-      ids.forEach(id=>{
-        const it = document.createElement('div'); it.className='item clickable';
-        const session = state.sessions[id];
-        const server = session.server;
-        it.innerHTML = `
-          <div class="info">
-            <div class="title">${server.username}@${server.host}</div>
-            <div class="meta">会话 ${id.slice(-6)}</div>
-          </div>
-          <div class="actions">
-            <button class="btn btn-danger btn-disconnect" data-id="${id}">断开</button>
-          </div>
-        `;
-        // switch on item click
-        it.addEventListener('click', ()=>switchTo(id));
-        // prevent bubbling from disconnect button
-        const btn = it.querySelector('.btn-disconnect');
-        btn.addEventListener('click', (e)=>{ e.stopPropagation(); closeSession(id); });
-        c.appendChild(it);
+    document.addEventListener('DOMContentLoaded', ()=>{
+      state.socket = io('/', { path:'/socket.io', transports:['websocket'] });
+      state.socket.on('output', msg => {
+        const { terminal_id, data } = msg || {}; if(!terminal_id) return; const s = state.sessions[terminal_id]; if(!s) return; if(data){ s.term.write(String(data).replace(/\n/g,'\r\n')); }
       });
-    }
+      const params = new URLSearchParams(window.location.search);
+      const logName = params.get('log_name');
+      const sshIndex = params.get('ssh_index');
+      const serverId = params.get('server_id');
+      if (logName && logName.trim() !== '' && sshIndex !== null) {
+        connectByConfig(logName.trim(), parseInt(sshIndex,10)||0);
+      } else if (serverId) {
+        connectByServerId(serverId);
+      } else if (params.get('single')==='1') {
+        const ln = (logName||'').trim();
+        if (ln) { const si = parseInt(sshIndex||'0',10)||0; connectByConfig(ln, si); }
+        else if (serverId) { connectByServerId(serverId); }
+        else { $('#placeholder').innerHTML = '缺少 log_name 或 server_id 参数<br/>无法自动连接'; }
+      }
+    });
 
-    function refreshActive(){
-      renderActive();
-    }
-
-    // 页面关闭时尽量关闭会话
     window.addEventListener('beforeunload', ()=>{
-  const ids = Object.keys(state.sessions);
-  ids.forEach(id=>{ try{ fetch(`${API}/terminals/${id}`, { method:'DELETE', keepalive:true }); }catch(e){} });
+      const ids = Object.keys(state.sessions);
+      ids.forEach(id=>{ try{ fetch(`${API}/terminals/${id}`, { method:'DELETE', keepalive:true }); }catch(e){} });
     });
   </script>
 </body>

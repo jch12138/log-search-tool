@@ -3,7 +3,7 @@ import sys
 import logging
 from logging.handlers import TimedRotatingFileHandler
 from flask import Flask, render_template
-from flask_socketio import SocketIO, join_room, leave_room
+from flask_socketio import SocketIO, join_room, leave_room, rooms
 from flask_cors import CORS
 
 from .config.settings import Settings
@@ -120,8 +120,28 @@ def create_app() -> Flask:
 
     @socketio.on('disconnect')  # pragma: no cover - realtime
     def handle_disconnect():  # noqa
-        # 客户端断开后，无需特殊处理；终端生命周期由 REST DELETE 管理
-        pass
+        """在客户端 Socket 断开时标记相关终端，延迟几秒无重连则关闭。"""
+        try:
+            current_rooms = list(rooms()) if callable(rooms) else []
+            terminal_ids = [r for r in current_rooms if isinstance(r, str) and r.startswith('term_')]
+            if not terminal_ids:
+                return
+            logging.getLogger(__name__).info("[socket] disconnect; candidate terminal rooms=%s", terminal_ids)
+            import threading, time as _time
+
+            def _delayed_check(tids):
+                _time.sleep(5)
+                for tid in tids:
+                    try:
+                        if tid in terminal_service_singleton.sessions:
+                            logging.getLogger(__name__).info("[socket] closing orphan terminal after disconnect: %s", tid)
+                            terminal_service_singleton.close_terminal(tid)
+                    except Exception:
+                        continue
+
+            threading.Thread(target=_delayed_check, args=(terminal_ids,), daemon=True).start()
+        except Exception:
+            logging.getLogger(__name__).exception("socket disconnect handler failed")
 
     # 注册关闭回调，通知前端
     def _on_close(payload):  # pragma: no cover - realtime

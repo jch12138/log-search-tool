@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SFTP 文件管理</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Ctext%20x%3D%2750%25%27%20y%3D%2750%25%27%20text-anchor%3D%27middle%27%20dominant-baseline%3D%27central%27%20font-size%3D%2752%27%3E%F0%9F%93%81%3C/text%3E%3C/svg%3E" />
+  <link rel="icon" type="image/svg+xml" href="/static/icons/favicon-sftp.svg" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/sftp.css') }}" />
   <style>
     /* 轻量覆盖：沿用全局消息定位为居中（与 main.css 的 Element Plus 一致）*/
@@ -14,7 +14,7 @@
 <body>
   <div class="container">
     <div class="header">
-      <h1>SFTP 文件浏览器</h1>
+  <h1 id="page-title">SFTP 文件浏览器</h1>
       <div class="actions">
         <a href="/" class="btn btn-secondary">返回主页</a>
         <button class="btn btn-primary" id="new-conn-btn">新建连接</button>
@@ -113,8 +113,10 @@
     let fileSelection = new Set();
     const sortState = { key: 'name', dir: 'asc' };
 
-    // 每个连接的独立状态（路径、所选文件）
-    const connectionStates = {};
+  // 每个连接的独立状态（路径、所选文件）
+  const connectionStates = {};
+  // 活跃连接缓存，用于标题更新
+  let activeConnectionsCache = [];
 
     // API prefix
     const API = '/api/v1';
@@ -158,6 +160,7 @@
     }
 
     function renderActiveConnections(conns){
+      activeConnectionsCache = conns || [];
       const container = $('connections-list');
       if (!conns.length) {
         container.innerHTML = '<div class="item" style="text-align:center;cursor:default;">暂无活跃连接</div>';
@@ -282,6 +285,7 @@
               });
               
               showMessage('连接成功','success');
+              updatePageTitle(res);
               
               // 连接后默认跳转到根目录
               const connId = res.connection_id;
@@ -328,6 +332,15 @@
     function openMkdirModal(){ if(!currentConnectionId){ return showMessage('请先连接到服务器','error'); } $('mkdir-modal').classList.add('active'); }
     function closeMkdirModal(){ $('mkdir-modal').classList.remove('active'); $('mkdir-form').reset(); }
 
+    function updatePageTitle(info){
+      if(!info) return;
+      if(info.username && info.host){
+        document.title = `${info.username}@${info.host}`;
+        const h = document.getElementById('page-title');
+        if(h) h.textContent = `${info.username}@${info.host}`;
+      }
+    }
+
     async function connectViaForm(e){
       e.preventDefault();
       const payload = {
@@ -339,9 +352,10 @@
       };
       if(!payload.host || !payload.username || !payload.password){ return showMessage('请填写必填项','error'); }
       try{
-        await fetchJSON(`${API}/sftp/connect`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        const info = await fetchJSON(`${API}/sftp/connect`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
         closeConnectModal();
         showMessage('连接成功','success');
+        updatePageTitle(info);
         loadActiveConnections();
         loadAvailableServers(); // 刷新可用服务器列表，移除已连接的服务器
       }catch(err){ showMessage(err.message, 'error'); }
@@ -362,6 +376,8 @@
       enableToolbar();
       $('path-input').value = currentPath;
       loadDirectory(currentPath);
+  const info = activeConnectionsCache.find(c=>c.connection_id===id);
+  if(info) updatePageTitle(info);
     }
 
     async function loadDirectory(path){
@@ -474,6 +490,30 @@
       setupEvents();
       loadActiveConnections();
       loadAvailableServers();
+      // single 模式： ?single=1&log_name=xxx&ssh_index=0
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('single') === '1') {
+        const logName = params.get('log_name') || '';
+        const sshIndex = parseInt(params.get('ssh_index') || '0', 10) || 0;
+        // 隐藏侧栏与新建连接按钮
+        const sidebar = document.querySelector('.sidebar'); if(sidebar) sidebar.style.display='none';
+        const actions = document.querySelector('.actions'); if(actions){ const btn = document.getElementById('new-conn-btn'); if(btn) btn.style.display='none'; }
+        // 调整布局宽度
+        const mainLayout = document.querySelector('.main-layout'); if(mainLayout){ mainLayout.style.gridTemplateColumns = '1fr'; }
+        // 直接通过配置连接
+        (async ()=>{
+          try {
+            const resp = await fetch(`${API}/sftp/connect-by-config`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ log_name: logName, ssh_index: sshIndex, connection_name: logName? (logName+"#"+sshIndex): 'log'})});
+            const j = await resp.json();
+            if(!j.success) return;
+            currentConnectionId = j.data.connection_id;
+            enableToolbar();
+            $('path-input').value = '/';
+            loadDirectory('/');
+            updatePageTitle(j.data);
+          } catch(e) { /* ignore */ }
+        })();
+      }
     });
   </script>
 </body>

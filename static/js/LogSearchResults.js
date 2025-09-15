@@ -448,6 +448,10 @@ const LogSearchResults = {
                     align-items: center;
                     gap: 6px;
                 }
+                .mini-action-btn { padding:6px 8px; font-size:12px; border:1px solid #e4e7ed; background:#fff; color:#606266; border-radius:6px; cursor:pointer; line-height:1; display:flex; align-items:center; gap:4px; transition:all .18s; }
+                .mini-action-btn:hover { background:#f5f7fa; color:#409eff; border-color:#dcdfe6; }
+                .mini-action-btn:active { background:#ecf5ff; }
+                .mini-action-btn svg { width:14px; height:14px; display:block; fill:currentColor; }
                 .fullscreen-btn { padding:6px 12px; font-size:12px; border:1px solid #e4e7ed; background:#fafbfc; color:#909399; border-radius:6px; cursor:pointer; transition:all .2s; display:flex; align-items:center; gap:4px; line-height:1; font-weight:400; }
                 .fullscreen-btn:hover { background:#f0f2f5; border-color:#c0c4cc; color:#606266; transform:translateY(-1px); box-shadow:0 2px 4px rgba(0,0,0,0.1); }
                 .fullscreen-btn:active { background:#e4e7ed; border-color:#b3b8c3; transform:translateY(0); box-shadow:0 1px 2px rgba(0,0,0,0.1); }
@@ -794,6 +798,21 @@ const LogSearchResults = {
             // 按需求显示为 ../文件名
             return `../${fileName}`;
         }
+        ,
+        openSftp(hostResult){
+            if(!hostResult) return;
+            const logName = (this.searchResults && this.searchResults.log_name) || '';
+            const idx = hostResult.ssh_index;
+            const url = `/sftp?single=1&log_name=${encodeURIComponent(logName)}&ssh_index=${encodeURIComponent(idx)}`;
+            window.open(url, '_blank');
+        },
+        openTerminal(hostResult){
+            if(!hostResult) return;
+            const logName = (this.searchResults && this.searchResults.log_name) || '';
+            const idx = hostResult.ssh_index;
+            const url = `/terminals?single=1&log_name=${encodeURIComponent(logName)}&ssh_index=${encodeURIComponent(idx)}`;
+            window.open(url, '_blank');
+        }
     },
     
     template: `
@@ -819,6 +838,18 @@ const LogSearchResults = {
                                 </span>
                             </div>
                             <div class="host-actions">
+                                                                <button class="mini-action-btn" @click="openSftp(group.hostResult)" :title="'文件管理 '+group.host" aria-label="文件管理">
+                                                                    <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                                                                        <path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h4.764a2.5 2.5 0 0 1 1.768.732L14.172 6H18.5A2.5 2.5 0 0 1 21 8.5v8A3.5 3.5 0 0 1 17.5 20h-11A3.5 3.5 0 0 1 3 16.5v-10Z" fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/>
+                                                                    </svg>
+                                                                </button>
+                                                                <button class="mini-action-btn" @click="openTerminal(group.hostResult)" :title="'在线终端 '+group.host" aria-label="在线终端">
+                                                                    <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                                                                        <path d="M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.2" fill="none"/>
+                                                                        <path d="m7 9 3.5 3L7 15" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                                                                        <path d="M11.5 15H17" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                                                                    </svg>
+                                                                </button>
                                 <button class="fullscreen-btn" :class="{ 'is-active': fullscreenHost === group.host }" @click="toggleFullscreen(group.host)" :title="fullscreenHost === group.host ? '退出全屏 (Esc)' : '放大查看'">
                                     <span style="font-size:12px; letter-spacing:1px;">{{ fullscreenHost === group.host ? '还原' : '放大' }}</span>
                                 </button>

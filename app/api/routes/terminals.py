@@ -37,6 +37,7 @@ def _create_from_server_id(server_id: str, data: dict):
 		'session_id': session.session_id,
 		'connection_status': session.status,
 		'host': session.host,
+		'username': session.username,
 		'created_at': session.created_at
 	}, None
 
@@ -62,6 +63,7 @@ def _create_from_log_config(log_name, ssh_index, data):
 		'session_id': session.session_id,
 		'connection_status': session.status,
 		'host': session.host,
+		'username': session.username,
 		'created_at': session.created_at,
 		'initial_prompt': f"{session.username}@{session.host}:~$ "
 	}, None

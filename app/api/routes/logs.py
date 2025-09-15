@@ -88,7 +88,8 @@ def search_log(log_name: str):
 		reverse_order=bool(data.get('reverse_order', False)),
 		use_file_filter=bool(data.get('use_file_filter', False)),
 		selected_file=data.get('selected_file'),
-		selected_files=data.get('selected_files')
+		selected_files=data.get('selected_files'),
+		max_lines=int(data['max_lines']) if 'max_lines' in data and str(data['max_lines']).isdigit() else None
 	)
 	logger.info(f"[SEARCH] IP: {client_ip} | Log: {log_name} | Keyword: '{search_params.keyword}' | Mode: {search_params.search_mode}")
 	result = search_service.search_multi_host(log_config.to_dict(), search_params)

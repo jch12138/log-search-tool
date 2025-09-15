@@ -3,7 +3,8 @@
 import os
 import logging
 import time
-from typing import Dict, Any, List
+import re
+from typing import Dict, Any, List, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from app.models import SearchParams, SearchResult, MultiHostSearchResult
 from app.services.ssh import SSHConnectionManager
@@ -92,24 +93,45 @@ class LogSearchService:
 					stdout.encode('utf-8')
 				except Exception:
 					stdout = decode_bytes(stdout.encode('latin-1', errors='ignore'))
+			# 解析 grep 输出，移除行号/分隔符，保持与真实日志内容一致
 			lines = stdout.strip().split('\n') if stdout.strip() else []
-			results = [l for l in lines if l.strip()]
-			matches = []
-			line_no = 1
-			for ln in results:
-				content = ln
-				if ':' in ln:
-					parts = ln.split(':', 2)
-					if len(parts) >= 2 and parts[0].isdigit():
-						line_no = int(parts[0])
-						content = parts[1] if len(parts) == 2 else ':'.join(parts[1:])
-					elif len(parts) >= 3 and parts[1].isdigit():
-						line_no = int(parts[1])
-						content = parts[2]
-				matches.append({'file_path': resolved_file_path, 'line_number': line_no, 'content': content})
-				line_no += 1
+			results, matches = self._parse_grep_output(lines, resolved_file_path)
+			# 后端行数限制（保护前端渲染性能）
+			truncated = False
+			original_total = len(results)
+			from app.models import SearchParams as _SP  # 局部导入避免循环
+			if isinstance(search_params, _SP) and search_params.max_lines:
+				limit = search_params.max_lines
+				if limit and len(results) > limit:
+					# 需求：始终保留“最新”的日志行
+					# 非 reverse_order：结果按时间正序 -> 取末尾 limit 条
+					# reverse_order：结果已被反转（最新在前） -> 取前 limit 条
+					if getattr(search_params, 'reverse_order', False):
+						results = results[:limit]
+						matches = matches[:limit]
+					else:
+						results = results[-limit:]
+						matches = matches[-limit:]
+					truncated = True
 			elapsed = time.time() - start
-			return SearchResult(host=host, ssh_index=ssh_index, results=results, total_results=len(results), search_time=elapsed, search_result={'content': stdout.strip(), 'file_path': resolved_file_path, 'keyword': search_params.keyword, 'total_lines': len(results), 'search_time': elapsed, 'matches': matches}, success=True)
+			return SearchResult(
+				host=host,
+				ssh_index=ssh_index,
+				results=results,
+				total_results=len(results),
+				search_time=elapsed,
+				search_result={
+					'content': stdout.strip(),
+					'file_path': resolved_file_path,
+					'keyword': search_params.keyword,
+					'total_lines': len(results),
+					'original_total_lines': original_total,
+					'truncated': truncated,
+					'search_time': elapsed,
+					'matches': matches
+				},
+				success=True
+			)
 		except Exception as e:
 			elapsed = time.time() - start
 			return SearchResult(host=host, ssh_index=ssh_index, results=[f"[{host}] 搜索失败: {e}"], total_results=1, search_time=elapsed, search_result={'content': '', 'file_path': '', 'keyword': search_params.keyword, 'total_lines': 0, 'search_time': elapsed, 'matches': []}, success=False, error=str(e))
@@ -249,6 +271,39 @@ class LogSearchService:
 					modified = 'unknown'
 				files.append({'filename': filename, 'full_path': os.path.join(log_dir, filename), 'size': size, 'birth_time': modified, 'modified_time': modified, 'host': host})
 		return files
+
+	def _parse_grep_output(self, lines: List[str], file_path: str) -> Tuple[List[str], List[Dict[str, Any]]]:
+		"""Parse grep -n / -nC output removing line numbers & context separators.
+
+		Supports patterns like:
+		  123:actual log line
+		  123-actual log line (before context)
+		  123=actual log line (after context)
+		And ignores lines that are exactly '--' (grep context separator).
+		Returns cleaned lines and match metadata with original line numbers when available.
+		"""
+		clean_results: List[str] = []
+		matches: List[Dict[str, Any]] = []
+		line_num_pattern = re.compile(r'^(\d+)([:=\-])(.*)$')
+		for raw in lines:
+			if not raw.strip():
+				continue
+			if raw.strip() == '--':  # grep context separator
+				continue
+			orig_line_number = None
+			content = raw
+			m = line_num_pattern.match(raw)
+			if m:
+				try:
+					orig_line_number = int(m.group(1))
+					content = m.group(3)
+				except Exception:
+					orig_line_number = None
+			# 再次剥离前导冒号/空白
+			content = content.lstrip(':').lstrip()
+			clean_results.append(content)
+			matches.append({'file_path': file_path, 'line_number': orig_line_number, 'content': content})
+		return clean_results, matches
 
 	def close(self):  # pragma: no cover
 		self.ssh_manager.close_all()

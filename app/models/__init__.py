@@ -46,6 +46,7 @@ class SearchParams:
     use_file_filter: bool = False
     selected_file: Optional[str] = None
     selected_files: Optional[Dict[str, str]] = None
+    max_lines: Optional[int] = None  # 每个主机返回的最大行数（截断前）
 
     def validate(self):
         errors = []
@@ -55,6 +56,9 @@ class SearchParams:
         if self.search_mode not in valid_modes:
             errors.append(f"搜索模式必须是 {'/'.join(valid_modes)} 之一，当前值: {self.search_mode}")
     # 放宽文件过滤约束：允许未指定文件时后端使用默认路径
+        if self.max_lines is not None:
+            if self.max_lines <= 0 or self.max_lines > 20000:
+                errors.append(f"max_lines 必须在 1-20000 之间，当前值: {self.max_lines}")
         if errors:
             raise ValueError("参数验证失败: " + "; ".join(errors))
 

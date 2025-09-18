@@ -1,0 +1,47 @@
+/* Utility classes for layout, spacing, flex, text, etc. */
+.flex { display:flex; }
+.flex-col { display:flex; flex-direction:column; }
+.flex-center { display:flex; align-items:center; justify-content:center; }
+.flex-between { display:flex; align-items:center; justify-content:space-between; }
+.flex-wrap { flex-wrap:wrap; }
+.items-center { align-items:center; }
+.gap-4 { gap:4px; }
+.gap-6 { gap:6px; }
+.gap-8 { gap:8px; }
+.gap-10 { gap:10px; }
+.gap-12 { gap:12px; }
+.gap-14 { gap:14px; }
+.gap-16 { gap:16px; }
+.m-0 { margin:0!important; }
+.mt-12 { margin-top:12px!important; }
+.mb-8 { margin-bottom:8px!important; }
+.p-0 { padding:0!important; }
+.px-6 { padding-left:6px!important; padding-right:6px!important; }
+.px-8 { padding-left:8px!important; padding-right:8px!important; }
+.px-12 { padding-left:12px!important; padding-right:12px!important; }
+.py-6 { padding-top:6px!important; padding-bottom:6px!important; }
+.py-8 { padding-top:8px!important; padding-bottom:8px!important; }
+.p-12 { padding:12px!important; }
+.text-12 { font-size:12px!important; }
+.text-13 { font-size:13px!important; }
+.text-14 { font-size:14px!important; }
+.text-muted { color:#909399!important; }
+.text-primary { color:#409eff!important; }
+.font-semibold { font-weight:600!important; }
+.badge-inline { background:#f0f2f5; color:#909399; font-size:12px; padding:2px 6px; border-radius:10px; line-height:1; display:inline-flex; align-items:center; }
+.box-border { border:1px solid #ebeef5; border-radius:6px; }
+.overflow-auto { overflow:auto; }
+.max-h-360 { max-height:360px; }
+.h-300 { height:300px; }
+.relative { position:relative; }
+.inline-block { display:inline-block; }
+.nowrap { white-space:nowrap; }
+.break-all { word-break:break-all; }
+.code-badge { font-family:monospace; font-size:12px; background:#f4f4f5; padding:2px 6px; border-radius:4px; }
+.cursor-pointer { cursor:pointer; }
+.transition { transition:all .2s; }
+.rounded-6 { border-radius:6px!important; }
+.rounded-12 { border-radius:12px!important; }
+.w-full { width:100%!important; }
+.flex-1 { flex:1!important; }
+.min-w-380 { min-width:380px; }

@@ -18,75 +18,14 @@
     <link rel="stylesheet" href="/static/css/groups.css" />
     <link rel="stylesheet" href="/static/css/search.css" />
     <link rel="stylesheet" href="/static/css/results.css" />
-    <!-- 紧凑样式覆盖，缩小整体字号与间距约10% -->
+    <!-- 紧凑样式覆盖 -->
     <link rel="stylesheet" href="/static/css/compact.css" />
-    <style>
-        /* 文件过滤器展开/折叠过渡动画 */
-        .file-filter-enter-from,
-        .file-filter-leave-to {
-            max-height: 0;
-            opacity: 0;
-            transform: translateY(-4px);
-        }
-        .file-filter-enter-to,
-        .file-filter-leave-from {
-            max-height: 800px; /* 允许足够高度 */
-            opacity: 1;
-            transform: translateY(0);
-        }
-        .file-filter-enter-active,
-        .file-filter-leave-active {
-            overflow: hidden;
-            transition: max-height .28s ease, opacity .25s ease, transform .28s ease;
-        }
-
-        /* 日志结果标签栏：整体白底圆角容器 + 单个标签白色/选中浅蓝 */
-        .log-tabs-bar {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px 10px;
-            padding: 16px 16px 16px 16px; /* 与 search-section 统一的内边距风格 */
-            background: #fff;
-            border-radius: 8px; /* 统一圆角 */
-            /* box-shadow: 0 2px 12px rgba(0,0,0,0.1); 同 search-section */
-            margin: 0 0 0 0;
-        }
-        .log-tab-item {
-            user-select: none;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            max-width: 240px;
-            padding: 8px 18px;
-            font-size: 14px;
-            line-height: 1.25;
-            border-radius: 8px;
-            background: #fff;
-            color: var(--el-text-color-regular);
-            cursor: pointer;
-            position: relative;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.08), inset 0 0 0 1px var(--el-border-color-extra-light);
-            transition: background .15s ease, color .15s ease, box-shadow .18s ease, transform .16s ease;
-        }
-    .log-tab-item:hover { background: #f5f7fa; }
-        .log-tab-item.active {
-            background: #ecf5ff; /* 浅蓝，与整体风格协调 */
-            color: var(--el-color-primary);
-            font-weight: 600;
-            box-shadow: 0 1px 4px rgba(64,158,255,0.25), inset 0 0 0 1px var(--el-color-primary-light-5);
-        }
-    .log-tab-item .tab-title { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:center; }
-    .log-tab-item .close { font-size:14px; line-height:1; color:var(--el-text-color-placeholder); padding:2px; border-radius:3px; transition:background .15s ease, color .15s ease; opacity:1; }
-    .log-tab-item:hover .close { opacity:1; }
-    .log-tab-item .close:hover { color:var(--el-color-danger); background:var(--el-fill-color); }
-    .log-tab-item .tab-badge { font-size:10px; line-height:16px; min-width:20px; padding:0 6px; border-radius:10px; background:#eef2f6; color:var(--el-text-color-secondary); text-align:center; font-weight:500; }
-    .log-tab-item.active .tab-badge { background:#d3e9ff; color:var(--el-color-primary); }
-    .log-tab-item .tab-badge.spinning { animation:tabPulse 1s linear infinite; }
-    @keyframes tabPulse { 0% {opacity:.35;} 50% {opacity:1;} 100% {opacity:.35;} }
-    .results-section { margin-top:0; }
-    /* .right-panel { background:var(--el-bg-color); } */
-    .search-section { border-bottom:1px solid var(--el-border-color-light); }
-    </style>
+    <!-- Index page specific extracted styles -->
+    <link rel="stylesheet" href="/static/css/index.css" />
+    <!-- Log results component styles -->
+    <link rel="stylesheet" href="/static/css/log-results.css" />
+    <!-- Utilities -->
+    <link rel="stylesheet" href="/static/css/utilities.css" />
     
     <!-- 本地JavaScript库 -->
     <script src="/static/js/vendor/vue.global.js"></script>
@@ -181,7 +120,7 @@
                         <el-form :model="searchForm" class="search-form" :disabled="!selectedLog" @submit.prevent="executeSearch">
                             <!-- 主搜索框容器 -->
                             <div style="display: flex; gap: 8px; align-items: center;">
-                                <div class="search-input-container" :class="{ focused: searchInputFocused }" style="flex: 1;">
+                                <div class="search-input-container flex items-center gap-8" :class="{ focused: searchInputFocused }" style="flex: 1;">
                                     <input type="text" v-model="searchForm.keyword" placeholder="输入搜索关键词，留空则显示最新日志"
                                         class="search-input" @focus="searchInputFocused = true"
                                         @blur="searchInputFocused = false" @keyup.enter="executeSearch"
@@ -223,7 +162,7 @@
 
                                         <!-- 上下文行数 - 只在上下文模式时显示 -->
                                         <template v-if="searchForm.search_mode === 'context'">
-                                            <span style="font-size: 12px; color: #909399; margin-left: 8px;">行数:</span>
+                                            <span class="text-12 text-muted" style="margin-left: 8px;">行数:</span>
                                             <input type="number" v-model.number="searchForm.context_span"
                                                 class="context-span-input" min="0" max="20" :disabled="!selectedLog"
                                                 title="上下文行数" />
@@ -244,7 +183,7 @@
                                         <div v-for="group in groupedFiles" :key="group.key" style="flex:1; min-width:380px; display:flex; flex-direction:column; gap:6px;">
                                             <div style="display:flex; align-items:center; gap:10px;">
                                                 <span style="font-size:13px; font-weight:600; color:#409eff; white-space:nowrap;">[[ group.host ]]</span>
-                                                <div class="selected-file-box" :class="{ empty: !searchForm.selected_files[group.key] }" style="position:relative; flex:1; padding:6px 34px 6px 10px; border:1px solid #dcdfe6; border-radius:6px; background:#fff; font-size:12px; min-height:34px; display:flex; align-items:center; line-height:1.4; overflow:hidden;">
+                                                <div class="selected-file-box" :class="{ empty: !searchForm.selected_files[group.key] }">
                                                     <template v-if="searchForm.selected_files[group.key]">
                                                         <span style="word-break:break-all;">[[ formatDisplayPath(searchForm.selected_files[group.key]) ]]</span>
                                                         <span class="clear-icon" @click.stop="clearSelectedFile(group)" style="position:absolute; right:30px; top:50%; transform:translateY(-50%); cursor:pointer; font-size:14px; color:#b1b3b8; line-height:1; padding:2px;" title="清除">×</span>
@@ -339,8 +278,7 @@
         const { createApp } = Vue;
         const { ElMessage, ElMessageBox, ElLoading } = ElementPlus;
 
-        const app = createApp({
-            delimiters: ['[[', ']]'],
+    const app = createApp({
             components: {
                 LogSearchResults
             },
@@ -579,6 +517,92 @@
                         console.error('详细错误信息:', errorInfo.details);
                     }
                 },
+                // 执行搜索
+                async executeSearch() {
+                    const tab = this.activeTab;
+                    if (!tab || !this.selectedLog) {
+                        ElMessage.warning('请先选择一个日志配置');
+                        return;
+                    }
+                    if (this.searchForm.use_file_filter) {
+                        const totalHosts = this.groupedFiles.length;
+                        const chosen = Object.keys(this.searchForm.selected_files || {}).length;
+                        if (chosen === 0) {
+                            ElMessage.info('未选择任何文件，将使用配置默认路径');
+                        } else if (chosen < totalHosts) {
+                            ElMessage.info(`部分主机未选文件（${chosen}/${totalHosts}），未选的将用默认路径`);
+                        }
+                    }
+                    this.buildPlaceholderResults(tab);
+                    tab.highlightKeyword='';
+                    await this.$nextTick();
+                    tab.searching = true;
+                    tab.hasSearched = true;
+                    try {
+                        const response = await axios.post(`/api/v1/logs/${this.selectedLog.name}/search`, this.searchForm);
+                        if (response.data.success) {
+                            tab.searchResults = response.data.data;
+                            if (tab.searchResults) tab.searchResults.pre_search = false;
+                            tab.highlightKeyword = this.searchForm.keyword || '';
+                            tab.resultsVersion += 1;
+                            if (tab.searchResults.total_matches === 0) {
+                                ElMessage.info('未找到匹配的日志记录');
+                            } else {
+                                ElMessage.success(`找到 ${tab.searchResults.total_matches} 个匹配项`);
+                            }
+                        } else {
+                            this.handleApiError({ response: { data: response.data } }, '搜索失败');
+                            tab.searchResults = null;
+                            tab.highlightKeyword='';
+                        }
+                    } catch (e) {
+                        this.handleApiError(e, '搜索请求失败');
+                        console.error('搜索失败:', e);
+                        tab.searchResults=null;
+                        tab.highlightKeyword='';
+                    } finally {
+                        tab.searching = false;
+                        this.$nextTick(()=>this.updateResultsHeight());
+                    }
+                },
+                // 构建占位结果
+                buildPlaceholderResults(tab=null) {
+                    tab = tab || this.activeTab;
+                    if (!tab) return;
+                    const logRef = tab.selectedLog || this.selectedLog;
+                    if (!logRef || !logRef.sshs || !logRef.sshs.length) {
+                        tab.searchResults = null;
+                        tab.resultsVersion += 1;
+                        if (tab.id === this.activeTabId) { this.searchResults=null; this.resultsVersion=tab.resultsVersion; }
+                        return;
+                    }
+                    const hosts = logRef.sshs.map((s,idx)=>({
+                        host: s.host || 'unknown',
+                        ssh_index: idx,
+                        results: [],
+                        total_results: 0,
+                        search_time: 0,
+                        search_result:{ content:'', file_path:'', keyword:'', total_lines:0, search_time:0, matches:[] },
+                        success: true
+                    }));
+                    tab.searchResults = {
+                        log_name: logRef.name,
+                        keyword: '',
+                        search_params: {},
+                        total_hosts: hosts.length,
+                        hosts,
+                        total_results: 0,
+                        total_matches: 0,
+                        total_search_time: 0,
+                        parallel_execution: false,
+                        pre_search: true
+                    };
+                    tab.resultsVersion += 1;
+                    if (tab.id === this.activeTabId) {
+                        this.searchResults = tab.searchResults;
+                        this.resultsVersion = tab.resultsVersion;
+                    }
+                },
 
                 // 全局键盘事件处理
                 handleGlobalKeydown(event) {
@@ -803,18 +827,27 @@
                         }
                         // 若不是以 / 结尾，视为文件，取其所在目录
                         if (!rawPath.endsWith('/')) {
-                            const lastSlash = rawPath.lastIndexOf('/');
-                            rawPath = lastSlash > 0 ? rawPath.slice(0, lastSlash) : '/';
+                            rawPath = rawPath.slice(0, rawPath.lastIndexOf('/')) + '/';
                         }
-                        // 清理多余斜杠
-                        rawPath = rawPath.replace(/\/+/g, '/').replace(/\/+$/,'');
-                        if (rawPath === '') rawPath = '/';
-                        this.listRemotePath(host, rawPath);
+                        this.browsing.currentPath = rawPath;
+                        this.refreshCurrent();
                     } catch (e) {
-                        console.warn('解析初始目录失败，回退到根目录', e);
-                        this.listRemotePath(host, '.');
+                        console.error('计算初始目录失败', e);
                     }
                 },
+
+                // 刷新当前浏览目录
+                async refreshCurrent() {
+                    if (!this.selectedLog) return;
+                    const { currentHost, currentHostIndex, currentPath } = this.browsing;
+                    if (!currentHost || currentHostIndex == null || currentHostIndex < 0) return;
+                    if (!currentPath) {
+                        this.listRemotePath(currentHost, '/');
+                    } else {
+                        this.listRemotePath(currentHost, currentPath);
+                    }
+                },
+
                 async ensureSftpConnection(host, sshIndex) {
                     if (this.browsing.connectionIds[host]) return;
                     this.browsing.loading[host] = true;
@@ -831,6 +864,7 @@
                         this.browsing.loading[host] = false;
                     }
                 },
+
                 async listRemotePath(host, path) {
                     const cid = this.browsing.connectionIds[host];
                     if (!cid) return;
@@ -851,20 +885,21 @@
                         this.browsing.loading[host] = false;
                     }
                 },
-        handleBrowserDblClick(row) {
+
+                handleBrowserDblClick(row) {
                     if (!row) return;
                     if (row.is_directory) {
                         const p = (this.browsing.currentPath === '/' ? '' : this.browsing.currentPath) + '/' + row.name;
                         this.listRemotePath(this.browsing.currentHost, p);
                     } else {
-                        // 选中文件并关闭
                         const full = (this.browsing.currentPath === '/' ? '/' : this.browsing.currentPath + '/') + row.name;
-            const key = `${this.browsing.currentHost}|${this.browsing.currentHostIndex}`;
-            this.searchForm.selected_files[key] = full;
+                        const key = `${this.browsing.currentHost}|${this.browsing.currentHostIndex}`;
+                        this.searchForm.selected_files[key] = full;
                         ElMessage.success('已选择文件: ' + row.name);
                         this.closeBrowser();
                     }
                 },
+
                 goParent() {
                     if (!this.browsing.parentPath) return;
                     this.listRemotePath(this.browsing.currentHost, this.browsing.parentPath);
@@ -872,159 +907,28 @@
                 closeBrowser() {
                     this.browsing.visible = false;
                 },
-                refreshCurrent() {
-                    if (!this.browsing.currentHost) return;
-                    this.listRemotePath(this.browsing.currentHost, this.browsing.currentPath || '.');
+                refreshCurrentLegacy() {
+                    // legacy name kept if referenced somewhere else
+                    this.refreshCurrent();
                 },
 
-                // 格式化文件大小显示
-                formatFileSize(bytes) {
-                    if (!bytes || bytes === 0) return '0 B';
-                    const k = 1024;
-                    const sizes = ['B', 'KB', 'MB', 'GB'];
-                    const i = Math.floor(Math.log(bytes) / Math.log(k));
-                    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-                },
-
-                // 格式化文件时间显示
                 formatFileTime(timeStr) {
                     if (!timeStr) return '未知';
                     try {
                         const date = new Date(timeStr);
-                        // 返回标准格式：YYYY-MM-DD HH:mm:ss
                         return date.toLocaleString('zh-CN', {
-                            year: 'numeric',
-                            month: '2-digit',
-                            day: '2-digit',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            second: '2-digit',
-                            hour12: false
+                            year: 'numeric', month: '2-digit', day: '2-digit',
+                            hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
                         });
-                    } catch (e) {
-                        return timeStr;
-                    }
+                    } catch (e) { return timeStr; }
                 },
                 formatDisplayPath(p) {
                     if (!p) return '';
-                    // 简单截断过长路径中间部分
-                    if (p.length > 80) {
-                        return p.slice(0, 35) + ' ... ' + p.slice(-35);
-                    }
-                    return p;
+                    return p.length > 80 ? p.slice(0,35)+' ... '+p.slice(-35) : p;
                 },
                 clearSelectedFile(group) {
                     if (!group) return;
-                    this.$delete ? this.$delete(this.searchForm.selected_files, group.key) : (delete this.searchForm.selected_files[group.key]);
-                },
-
-                async executeSearch() {
-                    const tab = this.activeTab;
-                    if (!tab || !this.selectedLog) {
-                        ElMessage.warning('请先选择一个日志配置');
-                        return;
-                    }
-
-                    // 验证文件过滤设置
-                    // 若开启文件过滤但未为所有主机选文件，允许继续：未选择的主机 fallback 到默认配置路径
-                    if (this.searchForm.use_file_filter) {
-                        const totalHosts = this.groupedFiles.length;
-                        const chosen = Object.keys(this.searchForm.selected_files || {}).length;
-                        if (chosen === 0) {
-                            ElMessage.info('未选择任何文件，将使用配置默认路径');
-                        } else if (chosen < totalHosts) {
-                            ElMessage.info(`部分主机未选文件（${chosen}/${totalHosts}），未选的将用默认路径`);
-                        }
-                    }
-
-                    // 进入搜索：先展示占位框避免闪烁
-                    this.buildPlaceholderResults(tab);
-                    tab.highlightKeyword = '';
-                    await this.$nextTick();
-
-                    tab.searching = true;
-                    tab.hasSearched = true;
-
-                    try {
-                        const response = await axios.post(`/api/v1/logs/${this.selectedLog.name}/search`, this.searchForm);
-
-                        if (response.data.success) {
-                            tab.searchResults = response.data.data;
-                            if (tab.searchResults) tab.searchResults.pre_search = false;
-                            tab.highlightKeyword = this.searchForm.keyword || '';
-                            tab.resultsVersion += 1;
-                            if (tab.searchResults.total_matches === 0) {
-                                ElMessage.info('未找到匹配的日志记录');
-                            } else {
-                                ElMessage.success(`找到 ${tab.searchResults.total_matches} 个匹配项`);
-                            }
-                        } else {
-                            this.handleApiError({ response: { data: response.data } }, '搜索失败');
-                            tab.searchResults = null;
-                            tab.highlightKeyword = '';
-                        }
-                    } catch (error) {
-                        this.handleApiError(error, '搜索请求失败');
-                        console.error('搜索失败:', error);
-                        tab.searchResults = null;
-                        tab.highlightKeyword = '';
-                    } finally {
-                        tab.searching = false;
-                        this.$nextTick(() => this.updateResultsHeight());
-                    }
-                },
-                // 构建占位结果框（显示每个主机空容器）
-                buildPlaceholderResults(tab = null) {
-                    tab = tab || this.activeTab;
-                    if (!tab) return;
-                    const logRef = tab.selectedLog || this.selectedLog;
-                    if (!logRef || !logRef.sshs || !logRef.sshs.length) {
-                        tab.searchResults = null;
-                        tab.resultsVersion += 1;
-                        if (tab.id === this.activeTabId) { this.searchResults = null; this.resultsVersion = tab.resultsVersion; }
-                        return;
-                    }
-                    const hosts = logRef.sshs.map((s, idx) => ({
-                        host: s.host || 'unknown',
-                        ssh_index: idx,
-                        results: [],
-                        total_results: 0,
-                        search_time: 0,
-                        search_result: { content: '', file_path: '', keyword: '', total_lines: 0, search_time: 0, matches: [] },
-                        success: true
-                    }));
-                    tab.searchResults = {
-                        log_name: logRef.name,
-                        keyword: '',
-                        search_params: {},
-                        total_hosts: hosts.length,
-                        hosts,
-                        total_results: 0,
-            total_matches: 0,
-                        total_search_time: 0,
-            parallel_execution: false,
-            pre_search: true
-                    };
-                    tab.resultsVersion += 1;
-                    if (tab.id === this.activeTabId) {
-                        this.searchResults = tab.searchResults;
-                        this.resultsVersion = tab.resultsVersion;
-                    }
-                },
-                // 创建标签对象
-                _createTabForLog(log) {
-                    return {
-                        id: 'tab_' + (this.nextTabSeq++),
-                        logName: log.name,
-                        title: log.name,
-                        selectedLog: log,
-                        searchForm: JSON.parse(JSON.stringify(this._defaultSearchForm())),
-                        searchResults: null,
-                        highlightKeyword: '',
-                        hasSearched: false,
-                        searching: false,
-                        resultsVersion: 0
-                    };
+                    delete this.searchForm.selected_files[group.key];
                 },
                 _defaultSearchForm() {
                     return {
@@ -1039,32 +943,19 @@
                         max_lines: 2000
                     };
                 },
-                activateTab(id) {
-                    if (this.activeTabId === id) return;
-                    const tab = this.tabs.find(t => t.id === id);
-                    if (!tab) return;
-                    this.activeTabId = id;
-                    this._syncActiveTabToRoot();
-                    this.$nextTick(() => this.updateResultsHeight());
-                },
-                closeTab(id) {
-                    const idx = this.tabs.findIndex(t => t.id === id);
-                    if (idx === -1) return;
-                    const closingActive = this.tabs[idx].id === this.activeTabId;
-                    this.tabs.splice(idx,1);
-                    if (!this.tabs.length) {
-                        // 重置全局
-                        this.selectedLog = null;
-                        this.activeTabId = null;
-                        this.searchForm = this._defaultSearchForm();
-                        this.searchResults = null;
-                        this.highlightKeyword='';
-                        this.hasSearched=false;
-                    } else if (closingActive) {
-                        const newTab = this.tabs[Math.max(0, idx-1)];
-                        this.activeTabId = newTab.id;
-                        this._syncActiveTabToRoot();
-                    }
+                _createTabForLog(log) {
+                    return {
+                        id: 'tab_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
+                        logName: log.name,
+                        title: log.name,
+                        selectedLog: log,
+                        searchForm: JSON.parse(JSON.stringify(this._defaultSearchForm())),
+                        searchResults: null,
+                        highlightKeyword: '',
+                        hasSearched: false,
+                        searching: false,
+                        resultsVersion: 0
+                    };
                 },
                 _syncActiveTabToRoot() {
                     const tab = this.activeTab;
@@ -1077,21 +968,44 @@
                     this.searching = tab.searching;
                     this.resultsVersion = tab.resultsVersion;
                 },
-                tabStyle() { return {}; }
-                ,
+                activateTab(id) {
+                    if (this.activeTabId === id) return;
+                    const tab = this.tabs.find(t => t.id === id);
+                    if (!tab) return;
+                    this.activeTabId = id;
+                    this._syncActiveTabToRoot();
+                    this.$nextTick(()=>this.updateResultsHeight());
+                },
+                closeTab(id) {
+                    const idx = this.tabs.findIndex(t => t.id === id);
+                    if (idx === -1) return;
+                    const closingActive = this.tabs[idx].id === this.activeTabId;
+                    this.tabs.splice(idx,1);
+                    if (!this.tabs.length) {
+                        this.selectedLog = null;
+                        this.activeTabId = null;
+                        this.searchForm = this._defaultSearchForm();
+                        this.searchResults = null;
+                        this.highlightKeyword='';
+                        this.hasSearched=false;
+                        this.searching=false;
+                        this.resultsVersion=0;
+                    } else if (closingActive) {
+                        const newTab = this.tabs[Math.max(0, idx-1)];
+                        this.activeTabId = newTab.id;
+                        this._syncActiveTabToRoot();
+                    }
+                },
                 updateResultsHeight() {
                     try {
                         const wrapper = this.$refs.resultsWrapper;
                         if (!wrapper) return;
                         const wrapperRect = wrapper.getBoundingClientRect();
-                        // 以 right-panel 容器底部为界限（避免窗口内其它 padding 影响）
                         const parentPanel = wrapper.closest('.right-panel');
                         let availableHeight;
                         if (parentPanel) {
                             const panelRect = parentPanel.getBoundingClientRect();
-                            // 留出与底部统一间距
                             const bottomGap = 16;
-                            // 减去自身 padding-bottom，防止撑出父容器
                             const wrapperStyles = window.getComputedStyle(wrapper);
                             const paddingBottom = parseInt(wrapperStyles.paddingBottom) || 0;
                             availableHeight = panelRect.bottom - wrapperRect.top - bottomGap - paddingBottom;
@@ -1099,20 +1013,14 @@
                             const bottomGap = 16;
                             availableHeight = window.innerHeight - wrapperRect.top - bottomGap;
                         }
-                        // 减去头部高度（标题与统计标签区域）
                         const headerEl = wrapper.querySelector('.results-section-header');
                         let headerH = 0;
-                        if (headerEl) {
-                            const hr = headerEl.getBoundingClientRect();
-                            headerH = hr.height + 4; // 额外留 4px 间距
-                        }
+                        if (headerEl) headerH = headerEl.getBoundingClientRect().height + 4;
                         availableHeight -= headerH;
-                        if (availableHeight < 120) availableHeight = 120; // 保底
-                        // 若有文件过滤器处于展开状态，其动画可能尚未结束，稍做补偿再次刷新
+                        if (availableHeight < 120) availableHeight = 120;
                         const minH = 200;
                         this.dynamicResultsHeight = Math.max(minH, availableHeight) + 'px';
-                        // 动画过程中再次测量（避免首次高度算大/算小）
-                        requestAnimationFrame(() => {
+                        requestAnimationFrame(()=>{
                             const w2 = this.$refs.resultsWrapper;
                             if (!w2) return;
                             const wr2 = w2.getBoundingClientRect();
@@ -1122,26 +1030,24 @@
                                 const gap = 16;
                                 const w2Styles = window.getComputedStyle(w2);
                                 const padB2 = parseInt(w2Styles.paddingBottom) || 0;
-                                const avail2 = pr2.bottom - wr2.top - gap - padB2;
+                                let avail2 = pr2.bottom - wr2.top - gap - padB2;
                                 const header2 = w2.querySelector('.results-section-header');
-                                if (header2) {
-                                    const h2 = header2.getBoundingClientRect().height + 4;
-                                    avail2 -= h2;
-                                }
+                                if (header2) avail2 -= header2.getBoundingClientRect().height + 4;
                                 this.dynamicResultsHeight = Math.max(minH, avail2) + 'px';
                             }
                         });
-                    } catch(e) { /* ignore */ }
+                    } catch(e) {}
                 }
             }
         });
 
-        // 使用 Element Plus 和其指令
-        app.use(ElementPlus);
+        // 设置插值分隔符
+        if (app.config && app.config.compilerOptions) {
+            app.config.compilerOptions.delimiters = ['[[', ']]'];
+        }
 
-        // 挂载应用
+        app.use(ElementPlus);
         app.mount('#app');
     </script>
 </body>
-
 </html>

@@ -7,38 +7,38 @@ html, body {
 }
 
 /* 布局边距整体收紧 */
-.main-content { padding: 16px; gap: 16px; background: transparent; }
+.main-content { padding: 12px; gap: 16px; background: transparent; }
 .left-panel { width: 210px; }
-.panel-header { padding: 14px; }
+.panel-header { padding: 12px; }
 .panel-header h3 { font-size: 15px; }
 
 /* 分组与日志项 */
-.group-header { padding: 12px 14px; }
+.group-header { padding: 12px; }
 .group-name { font-size: 13px; }
 .group-count { font-size: 11px; }
-.log-item { padding: 12px 14px; }
+.log-item { padding: 12px; }
 .log-item h4 { font-size: 13px; margin-bottom: 4px; }
 .log-item p { font-size: 11px; }
 
 /* 更多菜单与按钮 */
-.more-button { padding: 12px 14px; font-size: 13px; }
-.menu-item { padding: 10px 14px; font-size: 13px; }
+.more-button { padding: 12px; font-size: 13px; }
+.menu-item { padding: 12px; font-size: 13px; }
 .menu-icon { font-size: 15px; width: 18px; }
 
 /* 搜索区块 */
-.search-section { padding: 16px; }
+.search-section { padding: 12px; }
 .search-input-container { height: 40px; }
-.search-input { font-size: 13px; padding: 10px 12px; }
+.search-input { font-size: 13px; padding: 12px; }
 .search-buttons { padding: 2px 6px; gap: 2px; }
 .search-button { width: 26px; height: 26px; font-size: 13px; }
-.execute-search-btn { height: 40px; min-width: 104px; padding: 10px 20px; font-size: 13px; }
+.execute-search-btn { height: 40px; min-width: 104px; padding: 12px; font-size: 13px; }
 .context-span-input { width: 54px; font-size: 12px; padding: 3px 6px; }
 
 /* 结果区块 */
-.results-section { padding: 16px; }
+.results-section { padding: 12px; }
 .results-header { font-size: 13px; }
 .result-line { font-size: 12px; line-height: 1.4; }
-.log-entry-header { padding: 10px 12px; font-size: 13px; }
+.log-entry-header { padding: 12px; font-size: 13px; }
 .log-content { padding: 12px; font-size: 12px; }
 .highlight { padding: 1px 3px; }
 

@@ -403,7 +403,7 @@
       const rows = [];
       if (currentPath !== '/') {
         const parent = currentPath.split('/').slice(0,-1).join('/') || '/';
-        rows.push(`<tr onclick="loadDirectory('${parent}')"><td class='checkbox-cell'></td><td class='name'>..</td><td>—</td><td>返回上级</td><td></td><td></td></tr>`);
+        rows.push(`<tr onclick="loadDirectory('${parent}')"><td class='checkbox-cell'></td><td class='name'>..</td><td>—</td><td></td><td></td><td></td></tr>`);
       }
       [...dirs, ...files].forEach(f => {
         // 使用原始文件名进行操作，显示转换后的文件名

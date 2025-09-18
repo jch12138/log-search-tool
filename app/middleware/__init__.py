@@ -66,16 +66,3 @@ def register_error_handlers(app: Flask):
         return jsonify({'success': False,'error': {'code': 'INTERNAL','message': '服务器内部错误'}}), 500
 
 __all__ = ['setup_middleware','api_response','register_error_handlers']
-from typing import Any
-from flask import Flask
-
-# 占位：复用旧 middleware.py 中方法，通过兼容导入
-try:
-    from middleware import register_error_handlers, setup_middleware  # type: ignore
-except Exception:
-    def register_error_handlers(app: Flask):
-        pass
-    def setup_middleware(app: Flask):
-        pass
-
-__all__ = ["register_error_handlers", "setup_middleware"]

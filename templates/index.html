@@ -44,8 +44,7 @@
 
 </head>
 
-<body>
-    <script>window.APP_PAGE="{{ page|default('') }}";</script>
+<body data-app-page="{{ page|default('') }}">
     <div id="app">
         <div class="app-container">
 
@@ -53,7 +52,7 @@
             <!-- 主内容区域 -->
             <div class="main-content">
                 <!-- 左侧日志列表 -->
-                <div class="left-panel" :class="{ 'collapsed': sidebarCollapsed }">
+                <aside class="left-panel" :class="{ 'collapsed': sidebarCollapsed }" aria-label="日志配置列表">
                     <!-- 折叠状态下的指示图标（仅装饰，悬停自动展开） -->
                     <div v-if="sidebarCollapsed" class="sidebar-toggle" title="悬停展开">
                         🔍
@@ -69,28 +68,29 @@
                         <!-- 分组显示 -->
                         <div v-for="group in groupedLogs" :key="group.name" class="log-group">
                             <!-- 分组标题 -->
-                            <div class="group-header" @click="toggleGroup(group.name)">
+                            <button type="button" class="group-header" @click="toggleGroup(group.name)" :aria-expanded="!group.isCollapsed" :aria-controls="'group-content-' + group.name">
                                 <span class="group-name">[[ group.name ]]</span>
                                 <span class="group-count">([[ group.logs.length ]])</span>
-                                <span class="toggle-icon" :class="{ collapsed: group.isCollapsed }">▼</span>
-                            </div>
+                                <span class="toggle-icon" :class="{ collapsed: group.isCollapsed }" aria-hidden="true">▼</span>
+                            </button>
                             
                             <!-- 分组内的日志列表 -->
-                            <div v-show="!group.isCollapsed" class="group-content">
-                                <div v-for="log in group.logs" :key="log.name" class="log-item"
-                                    :class="{ active: selectedLog?.name === log.name }" @click="selectLog(log)">
+                            <div v-show="!group.isCollapsed" class="group-content" :id="'group-content-' + group.name">
+                                <button type="button" v-for="log in group.logs" :key="log.name" class="log-item"
+                                    :class="{ active: selectedLog?.name === log.name }" @click="selectLog(log)"
+                                    :aria-pressed="selectedLog?.name === log.name ? 'true' : 'false'">
                                     <h4>[[ log.name ]]</h4>
                                     <p>[[ log.description || '暂无描述' ]]</p>
-                                </div>
+                                </button>
                             </div>
                         </div>
                     </div>
                     
    
-                </div>
+                </aside>
 
                 <!-- 右侧搜索和结果区域 -->
-                <div class="right-panel">
+                <main class="right-panel" aria-label="搜索与结果">
                     <!-- 搜索区域 -->
                     <div class="search-section">
 
@@ -220,18 +220,18 @@
                     </div>
 
                     <!-- 日志结果标签栏 -->
-                    <div class="log-tabs-bar" v-if="tabs.length">
-                    <div v-for="tab in tabs" :key="tab.id" @click="activateTab(tab.id)"
-                        :class="['log-tab-item', { active: tab.id === activeTabId }]">
-                            <span class="tab-title" :title="tab.title">[[ tab.title ]]</span>
-                            <span v-if="tab.searching" class="tab-badge spinning" title="搜索中">··</span>
-                            <span v-else-if="tab.hasSearched && tab.searchResults" class="tab-badge" :title="'匹配: '+(tab.searchResults.total_matches||0)">[[ tab.searchResults.total_matches ]]</span>
-                            <span class="close" @click.stop="closeTab(tab.id)" title="关闭">×</span>
-                        </div>
-                    </div>
+                    <nav class="log-tabs-bar" v-if="tabs.length" aria-label="搜索结果标签" role="tablist">
+                        <div v-for="tab in tabs" :key="tab.id" @click="activateTab(tab.id)"
+                            :class="['log-tab-item', { active: tab.id === activeTabId }]" role="tab" :aria-selected="tab.id === activeTabId ? 'true' : 'false'" tabindex="0">
+                                <span class="tab-title" :title="tab.title">[[ tab.title ]]</span>
+                                <span v-if="tab.searching" class="tab-badge spinning" title="搜索中">··</span>
+                                <span v-else-if="tab.hasSearched && tab.searchResults" class="tab-badge" :title="'匹配: '+(tab.searchResults.total_matches||0)">[[ tab.searchResults.total_matches ]]</span>
+                                <button type="button" class="close" @click.stop="closeTab(tab.id)" title="关闭" aria-label="关闭标签">×</button>
+                            </div>
+                    </nav>
 
                     <!-- 搜索结果区域 -->
-                    <div class="results-section" ref="resultsWrapper">
+                    <section class="results-section" ref="resultsWrapper" aria-label="搜索结果">
 
                         <!-- 使用日志搜索结果组件（仅在搜索完成后进行高亮） -->
                         <log-search-results
@@ -246,8 +246,8 @@
                             :enabled-highlighters="effectiveHighlighters"
                             empty-message="未找到匹配的日志记录"
                         />
-                    </div>
-                </div>
+                    </section>
+                </main>
             </div>
         </div>
     </div>
@@ -406,7 +406,7 @@
 
                     // 检查每个主机是否都选择了文件
                     return this.groupedFiles.every(group =>
-                        this.searchForm.selected_files[group.host]
+                        this.searchForm.selected_files[group.key]
                     );
                 }
             },
@@ -425,9 +425,10 @@
                 window.addEventListener('resize', this.updateResultsHeight, { passive: true });
 
                 // 如果通过独立页面进入 (sftp / terminals / config)
-                if (window.APP_PAGE && ['sftp','terminals','config'].includes(window.APP_PAGE)) {
+                const appPage = document.body.getAttribute('data-app-page');
+                if (appPage && ['sftp','terminals','config'].includes(appPage)) {
                     // 延迟让组件初始化完成
-                    setTimeout(()=>{ this.navigateToPage(window.APP_PAGE); }, 300);
+                    setTimeout(()=>{ this.navigateToPage(appPage); }, 300);
                 }
             },
 

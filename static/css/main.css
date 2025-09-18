@@ -455,3 +455,39 @@ body {
 
 /* Optional: center the text content inside message */
 /* .el-message .el-message__content { text-align: center; } */
+
+/* ---------------- Button element resets for recently converted interactive blocks ---------------- */
+/* After converting certain clickable divs to <button>, remove native button styling while keeping existing class styles */
+button.group-header,
+button.log-item,
+.log-tab-item button.close {
+    -webkit-appearance: none;
+    appearance: none;
+    border: 0;
+    font: inherit;
+    color: inherit;
+    margin: 0;
+    background: transparent;
+    text-align: inherit;
+}
+
+/* Preserve original spacing & width */
+button.group-header { width: 100%; }
+button.log-item { width: 100%; display: block; }
+
+/* Close button inside tab: keep inline-flex for centering */
+.log-tab-item button.close { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+
+/* Accessible focus styles */
+button.group-header:focus-visible,
+button.log-item:focus-visible,
+.log-tab-item button.close:focus-visible {
+    outline: 2px solid #409eff;
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+/* Remove default focus inner padding in Firefox */
+button::-moz-focus-inner { border: 0; padding: 0; }
+
+/* Hover states rely on existing .group-header:hover / .log-item:hover rules so no duplication needed */

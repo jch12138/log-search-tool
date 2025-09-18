@@ -7,6 +7,7 @@
 .log-tab-item.active { background:#ecf5ff; color:var(--el-color-primary); font-weight:600; box-shadow:0 1px 4px rgba(64,158,255,0.25), inset 0 0 0 1px var(--el-color-primary-light-5); }
 .log-tab-item .tab-title { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:center; }
 .log-tab-item .close { font-size:14px; line-height:1; color:var(--el-text-color-placeholder); padding:2px; border-radius:4px; transition:background .15s ease, color .15s ease; }
+.log-tab-item .close { background:transparent; border:0; cursor:pointer; }
 .log-tab-item .close:hover { color:var(--el-color-danger); background:var(--el-fill-color); }
 .log-tab-item .tab-badge { font-size:10px; line-height:16px; min-width:20px; padding:0 6px; border-radius:10px; background:#eef2f6; color:var(--el-text-color-secondary); text-align:center; font-weight:500; }
 .log-tab-item.active .tab-badge { background:#d3e9ff; color:var(--el-color-primary); }

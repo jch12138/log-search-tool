@@ -74,7 +74,41 @@ body {
     height: calc(100vh - 12px); /* 与右侧统一高度 */
     max-height: calc(100vh - 12px);
     /* 设置最大高度，留出上下边距 */
+    position: relative;
+    transition: width .28s ease;
 }
+
+/* 折叠状态 */
+.left-panel.collapsed { width: 42px; }
+.left-panel.collapsed .panel-header,
+.left-panel.collapsed .log-list { display: none !important; }
+
+/* 折叠按钮 */
+/* 折叠按钮基础样式（仅折叠状态显示） */
+.sidebar-toggle {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    color: #606266;
+    user-select: none;
+    background: transparent;
+    transition: background .2s ease, color .2s ease;
+    z-index: 10;
+}
+.sidebar-toggle:hover { background:transparent; color:#606266; }
+.left-panel:not(.collapsed) .sidebar-toggle { display:none; }
+
+/* 折叠后悬停展开预览 */
+.left-panel.collapsed:hover { width: 240px; box-shadow: 0 4px 18px rgba(0,0,0,0.12); }
+/* 悬停展开后隐藏箭头 */
+.left-panel.collapsed:hover .sidebar-toggle { display:none; }
+.left-panel.collapsed:hover .panel-header,
+.left-panel.collapsed:hover .log-list { display: block !important; }
 
 /* 侧边栏标题样式 */
 .panel-header {

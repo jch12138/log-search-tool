@@ -14,7 +14,7 @@
 @keyframes tabPulse { 0% {opacity:.35;} 50% {opacity:1;} 100% {opacity:.35;} }
 
 .results-section { margin-top:0; }
-.search-section { border-bottom:1px solid var(--el-border-color-light); }
+/* .search-section { border-bottom:1px solid var(--el-border-color-light); } */
 
 /* File selection box extracted */
 .selected-file-box { position:relative; flex:1; padding:6px 34px 6px 10px; border:1px solid #dcdfe6; border-radius:6px; background:#fff; font-size:12px; min-height:34px; display:flex; align-items:center; line-height:1.4; overflow:hidden; }

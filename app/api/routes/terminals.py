@@ -174,6 +174,25 @@ def set_terminal_encoding(terminal_id):
 		return jsonify({'success': False,'error': {'code':'INTERNAL','message': f'设置编码失败: {e}'}}), 500
 
 
+@terminals_bp.route('/terminals/<terminal_id>/size', methods=['POST'])
+def resize_terminal(terminal_id):
+	"""Resize PTY for better wrapping.
+
+	Request JSON: {"cols": <int>, "rows": <int>}.
+	"""
+	try:
+		data = request.get_json() or {}
+		cols = int(data.get('cols',0)); rows = int(data.get('rows',0))
+		if cols <=0 or rows <=0:
+			return jsonify({'success': False,'error': {'code':'INVALID_ARGUMENT','message': 'cols/rows 必须为正整数'}}), 400
+		terminal_service.resize_terminal(terminal_id, cols, rows)
+		return jsonify({'success': True,'data': {'terminal_id': terminal_id,'cols': cols,'rows': rows}})
+	except ValueError as e:
+		return jsonify({'success': False,'error': {'code':'NOT_FOUND','message': str(e)}}), 404
+	except Exception as e:  # noqa
+		return jsonify({'success': False,'error': {'code':'INTERNAL','message': f'调整终端大小失败: {e}'}}), 500
+
+
 @terminals_bp.route('/terminals/<terminal_id>/locale', methods=['POST'])
 def set_terminal_locale(terminal_id):
 	"""Set or auto-detect a UTF-8 locale for the remote session.

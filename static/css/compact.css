@@ -7,7 +7,7 @@ html, body {
 }
 
 /* 布局边距整体收紧 */
-.main-content { padding: 12px; gap: 16px; background: transparent; }
+.main-content { padding: 6px; gap: 16px; background: transparent; }
 .left-panel { width: 210px; }
 .panel-header { padding: 12px; }
 .panel-header h3 { font-size: 15px; }

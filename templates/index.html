@@ -82,33 +82,7 @@
                         </div>
                     </div>
                     
-                    <!-- 更多功能按钮 -->
-                    <!-- 临时隐藏更多工具入口: 用户请求 "暂时隐藏更多工具入口" -->
-                    <div class="more-actions hidden" aria-hidden="true">
-                        <button class="more-button" @click="toggleMoreMenu" :class="{ active: showMoreMenu }">
-                            <span class="more-icon">⚙️</span>
-                            <span class="more-text">更多功能</span>
-                            <span class="arrow-icon" :class="{ rotated: showMoreMenu }">▼</span>
-                        </button>
-                        
-                        <!-- 更多功能菜单 -->
-                        <div v-show="showMoreMenu" class="more-menu">
-                            <!-- 日志配置页面已隐藏 - 不开放给用户手动配置
-                            <div class="menu-item" @click="navigateToPage('config')">
-                                <span class="menu-icon">⚙️</span>
-                                <span class="menu-text">日志配置</span>
-                            </div>
-                            -->
-                            <div class="menu-item" @click="navigateToPage('sftp')">
-                                <span class="menu-icon">📁</span>
-                                <span class="menu-text">文件管理</span>
-                            </div>
-                            <div class="menu-item" @click="navigateToPage('terminals')">
-                                <span class="menu-icon">💻</span>
-                                <span class="menu-text">在线终端</span>
-                            </div>
-                        </div>
-                    </div>
+   
                 </div>
 
                 <!-- 右侧搜索和结果区域 -->

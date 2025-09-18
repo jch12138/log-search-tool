@@ -120,7 +120,7 @@ class TerminalService:
 				)
 				channel.send(_init_cmd.encode('utf-8', errors='ignore'))
 				# 给新登录 shell 少量时间初始化
-				time.sleep(2.0)
+				time.sleep(3.0)
 			except Exception:
 				pass
 		if initial_command:

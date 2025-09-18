@@ -512,22 +512,22 @@ const LogSearchResults = {
                                                                 </span>
                             </div>
                             <div class="host-actions">
-                                                                <button class="mini-action-btn" @click="openSftp(group.hostResult)" :title="'文件管理 '+group.host" aria-label="文件管理">
+                                                                <button class="action-btn" @click="openSftp(group.hostResult)" :title="'文件管理 '+group.host" aria-label="文件管理">
                                                                     <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
                                                                         <path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h4.764a2.5 2.5 0 0 1 1.768.732L14.172 6H18.5A2.5 2.5 0 0 1 21 8.5v8A3.5 3.5 0 0 1 17.5 20h-11A3.5 3.5 0 0 1 3 16.5v-10Z" fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/>
                                                                     </svg>
                                                                 </button>
-                                                                <button class="mini-action-btn" @click="openTerminal(group.hostResult)" :title="'在线终端 '+group.host" aria-label="在线终端">
+                                                                <button class="action-btn" @click="openTerminal(group.hostResult)" :title="'在线终端 '+group.host" aria-label="在线终端">
                                                                     <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
                                                                         <path d="M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.2" fill="none"/>
                                                                         <path d="m7 9 3.5 3L7 15" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
                                                                         <path d="M11.5 15H17" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
                                                                     </svg>
                                                                 </button>
-                                <button class="fullscreen-btn" :class="{ 'is-active': fullscreenHost === group.host }" @click="toggleFullscreen(group.host)" :title="fullscreenHost === group.host ? '退出全屏 (Esc)' : '放大查看'">
+                                <button class="action-btn text-label" :class="{ 'is-active': fullscreenHost === group.host }" @click="toggleFullscreen(group.host)" :title="fullscreenHost === group.host ? '退出全屏 (Esc)' : '放大查看'">
                                     <span style="font-size:12px; letter-spacing:1px;">[[ fullscreenHost === group.host ? '还原' : '放大' ]]</span>
                                 </button>
-                                <button class="download-btn" @click="downloadLogFile(group.hostResult)" title="下载日志文件">
+                                <button class="action-btn text-label" @click="downloadLogFile(group.hostResult)" title="下载日志文件">
                                     <span>下载日志</span>
                                 </button>
                             </div>

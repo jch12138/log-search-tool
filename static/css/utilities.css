@@ -45,3 +45,45 @@
 .w-full { width:100%!important; }
 .flex-1 { flex:1!important; }
 .min-w-380 { min-width:380px; }
+/* Additional utilities extracted from remaining inline styles */
+.gap-8-10 { gap:8px 10px; }
+.ml-8 { margin-left:8px!important; }
+.mt-12 { margin-top:12px!important; }
+.mb-0 { margin-bottom:0!important; }
+.mb-12 { margin-bottom:12px!important; }
+.mb-4 { margin-bottom:4px!important; }
+.font-600 { font-weight:600!important; }
+.text-primary-raw { color:#409eff!important; }
+.text-13-normal { font-size:13px!important; }
+.text-14-normal { font-size:14px!important; }
+.whitespace-nowrap { white-space:nowrap!important; }
+.border { border:1px solid #ebeef5!important; }
+.border-dcd { border:1px solid #dcdfe6!important; }
+.border-radius-6 { border-radius:6px!important; }
+.border-radius-4 { border-radius:4px!important; }
+.bg-white { background:#fff!important; }
+.bg-f4 { background:#f4f4f5!important; }
+.px-14 { padding-left:14px!important; padding-right:14px!important; }
+.py-6 { padding-top:6px!important; padding-bottom:6px!important; }
+.py-8 { padding-top:8px!important; padding-bottom:8px!important; }
+.p-2 { padding:2px!important; }
+.p-4 { padding:4px!important; }
+.p-6 { padding:6px!important; }
+.p-8 { padding:8px!important; }
+.p-12 { padding:12px!important; }
+.pl-10 { padding-left:10px!important; }
+.pr-34 { padding-right:34px!important; }
+.text-center { text-align:center!important; }
+.overflow-hidden { overflow:hidden!important; }
+.relative { position:relative!important; }
+.inline-flex { display:inline-flex!important; }
+.justify-between { justify-content:space-between!important; }
+.font-mono-12 { font-family:monospace; font-size:12px!important; }
+.h-34 { height:34px!important; }
+.w-100 { width:100%!important; }
+.max-h-360 { max-height:360px!important; }
+.code-like { font-size:12px!important; background:#f4f4f5!important; padding:2px 6px!important; border-radius:4px!important; }
+.text-909 { color:#909399!important; }
+.text-606 { color:#606266!important; }
+.text-b1 { color:#b1b3b8!important; }
+.pointer { cursor:pointer!important; }

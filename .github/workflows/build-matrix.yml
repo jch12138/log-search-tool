@@ -113,6 +113,7 @@ jobs:
             artifacts/log-search-api-onedir-*.zip
             artifacts/log-search-api-onedir-*.tar.gz
           if-no-files-found: ignore
+          retention-days: 1
 
   release:
     name: publish-release

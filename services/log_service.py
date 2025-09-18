@@ -11,7 +11,7 @@ import logging
 from typing import Dict, Any, List
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from app.models import SearchParams, SearchResult, MultiHostSearchResult
-from .ssh_service import SSHConnectionManager
+from app.services.ssh import SSHConnectionManager
 from app.services.utils.encoding import decode_bytes
 from app.services.utils.filename_resolver import resolve_log_filename
 
@@ -180,15 +180,16 @@ class LogSearchService:
             if exit_code != 0 and stderr:
                 raise Exception(f"搜索命令执行失败: {stderr}")
             
-            # 统一使用 decode_bytes 进行 UTF-8 / GB2312 回退
+            # 统一使用 smart_decode：若内容原本已为正确的 str 则保持；否则重新走字节路径
             if stdout:
                 try:
-                    # 将当前字符串视为原始字节猜测解码可能错误，先尝试直接utf-8验证
-                    stdout.encode('utf-8')
+                    stdout.encode('utf-8')  # 快速校验是否纯 UTF-8 表示
                 except Exception:
-                    # 退回到字节再解码策略
-                    candidate_bytes = stdout.encode('latin-1', errors='ignore')
-                    stdout = decode_bytes(candidate_bytes)
+                    from app.services.utils.encoding import smart_decode
+                    # 将现有 str 先视为 latin-1 回转为 bytes 再智能解码
+                    raw_bytes = stdout.encode('latin-1', errors='ignore')
+                    decoded, _enc = smart_decode(raw_bytes)
+                    stdout = decoded
             
             # 处理结果
             lines = stdout.strip().split('\n') if stdout.strip() else []

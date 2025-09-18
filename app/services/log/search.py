@@ -8,7 +8,7 @@ from typing import Dict, Any, List, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from app.models import SearchParams, SearchResult, MultiHostSearchResult
 from app.services.ssh import SSHConnectionManager
-from app.services.utils.encoding import decode_bytes
+from app.services.utils.encoding import decode_bytes, smart_decode
 from app.services.utils.filename_resolver import resolve_log_filename
 
 logger = logging.getLogger(__name__)
@@ -88,11 +88,17 @@ class LogSearchService:
 			stdout, stderr, code = conn.execute_command(command, timeout=30)
 			if code != 0 and stderr:
 				raise RuntimeError(f"搜索命令执行失败: {stderr}")
+			# 标准输出编码处理：先直接使用；若检测到替换符或异常，再用 smart_decode
+			encoding_used = 'utf-8'
 			if stdout:
 				try:
-					stdout.encode('utf-8')
+					stdout.encode('utf-8')  # 检测能否无损往返
 				except Exception:
-					stdout = decode_bytes(stdout.encode('latin-1', errors='ignore'))
+					decoded, enc_used = smart_decode(stdout.encode('latin-1', errors='ignore'))
+					stdout = decoded
+					encoding_used = enc_used
+			elif not stdout:
+				encoding_used = 'utf-8'
 			# 解析 grep 输出，移除行号/分隔符，保持与真实日志内容一致
 			lines = stdout.strip().split('\n') if stdout.strip() else []
 			results, matches = self._parse_grep_output(lines, resolved_file_path)
@@ -128,7 +134,8 @@ class LogSearchService:
 					'original_total_lines': original_total,
 					'truncated': truncated,
 					'search_time': elapsed,
-					'matches': matches
+					'matches': matches,
+					'encoding_used': encoding_used
 				},
 				success=True
 			)

@@ -514,7 +514,7 @@ const LogSearchResults = {
                             <div class="host-actions">
                                                                 <button class="action-btn" @click="openSftp(group.hostResult)" :title="'文件管理 '+group.host" aria-label="文件管理">
                                                                     <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
-                                                                        <path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h4.764a2.5 2.5 0 0 1 1.768.732L14.172 6H18.5A2.5 2.5 0 0 1 21 8.5v8A3.5 3.5 0 0 1 17.5 20h-11A3.5 3.5 0 0 1 3 16.5v-10Z" fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/>
+                                                                        <path d="M4 6h4.2c.4 0 .78.16 1.06.44l1.3 1.3c.28.28.66.44 1.06.44H19a1 1 0 0 1 1 1v7.5A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5V6Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>
                                                                     </svg>
                                                                 </button>
                                                                 <button class="action-btn" @click="openTerminal(group.hostResult)" :title="'在线终端 '+group.host" aria-label="在线终端">
@@ -524,11 +524,26 @@ const LogSearchResults = {
                                                                         <path d="M11.5 15H17" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
                                                                     </svg>
                                                                 </button>
-                                <button class="action-btn text-label" :class="{ 'is-active': fullscreenHost === group.host }" @click="toggleFullscreen(group.host)" :title="fullscreenHost === group.host ? '退出全屏 (Esc)' : '放大查看'">
-                                    <span style="font-size:12px; letter-spacing:1px;">[[ fullscreenHost === group.host ? '还原' : '放大' ]]</span>
+                                <button class="action-btn" :class="{ 'is-active': fullscreenHost === group.host }" @click="toggleFullscreen(group.host)" :title="fullscreenHost === group.host ? '退出全屏 (Esc)' : '放大查看'" aria-label="放大/还原">
+                                    <svg v-if="fullscreenHost !== group.host" viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+                                        <path d="M4 9V5a1 1 0 0 1 1-1h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M20 15v4a1 1 0 0 1-1 1h-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M15 4h4a1 1 0 0 1 1 1v4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M9 20H5a1 1 0 0 1-1-1v-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                    <svg v-else viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+                                        <path d="M9 9H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M15 15h4a1 1 0 0 1 1 1v3.99a1 1 0 0 1-1.01 1.01H15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M20 9h-4a1 1 0 0 1-1-1V4.99A1 1 0 0 1 15.99 4H20a1 1 0 0 1 1 1v4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M4 15h4a1 1 0 0 1 1 1v4.01A1 1 0 0 1 8.01 21H4a1 1 0 0 1-1-1v-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
                                 </button>
-                                <button class="action-btn text-label" @click="downloadLogFile(group.hostResult)" title="下载日志文件">
-                                    <span>下载日志</span>
+                                <button class="action-btn" @click="downloadLogFile(group.hostResult)" title="下载日志文件" aria-label="下载日志">
+                                    <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                                        <path d="M12 4v11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                                        <path d="m7 10 5 5 5-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                                        <path d="M5 19h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                                    </svg>
                                 </button>
                             </div>
                         </div>

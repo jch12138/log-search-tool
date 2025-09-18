@@ -923,12 +923,13 @@
                     };
                 },
                 _createTabForLog(log) {
+                    // 使用全局搜索表单，不为每个标签复制独立搜索配置
                     return {
                         id: 'tab_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
                         logName: log.name,
                         title: log.name,
                         selectedLog: log,
-                        searchForm: JSON.parse(JSON.stringify(this._defaultSearchForm())),
+                        searchForm: null,
                         searchResults: null,
                         highlightKeyword: '',
                         hasSearched: false,
@@ -940,7 +941,7 @@
                     const tab = this.activeTab;
                     if (!tab) return;
                     this.selectedLog = tab.selectedLog;
-                    this.searchForm = tab.searchForm;
+                    // 不再覆盖全局 searchForm，保持关键词与设置在所有标签一致
                     this.searchResults = tab.searchResults;
                     this.highlightKeyword = tab.highlightKeyword;
                     this.hasSearched = tab.hasSearched;

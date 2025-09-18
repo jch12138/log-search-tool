@@ -45,8 +45,7 @@
 </head>
 
 <body data-app-page="{{ page|default('') }}">
-    <div id="app">
-        <div class="app-container">
+    <div id="app" class="app-root">
 
 
             <!-- 主内容区域 -->
@@ -155,7 +154,7 @@
                             </div>
 
                             <!-- 文件过滤器 (带过渡) -->
-                            <transition name="file-filter" @after-enter="updateResultsHeight" @after-leave="updateResultsHeight">
+                            <transition name="file-filter">
                                 <div v-if="searchForm.use_file_filter" class="mt-12">
                                     <div class="flex gap-16 flex-wrap">
                                         <div v-for="group in groupedFiles" :key="group.key" class="flex-1 min-w-380 flex flex-col gap-6">
@@ -239,7 +238,6 @@
                             :search-results="activeTab ? activeTab.searchResults : searchResults"
                             :search-keyword="activeTab ? activeTab.highlightKeyword : highlightKeyword"
                             :use-regex="searchForm.use_regex"
-                            :height="searchResultsHeight"
                             :max-results="5000"
                             :show-search-stats="false"
                             :show-host-grouping="true"
@@ -249,7 +247,6 @@
                     </section>
                 </main>
             </div>
-        </div>
     </div>
 
     <script>
@@ -285,7 +282,7 @@
                     filesLoading: false, // 文件列表加载状态
                     collapsedGroups: new Set(), // 折叠的分组
                     showMoreMenu: false, // 更多菜单显示状态
-                    dynamicResultsHeight: '400px', // 动态结果高度
+                    // 已废弃：使用纯 CSS flex 自适应高度
                     searchForm: {
                         keyword: '',
                         search_mode: 'context', // keyword 或 context
@@ -397,9 +394,6 @@
                     };
                 },
 
-                // 结果高度由测量驱动
-                searchResultsHeight() { return this.dynamicResultsHeight; },
-
                 // 检查是否所有必需的文件都已选择
                 isFileFilterValid() {
                     // 不再自动加载文件列表，改为纯 SFTP 浏览选择
@@ -421,8 +415,7 @@
                 document.addEventListener('click', this.handleClickOutside);
 
                 // 初次计算高度
-                this.$nextTick(() => this.updateResultsHeight());
-                window.addEventListener('resize', this.updateResultsHeight, { passive: true });
+                // 动态高度事件已移除（由 flex 布局替代）
 
                 // 如果通过独立页面进入 (sftp / terminals / config)
                 const appPage = document.body.getAttribute('data-app-page');
@@ -436,7 +429,7 @@
                 // 清理事件监听器
                 document.removeEventListener('keydown', this.handleGlobalKeydown);
                 document.removeEventListener('click', this.handleClickOutside);
-                window.removeEventListener('resize', this.updateResultsHeight);
+                // 已无窗口 resize 监听需要清理
             },
 
             methods: {
@@ -542,7 +535,7 @@
                         tab.highlightKeyword='';
                     } finally {
                         tab.searching = false;
-                        this.$nextTick(()=>this.updateResultsHeight());
+                        // 高度无需重新计算
                     }
                 },
                 // 构建占位结果
@@ -759,7 +752,7 @@
                         this.availableFiles = [];
                         ElMessage.info('已关闭文件过滤');
                     }
-                    this.$nextTick(() => this.updateResultsHeight());
+                    // 高度无需重新计算
                 },
 
                 // 加载可用文件列表
@@ -955,7 +948,7 @@
                     if (!tab) return;
                     this.activeTabId = id;
                     this._syncActiveTabToRoot();
-                    this.$nextTick(()=>this.updateResultsHeight());
+                        // 高度无需重新计算
                 },
                 closeTab(id) {
                     const idx = this.tabs.findIndex(t => t.id === id);
@@ -977,48 +970,7 @@
                         this._syncActiveTabToRoot();
                     }
                 },
-                updateResultsHeight() {
-                    try {
-                        const wrapper = this.$refs.resultsWrapper;
-                        if (!wrapper) return;
-                        const wrapperRect = wrapper.getBoundingClientRect();
-                        const parentPanel = wrapper.closest('.right-panel');
-                        let availableHeight;
-                        if (parentPanel) {
-                            const panelRect = parentPanel.getBoundingClientRect();
-                            const bottomGap = 16;
-                            const wrapperStyles = window.getComputedStyle(wrapper);
-                            const paddingBottom = parseInt(wrapperStyles.paddingBottom) || 0;
-                            availableHeight = panelRect.bottom - wrapperRect.top - bottomGap - paddingBottom;
-                        } else {
-                            const bottomGap = 16;
-                            availableHeight = window.innerHeight - wrapperRect.top - bottomGap;
-                        }
-                        const headerEl = wrapper.querySelector('.results-section-header');
-                        let headerH = 0;
-                        if (headerEl) headerH = headerEl.getBoundingClientRect().height + 4;
-                        availableHeight -= headerH;
-                        if (availableHeight < 120) availableHeight = 120;
-                        const minH = 200;
-                        this.dynamicResultsHeight = Math.max(minH, availableHeight) + 'px';
-                        requestAnimationFrame(()=>{
-                            const w2 = this.$refs.resultsWrapper;
-                            if (!w2) return;
-                            const wr2 = w2.getBoundingClientRect();
-                            const pp2 = w2.closest('.right-panel');
-                            if (pp2) {
-                                const pr2 = pp2.getBoundingClientRect();
-                                const gap = 16;
-                                const w2Styles = window.getComputedStyle(w2);
-                                const padB2 = parseInt(w2Styles.paddingBottom) || 0;
-                                let avail2 = pr2.bottom - wr2.top - gap - padB2;
-                                const header2 = w2.querySelector('.results-section-header');
-                                if (header2) avail2 -= header2.getBoundingClientRect().height + 4;
-                                this.dynamicResultsHeight = Math.max(minH, avail2) + 'px';
-                            }
-                        });
-                    } catch(e) {}
-                }
+                // (height handled purely by flex layout)
             }
         });
 

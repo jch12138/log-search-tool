@@ -16,14 +16,13 @@ body {
 }
 
 /* 主容器 */
-.app-container {
+/* root app container (replaces former .app-container) */
+#app.app-root {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
     max-width: 100vw;
-    /* 防止水平溢出 */
     overflow-x: hidden;
-    /* 隐藏水平滚动条 */
 }
 
 /* 头部样式 */
@@ -198,9 +197,7 @@ body {
     /* box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1); */
     display: flex;
     flex-direction: column;
-    min-height: 400px;
-    /* 降低最小高度 */
-    /* 移除 max-height 限制以便填满父容器剩余空间 */
+    min-height: 0; /* 允许在父 flex 中自由伸缩 */
     width: 100%;
     max-width: 100%; /* 限制最大宽度以居中显示 */
     margin-left: 0;
@@ -209,6 +206,14 @@ body {
     /* 允许收缩 */
     overflow: hidden;
     /* 防止内容溢出 */
+}
+
+/* 结果内部滚动容器（组件根节点可添加 .log-results-scroller 类以适配） */
+.results-section .log-results-scroller,
+.results-section .log-results-root { /* 兼容可能的根类名 */
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
 }
 
 /* 日志列表 */

@@ -26,6 +26,13 @@ html, body { height:100%; font-family:'Microsoft YaHei','微软雅黑','Segoe UI
 .panel-header h3 { margin:0; font-size:15px; font-weight:600; }
 @media (max-width:1024px){ .left-panel { width:100%; flex-shrink:1; max-height:400px; } }
 
+/* Scrollable log list inside left panel */
+.log-list { flex:1; overflow-y:auto; overflow-x:hidden; min-height:0; -webkit-overflow-scrolling:touch; }
+.log-list::-webkit-scrollbar { width:8px; }
+.log-list::-webkit-scrollbar-track { background:#f1f1f1; border-radius:4px; }
+.log-list::-webkit-scrollbar-thumb { background:#c0c4cc; border-radius:4px; }
+.log-list::-webkit-scrollbar-thumb:hover { background:#909399; }
+
 /* === Log Groups === */
 .log-group { border-bottom:1px solid #f0f0f0; }
 .log-group:last-child { border-bottom:none; }

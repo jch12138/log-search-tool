@@ -1,0 +1,15 @@
+/* Project-specific overrides (loaded after index.css) */
+
+/* Ensure body background matches previous look if index.css changed */
+body { background: #f5f6fa; }
+
+/* Force the main layout to occupy full viewport height */
+.main-content { min-height: calc(100vh - 0px); }
+
+/* Center Element Plus message popups horizontally (parity with sftp page) */
+.el-message { left: 50% !important; right: auto !important; transform: translateX(-50%) !important; }
+
+/* Fix potential overflow on results container after layout changes */
+.results-section { min-height: 0; overflow: hidden; }
+.results-section .log-results-root, .results-section .log-results-scroller { overflow: auto; }
+

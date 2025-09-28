@@ -1,0 +1,193 @@
+logs:
+- description: SIT 环境日志
+  group: SIT
+  name: '123'
+  path: /Users/chenway/Desktop/log_search_app/testlog/test2.log
+  sshs:
+  - host: 127.0.0.1
+    password: jch12138
+    port: 22
+    username: chenway
+  - host: localhost
+    password: jch12138
+    port: 22
+    username: chenway
+- description: ''
+  group: UAT
+  name: surge
+  path: /Users/chenway/Library/Logs/Surge/Surge-2025-09-27-172235.log
+  sshs:
+  - host: 127.0.0.1
+    password: jch12138
+    port: 22
+    username: chenway
+- description: ''
+  group: ''
+  name: test
+  path: /Users/chenway/Desktop/log_search_app/testlog/test2.log
+  sshs:
+  - host: 127.0.0.1
+    password: jch12138
+    port: 22
+    username: chenway
+  - host: localhost
+    password: jch12138
+    port: 22
+    username: chenway
+- description: ''
+  group: ''
+  name: test1
+  path: /Users/chenway/Library/Logs/Surge/Surge-2025-08-31-014636.log
+  sshs:
+  - host: 127.0.0.1
+    password: jch12138
+    port: 22
+    username: chenway
+  - host: localhost
+    password: jch12138
+    port: 22
+    username: chenway
+- description: ''
+  group: ''
+  name: test2
+  path: /Users/chenway/Library/Logs/Surge/Surge-2025-08-31-014636.log
+  sshs:
+  - host: 127.0.0.1
+    password: jch12138
+    port: 22
+    username: chenway
+  - host: localhost
+    password: jch12138
+    port: 22
+    username: chenway
+- description: ''
+  group: ''
+  name: test3
+  path: /Users/chenway/Library/Logs/Surge/Surge-2025-08-31-014636.log
+  sshs:
+  - host: 127.0.0.1
+    password: jch12138
+    port: 22
+    username: chenway
+  - host: localhost
+    password: jch12138
+    port: 22
+    username: chenway
+- description: ''
+  group: ''
+  name: test3
+  path: /Users/chenway/Library/Logs/Surge/Surge-2025-08-31-014636.log
+  sshs:
+  - host: 127.0.0.1
+    password: jch12138
+    port: 22
+    username: chenway
+  - host: localhost
+    password: jch12138
+    port: 22
+    username: chenway
+- description: ''
+  group: ''
+  name: test3
+  path: /Users/chenway/Library/Logs/Surge/Surge-2025-08-31-014636.log
+  sshs:
+  - host: 127.0.0.1
+    password: jch12138
+    port: 22
+    username: chenway
+  - host: localhost
+    password: jch12138
+    port: 22
+    username: chenway
+- description: ''
+  group: ''
+  name: test3
+  path: /Users/chenway/Library/Logs/Surge/Surge-2025-08-31-014636.log
+  sshs:
+  - host: 127.0.0.1
+    password: jch12138
+    port: 22
+    username: chenway
+  - host: localhost
+    password: jch12138
+    port: 22
+    username: chenway
+- description: ''
+  group: ''
+  name: test3
+  path: /Users/chenway/Library/Logs/Surge/Surge-2025-08-31-014636.log
+  sshs:
+  - host: 127.0.0.1
+    password: jch12138
+    port: 22
+    username: chenway
+  - host: localhost
+    password: jch12138
+    port: 22
+    username: chenway
+- description: ''
+  group: ''
+  name: test3
+  path: /Users/chenway/Library/Logs/Surge/Surge-2025-08-31-014636.log
+  sshs:
+  - host: 127.0.0.1
+    password: jch12138
+    port: 22
+    username: chenway
+  - host: localhost
+    password: jch12138
+    port: 22
+    username: chenway
+- description: ''
+  group: ''
+  name: test3
+  path: /Users/chenway/Library/Logs/Surge/Surge-2025-08-31-014636.log
+  sshs:
+  - host: 127.0.0.1
+    password: jch12138
+    port: 22
+    username: chenway
+  - host: localhost
+    password: jch12138
+    port: 22
+    username: chenway
+- description: ''
+  group: ''
+  name: test3
+  path: /Users/chenway/Library/Logs/Surge/Surge-2025-08-31-014636.log
+  sshs:
+  - host: 127.0.0.1
+    password: jch12138
+    port: 22
+    username: chenway
+  - host: localhost
+    password: jch12138
+    port: 22
+    username: chenway
+- description: ''
+  group: ''
+  name: test3
+  path: /Users/chenway/Library/Logs/Surge/Surge-2025-08-31-014636.log
+  sshs:
+  - host: 127.0.0.1
+    password: jch12138
+    port: 22
+    username: chenway
+  - host: localhost
+    password: jch12138
+    port: 22
+    username: chenway
+- description: ''
+  group: ''
+  name: test3
+  path: /Users/chenway/Library/Logs/Surge/Surge-2025-08-31-014636.log
+  sshs:
+  - host: 127.0.0.1
+    password: jch12138
+    port: 22
+    username: chenway
+  - host: localhost
+    password: jch12138
+    port: 22
+    username: chenway
+settings: {}

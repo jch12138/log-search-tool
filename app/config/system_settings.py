@@ -71,7 +71,7 @@ class Settings:
     PORT: int = _get_int("APP_PORT", 8000)
     DEBUG: bool = _get_bool("APP_DEBUG", False)
 
-    LOG_LEVEL: str = os.getenv("APP_LOG_LEVEL", "INFO")
+    LOG_LEVEL: str = os.getenv("APP_LOG_LEVEL", "DEBUG")
     LOG_DIR: str = os.getenv("APP_LOG_DIR", "logs")
     LOG_FILE_NAME: str = os.getenv("APP_LOG_FILE", "app.log")
     LOG_BACKUP_COUNT: int = _get_int("APP_LOG_BACKUP", 7)
@@ -86,7 +86,7 @@ class Settings:
     MAX_CONTENT_LENGTH: int = _get_int("MAX_CONTENT_LENGTH", 16 * 1024 * 1024)
 
     # Root-config (migrated)
-    CONFIG_FILE_PATH: str = os.getenv("CONFIG_FILE_PATH", os.path.expanduser("~/.log_search_app/config.yaml"))
+    CONFIG_FILE_PATH: str = os.getenv("CONFIG_FILE_PATH", os.path.expanduser("./config.yaml"))
     SECRET_KEY: str = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
     API_PREFIX: str = os.getenv("API_PREFIX", "/api/v1")
     SSH_TIMEOUT: int = _get_int("SSH_TIMEOUT", 30)

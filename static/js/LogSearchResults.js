@@ -5,7 +5,7 @@ const LogSearchResults = {
     // 组件依赖加载
     async created() {
         await this.loadDependencies();
-        this.injectStyles();
+        // this.injectStyles();  // 移除样式注入调用
     },
     mounted() {
         window.addEventListener('keydown', this.handleKeyDown);
@@ -340,334 +340,8 @@ const LogSearchResults = {
         
         // 注入组件相关样式
         injectStyles() {
-            if (document.getElementById('log-search-results-styles')) {
-                return; // 样式已注入
-            }
-            
-            const style = document.createElement('style');
-            style.id = 'log-search-results-styles';
-            style.textContent = `
-                /* 简化层级后样式：直接在 results-section 下渲染 host-result-box */
-                .loading-dependencies {
-                    flex: 1;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    min-height: 200px;
-                }
-                
-                /* 独立容器，避免影响全局 .results-section 布局 */
-                .results-hosts-row {
-                    display: flex;
-                    flex-direction: row;
-                    gap: 20px;
-                    align-items: stretch;
-                    padding: 0; /* 去掉底部内边距 */
-                    box-sizing: border-box;
-                    flex-wrap: nowrap;
-                    width: 100%;
-                    flex: 1;             /* 占满父容器高度 */
-                    min-height: 0;       /* 允许内部滚动 */
-                }
-                .results-hosts-row > .host-result-box { flex:1; }
-                
-                .host-result-box {
-                    flex: 1;
-                    min-width: 0; /* 允许收缩 */
-                    border: 1px solid #e4e7ed;
-                    border-radius: 8px;
-                    overflow: hidden;
-                    background: white;
-                    display: flex;
-                    flex-direction: column;
-                    height: 100%;
-                    min-height: 0; /* 关键：使内部 .host-results 可滚动 */
-                }
-                .host-result-box.fullscreen-active { position:fixed; inset:12px 14px 14px 14px; z-index:9999; background:#ffffff; border:1px solid #e4e7ed; border-radius:10px; box-shadow:0 12px 32px rgba(0,0,0,0.45); width:auto!important; height:auto!important; max-width:none; max-height:none; }
-                .host-result-box.fullscreen-active .host-results { background:#282c34; }
-                body.fullscreen-log-freeze { overflow:hidden; }
-                
-                /* 只在有足够空间时设置最小宽度 */
-                @media (min-width: 768px) { .results-hosts-row > .host-result-box { min-width: 300px; } }
-                @media (max-width: 767px) {
-                    .results-hosts-row { flex-direction: column !important; gap:10px; flex-wrap: nowrap; }
-                    .results-hosts-row > .host-result-box { min-height:200px; max-height:300px; }
-                }
-                
-                .host-header {
-                    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-                    padding: 12px 16px;
-                    border-bottom: 1px solid #e4e7ed;
-                    position: sticky;
-                    top: 0;
-                    z-index: 10;
-                }
-                
-                .host-info {
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    justify-content: space-between;
-                }
-                
-                .host-left-info {
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                }
-                
-                .host-icon {
-                    font-size: 16px;
-                }
-                
-                .host-name {
-                    font-weight: 600;
-                    color: #303133;
-                    font-size: 14px;
-                }
-                
-                .host-count {
-                    color: #909399;
-                    font-size: 12px;
-                    background: #f0f2f5;
-                    padding: 2px 6px;
-                    border-radius: 10px;
-                }
-
-                /* 复用 el-tag 风格的主机信息标签 */
-                .host-tags { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
-                .host-tags .el-tag { margin: 0; display: inline-flex; align-items: center; max-width: 220px; }
-                .host-tags .el-tag .el-tag__content { display: inline-flex; align-items: center; }
-                .host-path-tag { max-width: 320px; font-family: 'Fira Code','SF Mono',monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-                @media (max-width: 1400px){ .host-path-tag { max-width: 240px; } }
-                @media (max-width: 1100px){ .host-path-tag { max-width: 180px; } }
-                @media (max-width: 900px){ .host-path-tag { display:none; } }
-                
-                .host-actions {
-                    display: flex;
-                    align-items: center;
-                    gap: 6px;
-                }
-                .mini-action-btn { padding:6px 8px; font-size:12px; border:1px solid #e4e7ed; background:#fff; color:#606266; border-radius:6px; cursor:pointer; line-height:1; display:flex; align-items:center; gap:4px; transition:all .18s; }
-                .mini-action-btn:hover { background:#f5f7fa; color:#409eff; border-color:#dcdfe6; }
-                .mini-action-btn:active { background:#ecf5ff; }
-                .mini-action-btn svg { width:14px; height:14px; display:block; fill:currentColor; }
-                .fullscreen-btn { padding:6px 12px; font-size:12px; border:1px solid #e4e7ed; background:#fafbfc; color:#909399; border-radius:6px; cursor:pointer; transition:all .2s; display:flex; align-items:center; gap:4px; line-height:1; font-weight:400; }
-                .fullscreen-btn:hover { background:#f0f2f5; border-color:#c0c4cc; color:#606266; transform:translateY(-1px); box-shadow:0 2px 4px rgba(0,0,0,0.1); }
-                .fullscreen-btn:active { background:#e4e7ed; border-color:#b3b8c3; transform:translateY(0); box-shadow:0 1px 2px rgba(0,0,0,0.1); }
-                .fullscreen-btn.is-active { background:#409eff; color:#fff; border-color:#409eff; box-shadow:0 2px 6px rgba(64,158,255,0.35); }
-                
-                .download-btn {
-                    padding: 6px 12px;
-                    font-size: 12px;
-                    border: 1px solid #e4e7ed;
-                    background: #fafbfc;
-                    color: #909399;
-                    border-radius: 6px;
-                    cursor: pointer;
-                    transition: all 0.2s ease;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    gap: 4px;
-                    min-width: 60px;
-                    text-align: center;
-                    font-weight: 400;
-                    line-height: 1;
-                }
-                
-                .download-btn:hover {
-                    background: #f0f2f5;
-                    border-color: #c0c4cc;
-                    color: #606266;
-                    transform: translateY(-1px);
-                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                }
-                
-                .download-btn:active {
-                    background: #e4e7ed;
-                    border-color: #b3b8c3;
-                    transform: translateY(0);
-                    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-                }
-                
-                .download-btn:focus {
-                    outline: none;
-                    border-color: #409eff;
-                    box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
-                }
-                
-                .download-btn i {
-                    font-size: 11px;
-                    margin: 0;
-                }
-                
-                .download-btn span {
-                    margin: 0;
-                    white-space: nowrap;
-                }
-                
-                .host-results {
-                    flex: 1;
-                    overflow-y: auto;
-                    padding: 0;
-                    background: #282c34;
-                    padding-bottom: 12px;
-                    min-height: 0; /* 防止 flex 子元素撑开父级导致不滚动 */
-                }
-                
-                .host-results::-webkit-scrollbar {
-                    width: 8px;
-                }
-                
-                .host-results::-webkit-scrollbar-track {
-                    background: #f1f1f1;
-                    border-radius: 4px;
-                }
-                
-                .host-results::-webkit-scrollbar-thumb {
-                    background: #c0c4cc;
-                    border-radius: 4px;
-                }
-                
-                .host-results::-webkit-scrollbar-thumb:hover {
-                    background: #909399;
-                }
-                
-                .result-line {
-                    background: #282c34;
-                    transition: background-color 0.2s;
-                }
-                
-                .result-line:hover {
-                    background: #2c313c;
-                }
-                
-                .result-content {
-                    padding: 8px 16px;
-                    font-family: 'Microsoft YaHei', '微软雅黑', 'Fira Code', 'SF Mono', 'Monaco', 'Cascadia Code', 'Roboto Mono', monospace;
-                    font-size: 14px;  /* 稍微调小字体 */
-                    font-weight: 400;  /* 标准字重 */
-                    line-height: 1.6;  /* 增加行高提升可读性 */
-                    white-space: pre-wrap;
-                    overflow-x: auto;
-                    word-break: break-all;
-                    margin: 0;
-                    /* One Dark Pro 背景和文字颜色 */
-                    background: #282c34;
-                    color: #abb2bf;
-                }
-                
-                .result-content code[class*="language-"],
-                .result-content pre[class*="language-"] {
-                    font-family: 'Microsoft YaHei', '微软雅黑', 'Fira Code', 'SF Mono', 'Monaco', 'Cascadia Code', 'Roboto Mono', monospace;
-                    font-size: 16px;  /* 与主要内容保持一致 */
-                    font-weight: 400;
-                    line-height: 1.6;
-                    background: transparent;
-                    margin: 0;
-                    padding: 0;
-                    border: none;
-                    border-radius: 0;
-                }
-                
-                .empty-results, .no-data {
-                    flex: 1;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    /* 保持与卡片一致的浅色背景 */
-                }
-                
-                /* One Dark Pro 主题配色 */
-                .result-content {
-                    background: #282c34;
-                    color: #abb2bf;
-                }
-                
-                /* Prism.js One Dark Pro 配色扩展 */
-                .token.comment { color: #5c6370; font-style: italic; }
-                .token.keyword { color: #c678dd; font-weight: bold; }
-                .token.builtin { color: #e5c07b; font-weight: bold; }
-                .token.important { color: #e06c75; font-weight: bold; }
-                .token.number { color: #d19a66; }
-                .token.string { color: #98c379; }
-                .token.variable { color: #61afef; }
-                .token.char { color: #56b6c2; }
-                .token.url { color: #61afef; text-decoration: underline; }
-                .token.punctuation { color: #abb2bf; }
-                
-                /* 日志级别专用配色 */
-                .token.log-level.important { color: #e06c75; } /* ERROR, FATAL */
-                .token.log-level.builtin { color: #e5c07b; }    /* WARN */
-                .token.log-level.keyword { color: #61afef; }    /* INFO */
-                .token.log-level.comment { color: #5c6370; }    /* DEBUG, TRACE */
-                
-                /* HTTP 状态码配色 */
-                .token.http-status.string { color: #98c379; }     /* 2xx 成功 */
-                .token.http-status.builtin { color: #e5c07b; }    /* 4xx 客户端错误 */
-                .token.http-status.important { color: #e06c75; }  /* 5xx 服务器错误 */
-                
-                /* 时间戳配色 */
-                .token.timestamp { color: #d19a66; }
-                
-                /* 搜索高亮样式 */
-                mark.search-highlight {
-                    background-color: #e5c07b;
-                    padding: 1px 3px;
-                    border-radius: 3px;
-                    font-weight: bold;
-                    color: #282c34;
-                    box-shadow: 0 1px 3px rgba(229, 192, 123, 0.3);
-                    border: none;
-                }
-                
-                /* 兼容旧样式 */
-                .log-error { color: #e06c75; font-weight: bold; }
-                .log-warn { color: #e5c07b; font-weight: bold; }
-                .log-info { color: #61afef; font-weight: bold; }
-                .log-debug { color: #5c6370; font-weight: bold; }
-                .log-timestamp { color: #d19a66; }
-                .log-ip { color: #61afef; }
-                .log-status-200 { color: #98c379; font-weight: bold; }
-                .log-status-error { color: #e06c75; font-weight: bold; }
-                
-                /* 主机无结果/占位样式（深色背景融合） */
-                .host-no-results {
-                    flex: 1;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    padding: 36px 16px;
-                    background: transparent;
-                    margin: 0;
-                }
-                .no-results-message {
-                    text-align: center;
-                    font-size: 14px;
-                    color: #ffffffb3;
-                    background: rgba(255,255,255,0.03);
-                    padding: 12px 16px 14px;
-                    border-radius: 4px;
-                    backdrop-filter: blur(2px);
-                }
-                .no-results-message i { opacity: .85; }
-                
-                /* 截断提示样式 */
-                .truncation-notice {
-                    border-top: 1px solid #e4e7ed;
-                    background: #f5f7fa;
-                    padding: 12px 16px;
-                    margin-top: 8px;
-                    border-radius: 0 0 6px 6px;
-                }
-                
-                .truncation-message {
-                    text-align: center;
-                    font-size: 13px;
-                }
-            `;
-            document.head.appendChild(style);
+            // 移除样式注入：样式已移至静态文件 log-results.css
+            // 保留函数以兼容旧版，现为无操作
         },
         
         // 高亮日志内容
@@ -830,31 +504,46 @@ const LogSearchResults = {
                         <div class="host-info">
                             <div class="host-left-info host-tags">
                                 <i class="fas fa-server host-icon" style="color:#409eff;"></i>
-                                <span class="el-tag el-tag--primary el-tag--light el-tag--small" :title="'主机: '+group.host">{{ group.host }}</span>
-                                <span class="el-tag el-tag--info el-tag--light el-tag--small" :title="'匹配条数'">{{ group.results.length }} 条</span>
-                                <span class="el-tag el-tag--warning el-tag--light el-tag--small host-path-tag" v-if="group.hostResult && group.hostResult.search_result && group.hostResult.search_result.file_path"
-                                      :title="group.hostResult.search_result.file_path">
-                                    {{ formatHostPath(group.hostResult.search_result.file_path) }}
-                                </span>
+                                <span class="el-tag el-tag--primary el-tag--light el-tag--small" :title="'主机: '+group.host">[[ group.host ]]</span>
+                                <span class="el-tag el-tag--info el-tag--light el-tag--small" :title="'匹配条数'">[[ group.results.length ]] 条</span>
+                                                                <span class="el-tag el-tag--warning el-tag--light el-tag--small host-path-tag" v-if="group.hostResult && group.hostResult.search_result && group.hostResult.search_result.file_path"
+                                                                            :title="group.hostResult.search_result.file_path">
+                                                                        [[ formatHostPath(group.hostResult.search_result.file_path) ]]
+                                                                </span>
                             </div>
                             <div class="host-actions">
-                                                                <button class="mini-action-btn" @click="openSftp(group.hostResult)" :title="'文件管理 '+group.host" aria-label="文件管理">
+                                                                <button class="action-btn" @click="openSftp(group.hostResult)" :title="'文件管理 '+group.host" aria-label="文件管理">
                                                                     <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
-                                                                        <path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h4.764a2.5 2.5 0 0 1 1.768.732L14.172 6H18.5A2.5 2.5 0 0 1 21 8.5v8A3.5 3.5 0 0 1 17.5 20h-11A3.5 3.5 0 0 1 3 16.5v-10Z" fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/>
+                                                                        <path d="M4 6h4.2c.4 0 .78.16 1.06.44l1.3 1.3c.28.28.66.44 1.06.44H19a1 1 0 0 1 1 1v7.5A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5V6Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>
                                                                     </svg>
                                                                 </button>
-                                                                <button class="mini-action-btn" @click="openTerminal(group.hostResult)" :title="'在线终端 '+group.host" aria-label="在线终端">
+                                                                <button class="action-btn" @click="openTerminal(group.hostResult)" :title="'在线终端 '+group.host" aria-label="在线终端">
                                                                     <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
                                                                         <path d="M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.2" fill="none"/>
                                                                         <path d="m7 9 3.5 3L7 15" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
                                                                         <path d="M11.5 15H17" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
                                                                     </svg>
                                                                 </button>
-                                <button class="fullscreen-btn" :class="{ 'is-active': fullscreenHost === group.host }" @click="toggleFullscreen(group.host)" :title="fullscreenHost === group.host ? '退出全屏 (Esc)' : '放大查看'">
-                                    <span style="font-size:12px; letter-spacing:1px;">{{ fullscreenHost === group.host ? '还原' : '放大' }}</span>
+                                <button class="action-btn" :class="{ 'is-active': fullscreenHost === group.host }" @click="toggleFullscreen(group.host)" :title="fullscreenHost === group.host ? '退出全屏 (Esc)' : '放大查看'" aria-label="放大/还原">
+                                    <svg v-if="fullscreenHost !== group.host" viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+                                        <path d="M4 9V5a1 1 0 0 1 1-1h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M20 15v4a1 1 0 0 1-1 1h-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M15 4h4a1 1 0 0 1 1 1v4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M9 20H5a1 1 0 0 1-1-1v-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                    <svg v-else viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+                                        <path d="M9 9H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M15 15h4a1 1 0 0 1 1 1v3.99a1 1 0 0 1-1.01 1.01H15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M20 9h-4a1 1 0 0 1-1-1V4.99A1 1 0 0 1 15.99 4H20a1 1 0 0 1 1 1v4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M4 15h4a1 1 0 0 1 1 1v4.01A1 1 0 0 1 8.01 21H4a1 1 0 0 1-1-1v-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
                                 </button>
-                                <button class="download-btn" @click="downloadLogFile(group.hostResult)" title="下载日志文件">
-                                    <span>下载日志</span>
+                                <button class="action-btn" @click="downloadLogFile(group.hostResult)" title="下载日志文件" aria-label="下载日志">
+                                    <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                                        <path d="M12 4v11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                                        <path d="m7 10 5 5 5-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                                        <path d="M5 19h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                                    </svg>
                                 </button>
                             </div>
                         </div>
@@ -869,9 +558,9 @@ const LogSearchResults = {
                             <div v-if="group.isTruncated" class="truncation-notice">
                                 <div class="truncation-message">
                                     <i class="fas fa-info-circle" style="color: #409eff; margin-right: 8px;"></i>
-                                    <span style="color: #606266;">结果过多，已显示前 {{ group.results.length }} 条</span>
+                                    <span style="color: #606266;">结果过多，已显示前 [[ group.results.length ]] 条</span>
                                     <div style="margin-top: 4px; color: #909399; font-size: 12px;">
-                                        原始匹配数: {{ group.originalCount }} 条，请使用更具体的关键词缩小搜索范围
+                                        原始匹配数: [[ group.originalCount ]] 条，请使用更具体的关键词缩小搜索范围
                                     </div>
                                 </div>
                             </div>
@@ -890,7 +579,7 @@ const LogSearchResults = {
                                 <i class="fas fa-exclamation-triangle" style="color: #f56c6c; margin-right: 8px;"></i>
                                 <span style="color: #f56c6c;">搜索失败</span>
                                 <div style="margin-top: 4px; color: #f56c6c; font-size: 12px;">
-                                    错误: {{ group.hostResult.error || '连接失败' }}
+                                    错误: [[ group.hostResult.error || '连接失败' ]]
                                 </div>
                             </div>
                             <!-- 搜索成功但无匹配结果的情况 -->
@@ -919,7 +608,7 @@ const LogSearchResults = {
                             </g>
                         </svg>
                     </div>
-                    <div class="el-empty__description">{{ emptyMessage }}</div>
+                    <div class="el-empty__description">[[ emptyMessage ]]</div>
                 </div>
             </div>
             

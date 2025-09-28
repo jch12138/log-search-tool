@@ -8,11 +8,11 @@
   <link rel="stylesheet" href="/static/fonts/source-code-pro.css" />
   <link rel="stylesheet" href="/static/css/xterm.css" />
   <style>
-    html,body { margin:0; padding:0; height:100%; width:100%; background:#0a0e1a; font-family: 'Source Code Pro','Consolas','Monaco','Menlo',monospace; }
-    body { display:flex; }
-    .viewport { flex:1; display:flex; padding:0; margin:0; overflow:hidden; }
-    #panel { flex:1; display:flex; position:relative; }
-    .term { flex:1; width:100%; height:100%; }
+  html,body { margin:0; padding:0; height:100%; width:100%; background:#0a0e1a; font-family: 'Source Code Pro','Consolas','Monaco','Menlo',monospace; }
+  body { display:flex; min-height:100vh; }
+  .viewport { flex:1; display:flex; padding:0; margin:0; overflow:hidden; }
+  #panel { flex:1; display:flex; position:relative; min-height:100%; }
+  .term { flex:1; width:100%; height:100%; display:flex; }
     .placeholder { color:#64748b; margin:auto; font-size:14px; letter-spacing:.5px; text-align:center; line-height:1.6; }
     .xterm .xterm-viewport::-webkit-scrollbar { width:8px; height:8px; }
     .xterm .xterm-viewport::-webkit-scrollbar-thumb { background:rgba(255,255,255,.15); border-radius:8px; }
@@ -22,7 +22,7 @@
 <body>
   <div class="viewport">
     <div id="panel">
-      <div class="placeholder" id="placeholder">等待连接<br/>请通过 URL 指定 ?log_name=xxx&ssh_index=N 或 single 模式</div>
+      <div class="placeholder" id="placeholder">连接中，请稍候...</div>
     </div>
   </div>
 
@@ -77,13 +77,17 @@
         panel.innerHTML='';
         panel.appendChild(el);
         term.open(el);
-        setTimeout(()=>{ try{ fitAddon.fit(); }catch(e){} }, 50);
+  const scheduleFit = ()=>{ try{ fitAddon.fit(); sendResize(d.terminal_id, term); }catch(e){} };
+  const stabilize = (left=3)=>{ if(left<=0) return; scheduleFit(); setTimeout(()=>stabilize(left-1), left===3?120:left===2?300:600); };        
+  setTimeout(scheduleFit, 50);
         if(d.initial_prompt){ term.write(d.initial_prompt.replace(/\n/g,'\r\n')); }
         term.onData(data => { if(state.socket){ state.socket.emit('input', { terminal_id: d.terminal_id, data }); }});
         if(state.socket){ state.socket.emit('join', { terminal_id: d.terminal_id }); }
         state.sessions[d.terminal_id] = { term, fitAddon };
         state.current = d.terminal_id;
-        window.addEventListener('resize', ()=>{ if(fitAddon) { try{ fitAddon.fit(); }catch(e){} } });
+  window.addEventListener('resize', ()=>{ scheduleFit(); });
+  stabilize();
+  observeResize(el, d.terminal_id, term, fitAddon);
       } catch(e){ showError('连接失败: '+e.message); }
     }
 
@@ -112,13 +116,17 @@
         panel.innerHTML='';
         panel.appendChild(el);
         term.open(el);
-        setTimeout(()=>{ try{ fitAddon.fit(); }catch(e){} }, 50);
+  const scheduleFit = ()=>{ try{ fitAddon.fit(); sendResize(d.terminal_id, term); }catch(e){} };
+  const stabilize = (left=3)=>{ if(left<=0) return; scheduleFit(); setTimeout(()=>stabilize(left-1), left===3?120:left===2?300:600); };
+  setTimeout(scheduleFit, 50);
         if(d.initial_prompt){ term.write(d.initial_prompt.replace(/\n/g,'\r\n')); }
         term.onData(data => { if(state.socket){ state.socket.emit('input', { terminal_id: d.terminal_id, data }); }});
         if(state.socket){ state.socket.emit('join', { terminal_id: d.terminal_id }); }
         state.sessions[d.terminal_id] = { term, fitAddon };
         state.current = d.terminal_id;
-        window.addEventListener('resize', ()=>{ if(fitAddon){ try{ fitAddon.fit(); }catch(e){} } });
+  window.addEventListener('resize', ()=>{ scheduleFit(); });
+  stabilize();
+  observeResize(el, d.terminal_id, term, fitAddon);
       } catch(e) { showError('连接失败: '+e.message); }
     }
 
@@ -127,6 +135,20 @@
       state.socket.on('output', msg => {
         const { terminal_id, data } = msg || {}; if(!terminal_id) return; const s = state.sessions[terminal_id]; if(!s) return; if(data){ s.term.write(String(data).replace(/\n/g,'\r\n')); }
       });
+      // helper resize observer
+      window.observeResize = function(el, tid, term, fitAddon){
+        if(!window.ResizeObserver) return;
+        const ro = new ResizeObserver(()=>{ try{ fitAddon.fit(); sendResize(tid, term, fitAddon); }catch(e){} });
+        ro.observe(el);
+      };
+      window.sendResize = function(tid, term){
+        if(!tid) return;
+        try {
+          const cols = term.cols;
+          const rows = term.rows;
+          fetch(`${API}/terminals/${tid}/size`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ cols, rows }) });
+        } catch(e){}
+      };
       const params = new URLSearchParams(window.location.search);
       const logName = params.get('log_name');
       const sshIndex = params.get('ssh_index');

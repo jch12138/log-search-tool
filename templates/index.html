@@ -12,81 +12,9 @@
     <link rel="stylesheet" href="/static/css/element-plus.css" />
     <!-- Prism.js CSS主题 -->
     <link rel="stylesheet" href="/static/css/prism-okaidia.min.css" />
-    <!-- 自定义CSS -->
+    <!-- Consolidated page CSS (replaces main/groups/search/results/compact/index/log-results/utilities) -->
     <link rel="stylesheet" href="/static/fonts/microsoft-yahei.css" />
-    <link rel="stylesheet" href="/static/css/main.css" />
-    <link rel="stylesheet" href="/static/css/groups.css" />
-    <link rel="stylesheet" href="/static/css/search.css" />
-    <link rel="stylesheet" href="/static/css/results.css" />
-    <!-- 紧凑样式覆盖，缩小整体字号与间距约10% -->
-    <link rel="stylesheet" href="/static/css/compact.css" />
-    <style>
-        /* 文件过滤器展开/折叠过渡动画 */
-        .file-filter-enter-from,
-        .file-filter-leave-to {
-            max-height: 0;
-            opacity: 0;
-            transform: translateY(-4px);
-        }
-        .file-filter-enter-to,
-        .file-filter-leave-from {
-            max-height: 800px; /* 允许足够高度 */
-            opacity: 1;
-            transform: translateY(0);
-        }
-        .file-filter-enter-active,
-        .file-filter-leave-active {
-            overflow: hidden;
-            transition: max-height .28s ease, opacity .25s ease, transform .28s ease;
-        }
-
-        /* 日志结果标签栏：整体白底圆角容器 + 单个标签白色/选中浅蓝 */
-        .log-tabs-bar {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px 10px;
-            padding: 16px 16px 16px 16px; /* 与 search-section 统一的内边距风格 */
-            background: #fff;
-            border-radius: 8px; /* 统一圆角 */
-            /* box-shadow: 0 2px 12px rgba(0,0,0,0.1); 同 search-section */
-            margin: 0 0 0 0;
-        }
-        .log-tab-item {
-            user-select: none;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            max-width: 240px;
-            padding: 8px 18px;
-            font-size: 14px;
-            line-height: 1.25;
-            border-radius: 8px;
-            background: #fff;
-            color: var(--el-text-color-regular);
-            cursor: pointer;
-            position: relative;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.08), inset 0 0 0 1px var(--el-border-color-extra-light);
-            transition: background .15s ease, color .15s ease, box-shadow .18s ease, transform .16s ease;
-        }
-    .log-tab-item:hover { background: #f5f7fa; }
-        .log-tab-item.active {
-            background: #ecf5ff; /* 浅蓝，与整体风格协调 */
-            color: var(--el-color-primary);
-            font-weight: 600;
-            box-shadow: 0 1px 4px rgba(64,158,255,0.25), inset 0 0 0 1px var(--el-color-primary-light-5);
-        }
-    .log-tab-item .tab-title { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:center; }
-    .log-tab-item .close { font-size:14px; line-height:1; color:var(--el-text-color-placeholder); padding:2px; border-radius:3px; transition:background .15s ease, color .15s ease; opacity:1; }
-    .log-tab-item:hover .close { opacity:1; }
-    .log-tab-item .close:hover { color:var(--el-color-danger); background:var(--el-fill-color); }
-    .log-tab-item .tab-badge { font-size:10px; line-height:16px; min-width:20px; padding:0 6px; border-radius:10px; background:#eef2f6; color:var(--el-text-color-secondary); text-align:center; font-weight:500; }
-    .log-tab-item.active .tab-badge { background:#d3e9ff; color:var(--el-color-primary); }
-    .log-tab-item .tab-badge.spinning { animation:tabPulse 1s linear infinite; }
-    @keyframes tabPulse { 0% {opacity:.35;} 50% {opacity:1;} 100% {opacity:.35;} }
-    .results-section { margin-top:0; }
-    /* .right-panel { background:var(--el-bg-color); } */
-    .search-section { border-bottom:1px solid var(--el-border-color-light); }
-    </style>
+    <link rel="stylesheet" href="/static/css/index.css" />
     
     <!-- 本地JavaScript库 -->
     <script src="/static/js/vendor/vue.global.js"></script>
@@ -105,16 +33,18 @@
 
 </head>
 
-<body>
-    <script>window.APP_PAGE="{{ page|default('') }}";</script>
-    <div id="app">
-        <div class="app-container">
+<body data-app-page="{{ page|default('') }}">
+    <div id="app" class="app-root">
 
 
             <!-- 主内容区域 -->
             <div class="main-content">
                 <!-- 左侧日志列表 -->
-                <div class="left-panel">
+                <aside class="left-panel" :class="{ 'collapsed': sidebarCollapsed }" aria-label="日志配置列表">
+                    <!-- 折叠状态下的指示图标（仅装饰，悬停自动展开） -->
+                    <div v-if="sidebarCollapsed" class="sidebar-toggle" title="悬停展开">
+                        🔍
+                    </div>
                     <div class="panel-header">
                         <h3>🔍 日志聚合搜索</h3>
                     </div>
@@ -126,62 +56,37 @@
                         <!-- 分组显示 -->
                         <div v-for="group in groupedLogs" :key="group.name" class="log-group">
                             <!-- 分组标题 -->
-                            <div class="group-header" @click="toggleGroup(group.name)">
+                            <button type="button" class="group-header" @click="toggleGroup(group.name)" :aria-expanded="!group.isCollapsed" :aria-controls="'group-content-' + group.name">
                                 <span class="group-name">[[ group.name ]]</span>
                                 <span class="group-count">([[ group.logs.length ]])</span>
-                                <span class="toggle-icon" :class="{ collapsed: group.isCollapsed }">▼</span>
-                            </div>
+                                <span class="toggle-icon" :class="{ collapsed: group.isCollapsed }" aria-hidden="true">▼</span>
+                            </button>
                             
                             <!-- 分组内的日志列表 -->
-                            <div v-show="!group.isCollapsed" class="group-content">
-                                <div v-for="log in group.logs" :key="log.name" class="log-item"
-                                    :class="{ active: selectedLog?.name === log.name }" @click="selectLog(log)">
+                            <div v-show="!group.isCollapsed" class="group-content" :id="'group-content-' + group.name">
+                                <button type="button" v-for="log in group.logs" :key="log.name" class="log-item"
+                                    :class="{ active: selectedLog?.name === log.name }" @click="selectLog(log)"
+                                    :aria-pressed="selectedLog?.name === log.name ? 'true' : 'false'">
                                     <h4>[[ log.name ]]</h4>
                                     <p>[[ log.description || '暂无描述' ]]</p>
-                                </div>
+                                </button>
                             </div>
                         </div>
                     </div>
                     
-                    <!-- 更多功能按钮 -->
-                    <!-- 临时隐藏更多工具入口: 用户请求 "暂时隐藏更多工具入口" -->
-                    <div class="more-actions" style="display:none;" aria-hidden="true">
-                        <button class="more-button" @click="toggleMoreMenu" :class="{ active: showMoreMenu }">
-                            <span class="more-icon">⚙️</span>
-                            <span class="more-text">更多功能</span>
-                            <span class="arrow-icon" :class="{ rotated: showMoreMenu }">▼</span>
-                        </button>
-                        
-                        <!-- 更多功能菜单 -->
-                        <div v-show="showMoreMenu" class="more-menu">
-                            <!-- 日志配置页面已隐藏 - 不开放给用户手动配置
-                            <div class="menu-item" @click="navigateToPage('config')">
-                                <span class="menu-icon">⚙️</span>
-                                <span class="menu-text">日志配置</span>
-                            </div>
-                            -->
-                            <div class="menu-item" @click="navigateToPage('sftp')">
-                                <span class="menu-icon">📁</span>
-                                <span class="menu-text">文件管理</span>
-                            </div>
-                            <div class="menu-item" @click="navigateToPage('terminals')">
-                                <span class="menu-icon">💻</span>
-                                <span class="menu-text">在线终端</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+   
+                </aside>
 
                 <!-- 右侧搜索和结果区域 -->
-                <div class="right-panel">
+                <main class="right-panel" aria-label="搜索与结果">
                     <!-- 搜索区域 -->
                     <div class="search-section">
 
 
                         <el-form :model="searchForm" class="search-form" :disabled="!selectedLog" @submit.prevent="executeSearch">
                             <!-- 主搜索框容器 -->
-                            <div style="display: flex; gap: 8px; align-items: center;">
-                                <div class="search-input-container" :class="{ focused: searchInputFocused }" style="flex: 1;">
+                            <div class="flex items-center gap-8">
+                                <div class="search-input-container flex items-center gap-8 flex-1" :class="{ focused: searchInputFocused }">
                                     <input type="text" v-model="searchForm.keyword" placeholder="输入搜索关键词，留空则显示最新日志"
                                         class="search-input" @focus="searchInputFocused = true"
                                         @blur="searchInputFocused = false" @keyup.enter="executeSearch"
@@ -223,7 +128,7 @@
 
                                         <!-- 上下文行数 - 只在上下文模式时显示 -->
                                         <template v-if="searchForm.search_mode === 'context'">
-                                            <span style="font-size: 12px; color: #909399; margin-left: 8px;">行数:</span>
+                                            <span class="text-12 text-muted ml-8">行数:</span>
                                             <input type="number" v-model.number="searchForm.context_span"
                                                 class="context-span-input" min="0" max="20" :disabled="!selectedLog"
                                                 title="上下文行数" />
@@ -238,22 +143,22 @@
                             </div>
 
                             <!-- 文件过滤器 (带过渡) -->
-                            <transition name="file-filter" @after-enter="updateResultsHeight" @after-leave="updateResultsHeight">
-                                <div v-if="searchForm.use_file_filter" style="margin-top:12px;">
-                                    <div style="display:flex; gap:16px; flex-wrap:wrap;">
-                                        <div v-for="group in groupedFiles" :key="group.key" style="flex:1; min-width:380px; display:flex; flex-direction:column; gap:6px;">
-                                            <div style="display:flex; align-items:center; gap:10px;">
-                                                <span style="font-size:13px; font-weight:600; color:#409eff; white-space:nowrap;">[[ group.host ]]</span>
-                                                <div class="selected-file-box" :class="{ empty: !searchForm.selected_files[group.key] }" style="position:relative; flex:1; padding:6px 34px 6px 10px; border:1px solid #dcdfe6; border-radius:6px; background:#fff; font-size:12px; min-height:34px; display:flex; align-items:center; line-height:1.4; overflow:hidden;">
+                            <transition name="file-filter">
+                                <div v-if="searchForm.use_file_filter" class="mt-12">
+                                    <div class="flex gap-16 flex-wrap">
+                                        <div v-for="group in groupedFiles" :key="group.key" class="flex-1 min-w-380 flex flex-col gap-6">
+                                            <div class="flex items-center gap-10">
+                                                <span class="text-13 font-semibold text-primary nowrap">[[ group.host ]]</span>
+                                                <div class="selected-file-box" :class="{ empty: !searchForm.selected_files[group.key] }">
                                                     <template v-if="searchForm.selected_files[group.key]">
-                                                        <span style="word-break:break-all;">[[ formatDisplayPath(searchForm.selected_files[group.key]) ]]</span>
-                                                        <span class="clear-icon" @click.stop="clearSelectedFile(group)" style="position:absolute; right:30px; top:50%; transform:translateY(-50%); cursor:pointer; font-size:14px; color:#b1b3b8; line-height:1; padding:2px;" title="清除">×</span>
+                                                        <span class="break-all">[[ formatDisplayPath(searchForm.selected_files[group.key]) ]]</span>
+                                                        <span class="clear-icon" @click.stop="clearSelectedFile(group)" title="清除">×</span>
                                                     </template>
                                                     <template v-else>
-                                                        <span style="color:#909399;">未选择文件</span>
+                                                        <span class="text-muted">未选择文件</span>
                                                     </template>
                                                 </div>
-                                                <el-button size="small" type="primary" plain style="white-space:nowrap; height:34px; padding:0 14px; display:flex; align-items:center; border-radius:6px;" @click="openSftpBrowser(group)" :disabled="!selectedLog || browsing.loading[group.originalHost]">
+                                                <el-button size="small" type="primary" plain class="nowrap h-34 flex items-center px-14 rounded-6" @click="openSftpBrowser(group)" :disabled="!selectedLog || browsing.loading[group.originalHost]">
                                                     浏览
                                                 </el-button>
                                             </div>
@@ -263,14 +168,14 @@
                             </transition>
                             <!-- SFTP 浏览对话框 -->
                             <el-dialog v-model="browsing.visible" title="远程文件浏览" width="720px" :close-on-click-modal="false" @close="closeBrowser">
-                                <div v-if="browsing.currentHost" style="margin-bottom:8px; font-size:13px; color:#606266; display:flex; flex-wrap:wrap; gap:12px; align-items:center;">
+                                <div v-if="browsing.currentHost" class="mb-8 text-13 text-606 flex flex-wrap gap-12 items-center">
                                     <span>主机: <strong>[[ browsing.currentHost ]]</strong></span>
-                                    <span>路径: <code style="font-size:12px; background:#f4f4f5; padding:2px 6px; border-radius:4px;">[[ browsing.currentPath || '/' ]]</code></span>
+                                    <span>路径: <code class="code-like">[[ browsing.currentPath || '/' ]]</code></span>
                                     <el-button size="small" @click="refreshCurrent" :loading="isBrowsingLoading">刷新</el-button>
                                 </div>
                                 <el-skeleton v-if="isBrowsingLoading" :rows="4" animated></el-skeleton>
-                                <div v-else style="max-height:360px; overflow:auto; border:1px solid #ebeef5; border-radius:6px;">
-                                    <el-table :key="browsing.currentPath + '_' + browsing.items.length" :data="browsing.items" size="small" @row-dblclick="handleBrowserDblClick" style="width:100%;" height="300" :row-key="row => row.name + '_' + row.type">
+                                <div v-else class="max-h-360 overflow-auto box-border rounded-6">
+                                    <el-table :key="browsing.currentPath + '_' + browsing.items.length" :data="browsing.items" size="small" @row-dblclick="handleBrowserDblClick" class="w-full" height="300" :row-key="row => row.name + '_' + row.type">
                                         <el-table-column label="名称" prop="name">
                                             <template #default="scope">
                                                 <span v-if="scope.row.is_directory">📁 [[ scope.row.name ]]</span>
@@ -285,11 +190,11 @@
                                             <template #default="scope">[[ formatFileTime(scope.row.modified_time) ]]</template>
                                         </el-table-column>
                                     </el-table>
-                                    <div v-if="!browsing.items.length" style="padding:12px; text-align:center; color:#909399; font-size:13px;">目录为空或无权限</div>
-                                    <div v-else style="padding:4px 8px; font-size:12px; color:#606266;">共 [[ browsing.items.length ]] 项</div>
+                                    <div v-if="!browsing.items.length" class="p-12 text-center text-muted text-13">目录为空或无权限</div>
+                                    <div v-else class="p-4 text-12 text-606">共 [[ browsing.items.length ]] 项</div>
                                 </div>
                                 <template #footer>
-                                    <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                                    <div class="flex justify-between w-full items-center">
                                         <div>
                                             <el-button size="small" @click="goParent" :disabled="!browsing.parentPath">上级目录</el-button>
                                         </div>
@@ -303,18 +208,18 @@
                     </div>
 
                     <!-- 日志结果标签栏 -->
-                    <div class="log-tabs-bar" v-if="tabs.length">
-                    <div v-for="tab in tabs" :key="tab.id" @click="activateTab(tab.id)"
-                        :class="['log-tab-item', { active: tab.id === activeTabId }]">
-                            <span class="tab-title" :title="tab.title">[[ tab.title ]]</span>
-                            <span v-if="tab.searching" class="tab-badge spinning" title="搜索中">··</span>
-                            <span v-else-if="tab.hasSearched && tab.searchResults" class="tab-badge" :title="'匹配: '+(tab.searchResults.total_matches||0)">[[ tab.searchResults.total_matches ]]</span>
-                            <span class="close" @click.stop="closeTab(tab.id)" title="关闭">×</span>
-                        </div>
-                    </div>
+                    <nav class="log-tabs-bar" v-if="tabs.length" aria-label="搜索结果标签" role="tablist">
+                        <div v-for="tab in tabs" :key="tab.id" @click="activateTab(tab.id)"
+                            :class="['log-tab-item', { active: tab.id === activeTabId }]" role="tab" :aria-selected="tab.id === activeTabId ? 'true' : 'false'" tabindex="0">
+                                <span class="tab-title" :title="tab.title">[[ tab.title ]]</span>
+                                <span v-if="tab.searching" class="tab-badge spinning" title="搜索中">··</span>
+                                <span v-else-if="tab.hasSearched && tab.searchResults" class="tab-badge" :title="'匹配: '+(tab.searchResults.total_matches||0)">[[ tab.searchResults.total_matches ]]</span>
+                                <button type="button" class="close" @click.stop="closeTab(tab.id)" title="关闭" aria-label="关闭标签">×</button>
+                            </div>
+                    </nav>
 
                     <!-- 搜索结果区域 -->
-                    <div class="results-section" ref="resultsWrapper">
+                    <section class="results-section" ref="resultsWrapper" aria-label="搜索结果">
 
                         <!-- 使用日志搜索结果组件（仅在搜索完成后进行高亮） -->
                         <log-search-results
@@ -322,25 +227,22 @@
                             :search-results="activeTab ? activeTab.searchResults : searchResults"
                             :search-keyword="activeTab ? activeTab.highlightKeyword : highlightKeyword"
                             :use-regex="searchForm.use_regex"
-                            :height="searchResultsHeight"
                             :max-results="5000"
                             :show-search-stats="false"
                             :show-host-grouping="true"
                             :enabled-highlighters="effectiveHighlighters"
                             empty-message="未找到匹配的日志记录"
                         />
-                    </div>
-                </div>
+                    </section>
+                </main>
             </div>
-        </div>
     </div>
 
     <script>
         const { createApp } = Vue;
         const { ElMessage, ElMessageBox, ElLoading } = ElementPlus;
 
-        const app = createApp({
-            delimiters: ['[[', ']]'],
+    const app = createApp({
             components: {
                 LogSearchResults
             },
@@ -348,6 +250,7 @@
                 return {
                     logs: [],
                     selectedLog: null,
+                    sidebarCollapsed: true,
                     logsLoading: false,
                     searching: false,
                     hasSearched: false,
@@ -368,7 +271,7 @@
                     filesLoading: false, // 文件列表加载状态
                     collapsedGroups: new Set(), // 折叠的分组
                     showMoreMenu: false, // 更多菜单显示状态
-                    dynamicResultsHeight: '400px', // 动态结果高度
+                    // 已废弃：使用纯 CSS flex 自适应高度
                     searchForm: {
                         keyword: '',
                         search_mode: 'context', // keyword 或 context
@@ -480,16 +383,13 @@
                     };
                 },
 
-                // 结果高度由测量驱动
-                searchResultsHeight() { return this.dynamicResultsHeight; },
-
                 // 检查是否所有必需的文件都已选择
                 isFileFilterValid() {
                     // 不再自动加载文件列表，改为纯 SFTP 浏览选择
 
                     // 检查每个主机是否都选择了文件
                     return this.groupedFiles.every(group =>
-                        this.searchForm.selected_files[group.host]
+                        this.searchForm.selected_files[group.key]
                     );
                 }
             },
@@ -504,13 +404,13 @@
                 document.addEventListener('click', this.handleClickOutside);
 
                 // 初次计算高度
-                this.$nextTick(() => this.updateResultsHeight());
-                window.addEventListener('resize', this.updateResultsHeight, { passive: true });
+                // 动态高度事件已移除（由 flex 布局替代）
 
                 // 如果通过独立页面进入 (sftp / terminals / config)
-                if (window.APP_PAGE && ['sftp','terminals','config'].includes(window.APP_PAGE)) {
+                const appPage = document.body.getAttribute('data-app-page');
+                if (appPage && ['sftp','terminals','config'].includes(appPage)) {
                     // 延迟让组件初始化完成
-                    setTimeout(()=>{ this.navigateToPage(window.APP_PAGE); }, 300);
+                    setTimeout(()=>{ this.navigateToPage(appPage); }, 300);
                 }
             },
 
@@ -518,7 +418,7 @@
                 // 清理事件监听器
                 document.removeEventListener('keydown', this.handleGlobalKeydown);
                 document.removeEventListener('click', this.handleClickOutside);
-                window.removeEventListener('resize', this.updateResultsHeight);
+                // 已无窗口 resize 监听需要清理
             },
 
             methods: {
@@ -577,6 +477,92 @@
                     // 如果是调试模式，打印详细错误信息
                     if (errorInfo.details) {
                         console.error('详细错误信息:', errorInfo.details);
+                    }
+                },
+                // 执行搜索
+                async executeSearch() {
+                    const tab = this.activeTab;
+                    if (!tab || !this.selectedLog) {
+                        ElMessage.warning('请先选择一个日志配置');
+                        return;
+                    }
+                    if (this.searchForm.use_file_filter) {
+                        const totalHosts = this.groupedFiles.length;
+                        const chosen = Object.keys(this.searchForm.selected_files || {}).length;
+                        if (chosen === 0) {
+                            ElMessage.info('未选择任何文件，将使用配置默认路径');
+                        } else if (chosen < totalHosts) {
+                            ElMessage.info(`部分主机未选文件（${chosen}/${totalHosts}），未选的将用默认路径`);
+                        }
+                    }
+                    this.buildPlaceholderResults(tab);
+                    tab.highlightKeyword='';
+                    await this.$nextTick();
+                    tab.searching = true;
+                    tab.hasSearched = true;
+                    try {
+                        const response = await axios.post(`/api/v1/logs/${this.selectedLog.name}/search`, this.searchForm);
+                        if (response.data.success) {
+                            tab.searchResults = response.data.data;
+                            if (tab.searchResults) tab.searchResults.pre_search = false;
+                            tab.highlightKeyword = this.searchForm.keyword || '';
+                            tab.resultsVersion += 1;
+                            if (tab.searchResults.total_matches === 0) {
+                                ElMessage.info('未找到匹配的日志记录');
+                            } else {
+                                ElMessage.success(`找到 ${tab.searchResults.total_matches} 个匹配项`);
+                            }
+                        } else {
+                            this.handleApiError({ response: { data: response.data } }, '搜索失败');
+                            tab.searchResults = null;
+                            tab.highlightKeyword='';
+                        }
+                    } catch (e) {
+                        this.handleApiError(e, '搜索请求失败');
+                        console.error('搜索失败:', e);
+                        tab.searchResults=null;
+                        tab.highlightKeyword='';
+                    } finally {
+                        tab.searching = false;
+                        // 高度无需重新计算
+                    }
+                },
+                // 构建占位结果
+                buildPlaceholderResults(tab=null) {
+                    tab = tab || this.activeTab;
+                    if (!tab) return;
+                    const logRef = tab.selectedLog || this.selectedLog;
+                    if (!logRef || !logRef.sshs || !logRef.sshs.length) {
+                        tab.searchResults = null;
+                        tab.resultsVersion += 1;
+                        if (tab.id === this.activeTabId) { this.searchResults=null; this.resultsVersion=tab.resultsVersion; }
+                        return;
+                    }
+                    const hosts = logRef.sshs.map((s,idx)=>({
+                        host: s.host || 'unknown',
+                        ssh_index: idx,
+                        results: [],
+                        total_results: 0,
+                        search_time: 0,
+                        search_result:{ content:'', file_path:'', keyword:'', total_lines:0, search_time:0, matches:[] },
+                        success: true
+                    }));
+                    tab.searchResults = {
+                        log_name: logRef.name,
+                        keyword: '',
+                        search_params: {},
+                        total_hosts: hosts.length,
+                        hosts,
+                        total_results: 0,
+                        total_matches: 0,
+                        total_search_time: 0,
+                        parallel_execution: false,
+                        pre_search: true
+                    };
+                    tab.resultsVersion += 1;
+                    if (tab.id === this.activeTabId) {
+                        this.searchResults = tab.searchResults;
+                        this.resultsVersion = tab.resultsVersion;
                     }
                 },
 
@@ -755,7 +741,7 @@
                         this.availableFiles = [];
                         ElMessage.info('已关闭文件过滤');
                     }
-                    this.$nextTick(() => this.updateResultsHeight());
+                    // 高度无需重新计算
                 },
 
                 // 加载可用文件列表
@@ -875,10 +861,22 @@
                             this.listRemotePath(host, raw);
                         }
                     } catch (e) {
-                        console.warn('解析初始目录失败，回退到根目录', e);
-                        this.listRemotePath(host, '.');
+                        console.error('计算初始目录失败', e);
                     }
                 },
+
+                // 刷新当前浏览目录
+                async refreshCurrent() {
+                    if (!this.selectedLog) return;
+                    const { currentHost, currentHostIndex, currentPath } = this.browsing;
+                    if (!currentHost || currentHostIndex == null || currentHostIndex < 0) return;
+                    if (!currentPath) {
+                        this.listRemotePath(currentHost, '/');
+                    } else {
+                        this.listRemotePath(currentHost, currentPath);
+                    }
+                },
+
                 async ensureSftpConnection(host, sshIndex) {
                     if (this.browsing.connectionIds[host]) return;
                     this.browsing.loading[host] = true;
@@ -895,6 +893,7 @@
                         this.browsing.loading[host] = false;
                     }
                 },
+
                 async listRemotePath(host, path) {
                     const cid = this.browsing.connectionIds[host];
                     if (!cid) return;
@@ -915,20 +914,21 @@
                         this.browsing.loading[host] = false;
                     }
                 },
-        handleBrowserDblClick(row) {
+
+                handleBrowserDblClick(row) {
                     if (!row) return;
                     if (row.is_directory) {
                         const p = (this.browsing.currentPath === '/' ? '' : this.browsing.currentPath) + '/' + row.name;
                         this.listRemotePath(this.browsing.currentHost, p);
                     } else {
-                        // 选中文件并关闭
                         const full = (this.browsing.currentPath === '/' ? '/' : this.browsing.currentPath + '/') + row.name;
-            const key = `${this.browsing.currentHost}|${this.browsing.currentHostIndex}`;
-            this.searchForm.selected_files[key] = full;
+                        const key = `${this.browsing.currentHost}|${this.browsing.currentHostIndex}`;
+                        this.searchForm.selected_files[key] = full;
                         ElMessage.success('已选择文件: ' + row.name);
                         this.closeBrowser();
                     }
                 },
+
                 goParent() {
                     if (!this.browsing.parentPath) return;
                     this.listRemotePath(this.browsing.currentHost, this.browsing.parentPath);
@@ -936,159 +936,28 @@
                 closeBrowser() {
                     this.browsing.visible = false;
                 },
-                refreshCurrent() {
-                    if (!this.browsing.currentHost) return;
-                    this.listRemotePath(this.browsing.currentHost, this.browsing.currentPath || '.');
+                refreshCurrentLegacy() {
+                    // legacy name kept if referenced somewhere else
+                    this.refreshCurrent();
                 },
 
-                // 格式化文件大小显示
-                formatFileSize(bytes) {
-                    if (!bytes || bytes === 0) return '0 B';
-                    const k = 1024;
-                    const sizes = ['B', 'KB', 'MB', 'GB'];
-                    const i = Math.floor(Math.log(bytes) / Math.log(k));
-                    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-                },
-
-                // 格式化文件时间显示
                 formatFileTime(timeStr) {
                     if (!timeStr) return '未知';
                     try {
                         const date = new Date(timeStr);
-                        // 返回标准格式：YYYY-MM-DD HH:mm:ss
                         return date.toLocaleString('zh-CN', {
-                            year: 'numeric',
-                            month: '2-digit',
-                            day: '2-digit',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            second: '2-digit',
-                            hour12: false
+                            year: 'numeric', month: '2-digit', day: '2-digit',
+                            hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
                         });
-                    } catch (e) {
-                        return timeStr;
-                    }
+                    } catch (e) { return timeStr; }
                 },
                 formatDisplayPath(p) {
                     if (!p) return '';
-                    // 简单截断过长路径中间部分
-                    if (p.length > 80) {
-                        return p.slice(0, 35) + ' ... ' + p.slice(-35);
-                    }
-                    return p;
+                    return p.length > 80 ? p.slice(0,35)+' ... '+p.slice(-35) : p;
                 },
                 clearSelectedFile(group) {
                     if (!group) return;
-                    this.$delete ? this.$delete(this.searchForm.selected_files, group.key) : (delete this.searchForm.selected_files[group.key]);
-                },
-
-                async executeSearch() {
-                    const tab = this.activeTab;
-                    if (!tab || !this.selectedLog) {
-                        ElMessage.warning('请先选择一个日志配置');
-                        return;
-                    }
-
-                    // 验证文件过滤设置
-                    // 若开启文件过滤但未为所有主机选文件，允许继续：未选择的主机 fallback 到默认配置路径
-                    if (this.searchForm.use_file_filter) {
-                        const totalHosts = this.groupedFiles.length;
-                        const chosen = Object.keys(this.searchForm.selected_files || {}).length;
-                        if (chosen === 0) {
-                            ElMessage.info('未选择任何文件，将使用配置默认路径');
-                        } else if (chosen < totalHosts) {
-                            ElMessage.info(`部分主机未选文件（${chosen}/${totalHosts}），未选的将用默认路径`);
-                        }
-                    }
-
-                    // 进入搜索：先展示占位框避免闪烁
-                    this.buildPlaceholderResults(tab);
-                    tab.highlightKeyword = '';
-                    await this.$nextTick();
-
-                    tab.searching = true;
-                    tab.hasSearched = true;
-
-                    try {
-                        const response = await axios.post(`/api/v1/logs/${this.selectedLog.name}/search`, this.searchForm);
-
-                        if (response.data.success) {
-                            tab.searchResults = response.data.data;
-                            if (tab.searchResults) tab.searchResults.pre_search = false;
-                            tab.highlightKeyword = this.searchForm.keyword || '';
-                            tab.resultsVersion += 1;
-                            if (tab.searchResults.total_matches === 0) {
-                                ElMessage.info('未找到匹配的日志记录');
-                            } else {
-                                ElMessage.success(`找到 ${tab.searchResults.total_matches} 个匹配项`);
-                            }
-                        } else {
-                            this.handleApiError({ response: { data: response.data } }, '搜索失败');
-                            tab.searchResults = null;
-                            tab.highlightKeyword = '';
-                        }
-                    } catch (error) {
-                        this.handleApiError(error, '搜索请求失败');
-                        console.error('搜索失败:', error);
-                        tab.searchResults = null;
-                        tab.highlightKeyword = '';
-                    } finally {
-                        tab.searching = false;
-                        this.$nextTick(() => this.updateResultsHeight());
-                    }
-                },
-                // 构建占位结果框（显示每个主机空容器）
-                buildPlaceholderResults(tab = null) {
-                    tab = tab || this.activeTab;
-                    if (!tab) return;
-                    const logRef = tab.selectedLog || this.selectedLog;
-                    if (!logRef || !logRef.sshs || !logRef.sshs.length) {
-                        tab.searchResults = null;
-                        tab.resultsVersion += 1;
-                        if (tab.id === this.activeTabId) { this.searchResults = null; this.resultsVersion = tab.resultsVersion; }
-                        return;
-                    }
-                    const hosts = logRef.sshs.map((s, idx) => ({
-                        host: s.host || 'unknown',
-                        ssh_index: idx,
-                        results: [],
-                        total_results: 0,
-                        search_time: 0,
-                        search_result: { content: '', file_path: '', keyword: '', total_lines: 0, search_time: 0, matches: [] },
-                        success: true
-                    }));
-                    tab.searchResults = {
-                        log_name: logRef.name,
-                        keyword: '',
-                        search_params: {},
-                        total_hosts: hosts.length,
-                        hosts,
-                        total_results: 0,
-            total_matches: 0,
-                        total_search_time: 0,
-            parallel_execution: false,
-            pre_search: true
-                    };
-                    tab.resultsVersion += 1;
-                    if (tab.id === this.activeTabId) {
-                        this.searchResults = tab.searchResults;
-                        this.resultsVersion = tab.resultsVersion;
-                    }
-                },
-                // 创建标签对象
-                _createTabForLog(log) {
-                    return {
-                        id: 'tab_' + (this.nextTabSeq++),
-                        logName: log.name,
-                        title: log.name,
-                        selectedLog: log,
-                        searchForm: JSON.parse(JSON.stringify(this._defaultSearchForm())),
-                        searchResults: null,
-                        highlightKeyword: '',
-                        hasSearched: false,
-                        searching: false,
-                        resultsVersion: 0
-                    };
+                    delete this.searchForm.selected_files[group.key];
                 },
                 _defaultSearchForm() {
                     return {
@@ -1103,13 +972,39 @@
                         max_lines: 2000
                     };
                 },
+                _createTabForLog(log) {
+                    // 使用全局搜索表单，不为每个标签复制独立搜索配置
+                    return {
+                        id: 'tab_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
+                        logName: log.name,
+                        title: log.name,
+                        selectedLog: log,
+                        searchForm: null,
+                        searchResults: null,
+                        highlightKeyword: '',
+                        hasSearched: false,
+                        searching: false,
+                        resultsVersion: 0
+                    };
+                },
+                _syncActiveTabToRoot() {
+                    const tab = this.activeTab;
+                    if (!tab) return;
+                    this.selectedLog = tab.selectedLog;
+                    // 不再覆盖全局 searchForm，保持关键词与设置在所有标签一致
+                    this.searchResults = tab.searchResults;
+                    this.highlightKeyword = tab.highlightKeyword;
+                    this.hasSearched = tab.hasSearched;
+                    this.searching = tab.searching;
+                    this.resultsVersion = tab.resultsVersion;
+                },
                 activateTab(id) {
                     if (this.activeTabId === id) return;
                     const tab = this.tabs.find(t => t.id === id);
                     if (!tab) return;
                     this.activeTabId = id;
                     this._syncActiveTabToRoot();
-                    this.$nextTick(() => this.updateResultsHeight());
+                        // 高度无需重新计算
                 },
                 closeTab(id) {
                     const idx = this.tabs.findIndex(t => t.id === id);
@@ -1117,95 +1012,31 @@
                     const closingActive = this.tabs[idx].id === this.activeTabId;
                     this.tabs.splice(idx,1);
                     if (!this.tabs.length) {
-                        // 重置全局
                         this.selectedLog = null;
                         this.activeTabId = null;
                         this.searchForm = this._defaultSearchForm();
                         this.searchResults = null;
                         this.highlightKeyword='';
                         this.hasSearched=false;
+                        this.searching=false;
+                        this.resultsVersion=0;
                     } else if (closingActive) {
                         const newTab = this.tabs[Math.max(0, idx-1)];
                         this.activeTabId = newTab.id;
                         this._syncActiveTabToRoot();
                     }
                 },
-                _syncActiveTabToRoot() {
-                    const tab = this.activeTab;
-                    if (!tab) return;
-                    this.selectedLog = tab.selectedLog;
-                    this.searchForm = tab.searchForm;
-                    this.searchResults = tab.searchResults;
-                    this.highlightKeyword = tab.highlightKeyword;
-                    this.hasSearched = tab.hasSearched;
-                    this.searching = tab.searching;
-                    this.resultsVersion = tab.resultsVersion;
-                },
-                tabStyle() { return {}; }
-                ,
-                updateResultsHeight() {
-                    try {
-                        const wrapper = this.$refs.resultsWrapper;
-                        if (!wrapper) return;
-                        const wrapperRect = wrapper.getBoundingClientRect();
-                        // 以 right-panel 容器底部为界限（避免窗口内其它 padding 影响）
-                        const parentPanel = wrapper.closest('.right-panel');
-                        let availableHeight;
-                        if (parentPanel) {
-                            const panelRect = parentPanel.getBoundingClientRect();
-                            // 留出与底部统一间距
-                            const bottomGap = 16;
-                            // 减去自身 padding-bottom，防止撑出父容器
-                            const wrapperStyles = window.getComputedStyle(wrapper);
-                            const paddingBottom = parseInt(wrapperStyles.paddingBottom) || 0;
-                            availableHeight = panelRect.bottom - wrapperRect.top - bottomGap - paddingBottom;
-                        } else {
-                            const bottomGap = 16;
-                            availableHeight = window.innerHeight - wrapperRect.top - bottomGap;
-                        }
-                        // 减去头部高度（标题与统计标签区域）
-                        const headerEl = wrapper.querySelector('.results-section-header');
-                        let headerH = 0;
-                        if (headerEl) {
-                            const hr = headerEl.getBoundingClientRect();
-                            headerH = hr.height + 4; // 额外留 4px 间距
-                        }
-                        availableHeight -= headerH;
-                        if (availableHeight < 120) availableHeight = 120; // 保底
-                        // 若有文件过滤器处于展开状态，其动画可能尚未结束，稍做补偿再次刷新
-                        const minH = 200;
-                        this.dynamicResultsHeight = Math.max(minH, availableHeight) + 'px';
-                        // 动画过程中再次测量（避免首次高度算大/算小）
-                        requestAnimationFrame(() => {
-                            const w2 = this.$refs.resultsWrapper;
-                            if (!w2) return;
-                            const wr2 = w2.getBoundingClientRect();
-                            const pp2 = w2.closest('.right-panel');
-                            if (pp2) {
-                                const pr2 = pp2.getBoundingClientRect();
-                                const gap = 16;
-                                const w2Styles = window.getComputedStyle(w2);
-                                const padB2 = parseInt(w2Styles.paddingBottom) || 0;
-                                const avail2 = pr2.bottom - wr2.top - gap - padB2;
-                                const header2 = w2.querySelector('.results-section-header');
-                                if (header2) {
-                                    const h2 = header2.getBoundingClientRect().height + 4;
-                                    avail2 -= h2;
-                                }
-                                this.dynamicResultsHeight = Math.max(minH, avail2) + 'px';
-                            }
-                        });
-                    } catch(e) { /* ignore */ }
-                }
+                // (height handled purely by flex layout)
             }
         });
 
-        // 使用 Element Plus 和其指令
-        app.use(ElementPlus);
+        // 设置插值分隔符
+        if (app.config && app.config.compilerOptions) {
+            app.config.compilerOptions.delimiters = ['[[', ']]'];
+        }
 
-        // 挂载应用
+    app.use(ElementPlus);
         app.mount('#app');
     </script>
 </body>
-
 </html>

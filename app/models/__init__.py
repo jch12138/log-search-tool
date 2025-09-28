@@ -97,6 +97,7 @@ class MultiHostSearchResult:
     total_results: int
     total_search_time: float
     parallel_execution: bool
+    aggregated_truncation: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -110,7 +111,8 @@ class MultiHostSearchResult:
             'hosts': [h.to_dict() for h in self.hosts],
             'total_hosts': self.total_hosts,
             'total_results': self.total_results,
-            'total_search_time': self.total_search_time
+            'total_search_time': self.total_search_time,
+            'aggregated_truncation': self.aggregated_truncation,
         }
 
 

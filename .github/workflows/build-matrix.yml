@@ -92,38 +92,7 @@ jobs:
             echo call start_prod.bat >> artifacts/log-search-api-onedir/start.bat
           fi
 
-      - name: Build onefile
-        run: |
-          set -e
-          if [[ "$RUNNER_OS" == "Windows" ]]; then sep=';'; else sep=':'; fi
-          EXTRA=""
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            [[ -f build/start_prod.bat ]] && EXTRA+=" --add-data build/start_prod.bat${sep}build"
-            [[ -f build/start_test.bat ]] && EXTRA+=" --add-data build/start_test.bat${sep}build"
-          else
-            [[ -f build/start_prod.sh ]] && EXTRA+=" --add-data build/start_prod.sh${sep}build"
-            [[ -f build/start_test.sh ]] && EXTRA+=" --add-data build/start_test.sh${sep}build"
-          fi
-          SCRIPTS_ARG=""
-            if [[ -d build/scripts ]]; then
-              SCRIPTS_ARG="--add-data build/scripts${sep}build/scripts"
-            fi
-          pyinstaller \
-            --name log-search-api \
-            --onefile \
-            --noconfirm \
-            --clean \
-            --add-data "templates${sep}templates" \
-            --add-data "static${sep}static" \
-            $SCRIPTS_ARG \
-            $EXTRA \
-            --hidden-import engineio \
-            --hidden-import socketio \
-            --hidden-import engineio.async_drivers.threading \
-            --hidden-import socketio.async_drivers.threading \
-            --collect-all paramiko \
-            run.py
-          mv dist/log-search-api* artifacts/
+  # Removed onefile build step (previously used --onefile). Only onedir build retained.
 
       - name: Package onedir
         run: |
@@ -136,34 +105,15 @@ jobs:
             tar -czf log-search-api-onedir-macos.tar.gz log-search-api-onedir
           fi
 
-      - name: Rename onefile for platform
-        run: |
-          cd artifacts
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            mv log-search-api.exe log-search-api-onefile-windows.exe
-            # 把脚本复制并改名为与 onefile 同目录的启动脚本
-            cp -f ../build/start_prod.bat start_prod.bat 2>/dev/null || true
-            cp -f ../build/start_test.bat start_test.bat 2>/dev/null || true
-            # 生成简化 start.bat 入口
-            if [ -f log-search-api-onefile-windows.exe ]; then
-              echo @echo off > start.bat
-              echo call start_prod.bat >> start.bat
-            fi
-          elif [[ "$RUNNER_OS" == "Linux" ]]; then
-            mv log-search-api log-search-api-onefile-linux
-          else
-            mv log-search-api log-search-api-onefile-macos
-          fi
-
       - name: Upload artifacts (platform-specific)
         uses: actions/upload-artifact@v4
         with:
           name: build-${{ matrix.os }}
           path: |
-            artifacts/log-search-api-onefile-* 
             artifacts/log-search-api-onedir-*.zip
             artifacts/log-search-api-onedir-*.tar.gz
           if-no-files-found: ignore
+          retention-days: 1
 
   release:
     name: publish-release
@@ -192,7 +142,6 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            collected/**/log-search-api-onefile-*
             collected/**/log-search-api-onedir-*.zip
             collected/**/log-search-api-onedir-*.tar.gz
             collected/**/SHA256SUMS.txt

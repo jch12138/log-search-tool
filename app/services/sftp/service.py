@@ -126,7 +126,8 @@ class SFTPService:
 
 	def _list_directory_via_ssh(self, connection_id: str, remote_path: str) -> Dict[str, Any]:  # pragma: no cover
 		ssh = self.connections[connection_id]['ssh']
-		cmd = f"export LANG=zh_CN.UTF-8 LC_ALL=zh_CN.UTF-8; ls -la '{remote_path}'"
+		# 不再强制 export LANG/LC_ALL，避免权限不足；直接 ls，必要时前端/解码逻辑兜底
+		cmd = f"ls -la '{remote_path}'"
 		_, stdout, stderr = None, *ssh.exec_command(cmd)[1:]
 		output = stdout.read()
 		lines = []

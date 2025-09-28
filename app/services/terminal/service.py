@@ -9,7 +9,10 @@ import logging
 from dataclasses import dataclass, asdict
 from typing import Dict, List, Optional, Any
 import paramiko
-from app.services.utils.encoding import decode_bytes
+from app.services.utils.encoding import decode_bytes, smart_decode
+
+def _smart_decode_chunk(data: bytes, last_good: str | None, forced: str | None):
+	return smart_decode(data, last_good=last_good, forced=forced)
 
 
 @dataclass
@@ -25,7 +28,7 @@ class TerminalSession:
 	current_directory: str = "~"
 	current_prompt: str = ""
 	command_count: int = 0
-	session_history: List[Dict[str, Any]] = None
+	session_history: Optional[List[Dict[str, Any]]] = None
 
 	def __post_init__(self):
 		if self.session_history is None:
@@ -44,7 +47,14 @@ class TerminalService:
 		if self._idle_timeout > 0:
 			threading.Thread(target=self._idle_reaper, daemon=True).start()
 
-	def create_terminal(self, host: str, port: int = 22, username: str = "", password: str = "", private_key: str = "", initial_command: str = "") -> TerminalSession:
+	def create_terminal(self, host: str, port: int = 22, username: str = "", password: str = "", private_key: str = "", initial_command: str = "", env_init: bool = True) -> TerminalSession:
+		"""Create an interactive terminal (SSH) session.
+
+		env_init=True combines:
+		  1) Re-exec login shell (-l) to load profile scripts.
+		  2) Conditional UTF-8 locale setup if LANG is empty/C/POSIX.
+		Markers: __AUTO_LOCALE_SET:<loc> or __AUTO_LOCALE_SKIP for diagnostics.
+		"""
 		terminal_id = f"term_{uuid.uuid4().hex[:8]}"
 		session_id = f"session_{uuid.uuid4().hex[:6]}"
 		if not (password or private_key):
@@ -81,7 +91,10 @@ class TerminalService:
 				'channel': channel,
 				'buffer': [],
 				'decoder': codecs.getincrementaldecoder('utf-8')(),
-				'encoding': 'utf-8',
+				'encoding': 'utf-8',          # last successful detected encoding
+				'forced_encoding': None,       # user override via API
+				'env_init': env_init,
+				'last_locale': None,
 				'lock': threading.Lock(),
 				'created_at': datetime.now(),
 			}
@@ -89,14 +102,61 @@ class TerminalService:
 		# 连接日志
 		self._logger.info("[terminal] session created: %s (session=%s) user=%s host=%s port=%s", terminal_id, session_id, username, host, port)
 		threading.Thread(target=self._output_reader, args=(terminal_id,), daemon=True).start()
-		try:
-			channel.send("export LANG=C.UTF-8 LC_ALL=C.UTF-8\n")
-		except Exception:
-			pass
+		# 环境初始化：登录 shell + 条件 locale
+		if env_init:
+			try:
+				# 合并：先条件 locale，输出标记，再 exec 登录 shell；exec 后续命令不会执行，因此 locale 逻辑必须放在 exec 之前
+				_init_cmd = (
+					"# init env: conditional locale + login shell\n"
+					"CUR=$(echo $LANG); "
+					"if [ -z \"$CUR\" ] || [ \"$CUR\" = C ] || [ \"$CUR\" = POSIX ]; then "
+					"LOC=$(locale -a 2>/dev/null | grep -i -E 'UTF-8|utf8' | head -n1); "
+					"if [ -n \"$LOC\" ]; then export LANG=$LOC LC_CTYPE=$LOC LC_ALL=$LOC; echo __AUTO_LOCALE_SET:$LOC; else echo __AUTO_LOCALE_SKIP; fi; "
+					"else echo __AUTO_LOCALE_SKIP; fi; "
+					"if command -v getent >/dev/null 2>&1; then USHELL=$(getent passwd $(whoami) | cut -d: -f7); fi; "
+					"if [ -z \"$USHELL\" ]; then USHELL=\"$SHELL\"; fi; "
+					"if [ -z \"$USHELL\" ]; then if command -v bash >/dev/null 2>&1; then USHELL=bash; elif command -v sh >/dev/null 2>&1; then USHELL=sh; fi; fi; "
+					"if [ -n \"$USHELL\" ]; then exec -a -${USHELL##*/} $USHELL -l; fi\n"
+				)
+				channel.send(_init_cmd.encode('utf-8', errors='ignore'))
+				# 给新登录 shell 少量时间初始化
+				time.sleep(3.0)
+			except Exception:
+				pass
 		if initial_command:
 			time.sleep(1)
 			self.send_command(terminal_id, initial_command)
 		return session
+
+	def set_locale(self, terminal_id: str, locale: str | None = None, auto: bool = False) -> dict:
+		"""Set locale for the remote shell session (best-effort).
+
+		If auto=True, attempt to pick a UTF-8 locale available on the remote host.
+		Stores last attempted locale in session dict for inspection.
+		"""
+		with self._lock:
+			sd = self.sessions.get(terminal_id)
+		if not sd:
+			raise ValueError("终端会话不存在")
+		channel = sd['channel']
+		chosen = locale
+		cmd = None
+		if auto:
+			cmd = (
+				"LOC=$(locale -a 2>/dev/null | grep -i -E 'UTF-8|utf8' | head -n1); "
+				"if [ -n \"$LOC\" ]; then export LANG=$LOC LC_CTYPE=$LOC LC_ALL=$LOC; echo __SET_LOCALE:$LOC; else echo __SET_LOCALE:FAILED; fi\n"
+			)
+		elif locale:
+			cmd = f"export LANG={locale} LC_CTYPE={locale} LC_ALL={locale}; echo __SET_LOCALE:{locale}\n"
+		if cmd:
+			try:
+				channel.send(cmd.encode('utf-8', errors='ignore'))
+				chosen = chosen or 'auto'
+			except Exception as e:  # pragma: no cover
+				chosen = f"failed:{e}"  # record failure
+		with self._lock:
+			sd['last_locale'] = chosen
+		return {'terminal_id': terminal_id, 'locale': chosen}
 
 	def get_terminals(self) -> Dict[str, Any]:
 		with self._lock:
@@ -154,9 +214,12 @@ class TerminalService:
 		if not sd or not si:
 			raise ValueError("终端会话不存在")
 		try:
-			sd['channel'].send(command.encode(sd['encoding']))
+			enc = sd.get('forced_encoding') or sd.get('encoding') or 'utf-8'
+			sd['channel'].send(command.encode(enc, errors='ignore'))
 			si.last_activity = datetime.now().isoformat() + 'Z'
 			si.command_count += 1
+			if si.session_history is None:
+				si.session_history = []
 			si.session_history.append({'timestamp': si.last_activity, 'command': command, 'output': ''})
 		except Exception as e:
 			si.status = 'error'
@@ -172,7 +235,8 @@ class TerminalService:
 		if not sd or not si:
 			raise ValueError("终端会话不存在")
 		try:
-			sd['channel'].send(data.encode(sd['encoding']))
+			enc = sd.get('forced_encoding') or sd.get('encoding') or 'utf-8'
+			sd['channel'].send(data.encode(enc, errors='ignore'))
 			si.last_activity = datetime.now().isoformat() + 'Z'
 		except Exception:
 			si.status = 'error'
@@ -207,6 +271,7 @@ class TerminalService:
 			return
 		channel = sd['channel']
 		decoder = sd['decoder']
+		last_good = sd.get('encoding', 'utf-8')
 		while True:
 			if channel.closed:
 				break
@@ -215,10 +280,25 @@ class TerminalService:
 					data = channel.recv(8192)
 					if not data:
 						break
-					try:
-						text = decoder.decode(data)
-					except Exception:
-						text = decode_bytes(data)
+					# We decode per chunk to adjust encoding dynamically if needed
+					forced = sd.get('forced_encoding')
+					text, detected = _smart_decode_chunk(data, last_good, forced)
+					if not forced and detected and detected != last_good:
+						last_good = detected
+						with self._lock:
+							# persist last successful encoding
+							sd['encoding'] = detected
+					# Locale marker parsing
+					if '__AUTO_LOCALE_SET:' in text or '__SET_LOCALE:' in text:
+						marker = None
+						for line in text.splitlines():
+							if line.startswith('__AUTO_LOCALE_SET:'):
+								marker = line.split(':',1)[1].strip(); break
+							if line.startswith('__SET_LOCALE:'):
+								marker = line.split(':',1)[1].strip(); break
+						if marker:
+							with self._lock:
+								sd['last_locale'] = marker
 					with sd['lock']:
 						sd['buffer'].append(text)
 				else:

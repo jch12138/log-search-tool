@@ -791,25 +791,89 @@
                     this.browsing.currentHostIndex = sshIndex;
                     this.browsing.visible = true;
                     await this.ensureSftpConnection(host, sshIndex);
-                    // 计算初始目录 = ssh 配置中的 path（去掉文件名或占位符部分）
+                    // 更智能的默认路径：
+                    // 1) 若 path 含占位符，先用当前日期替换 {YYYY}/{MM}/{DD}，得到“解析后的完整文件路径”，取其父目录作为首选目录；
+                    //    若该目录下找不到与解析后文件名匹配的文件（或目录不存在），则回退到“占位符之前”的目录。
+                    // 2) 若不含占位符：若是文件路径则取父目录，否则直接用目录。
                     try {
                         const sshCfg = this.selectedLog.sshs[sshIndex] || {};
-                        let rawPath = sshCfg.path || this.selectedLog.path || '/';
-                        if (!rawPath) rawPath = '/';
-                        // 如果包含占位符，截取到占位符前
-                        const phIdx = rawPath.search(/\{[A-Z]+\}/);
-                        if (phIdx !== -1) {
-                            rawPath = rawPath.slice(0, phIdx);
+                        const originalPath = (sshCfg.path || this.selectedLog.path || '/') || '/';
+                        const hasPlaceholder = /\{[^}]+\}/.test(originalPath);
+
+                        const normalizeDir = (p) => {
+                            let s = (p || '/').replace(/\/+/g, '/');
+                            if (s !== '/' && s.endsWith('/')) s = s.replace(/\/+$/,'');
+                            if (!s) s = '/';
+                            return s;
+                        };
+                        const parentDir = (p) => {
+                            if (!p) return '/';
+                            const i = p.lastIndexOf('/');
+                            if (i <= 0) return '/';
+                            return p.slice(0, i) || '/';
+                        };
+                        const pad2 = (n) => (n < 10 ? '0' + n : '' + n);
+                        const replaceDatePlaceholders = (p) => {
+                            const now = new Date();
+                            const YYYY = '' + now.getFullYear();
+                            const MM = pad2(now.getMonth() + 1);
+                            const DD = pad2(now.getDate());
+                            return p
+                                .replace(/\{YYYY\}/g, YYYY)
+                                .replace(/\{MM\}/g, MM)
+                                .replace(/\{DD\}/g, DD);
+                        };
+                        const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        const buildNameMatcher = (basename) => {
+                            if (basename.includes('{N}')) {
+                                const pattern = '^' + escapeRegExp(basename).replace(/\\\{N\\\}/g, '\\d+') + '$';
+                                return new RegExp(pattern);
+                            }
+                            return basename; // exact match string
+                        };
+                        const probePath = async (h, dir) => {
+                            const cid = this.browsing.connectionIds[h];
+                            if (!cid) throw new Error('no connection');
+                            const resp = await axios.post('/api/v1/sftp/list', { connection_id: cid, path: dir });
+                            if (!resp.data.success) throw Object.assign(new Error('list failed'), { response: resp });
+                            return resp.data.data;
+                        };
+
+                        if (hasPlaceholder) {
+                            // 解析日期占位符得到期望文件名
+                            const resolvedPath = replaceDatePlaceholders(originalPath);
+                            const primaryDir = normalizeDir(parentDir(resolvedPath.endsWith('/') ? resolvedPath.slice(0, -1) : resolvedPath));
+                            const baseName = resolvedPath.slice(resolvedPath.lastIndexOf('/') + 1) || '';
+                            const nameMatcher = buildNameMatcher(baseName); // RegExp 或字符串
+                            // 备选：截断到第一个占位符之前，再取父目录
+                            const phIdx = originalPath.search(/\{[^}]+\}/);
+                            let fallbackBase = phIdx >= 0 ? originalPath.slice(0, phIdx) : originalPath;
+                            if (!fallbackBase.endsWith('/')) fallbackBase = parentDir(fallbackBase);
+                            const fallbackDir = normalizeDir(fallbackBase || '/');
+
+                            try {
+                                const data = await probePath(host, primaryDir);
+                                const items = Array.isArray(data.items) ? data.items : [];
+                                const found = items.some(it => !it.is_directory && (
+                                    (nameMatcher instanceof RegExp) ? nameMatcher.test(it.name) : (nameMatcher ? it.name === nameMatcher : false)
+                                ));
+                                if (found) {
+                                    this.listRemotePath(host, primaryDir);
+                                    return;
+                                }
+                                // 找不到匹配文件，退回更上层目录
+                                this.listRemotePath(host, fallbackDir);
+                            } catch (err) {
+                                // 目录不存在或无法访问，直接回退
+                                this.listRemotePath(host, fallbackDir);
+                            }
+                        } else {
+                            // 无占位符：根据是否为文件路径决定目录
+                            let raw = originalPath;
+                            if (!raw.endsWith('/')) raw = parentDir(raw);
+                            raw = normalizeDir(raw);
+                            this.listRemotePath(host, raw);
                         }
-                        // 若不是以 / 结尾，视为文件，取其所在目录
-                        if (!rawPath.endsWith('/')) {
-                            const lastSlash = rawPath.lastIndexOf('/');
-                            rawPath = lastSlash > 0 ? rawPath.slice(0, lastSlash) : '/';
-                        }
-                        // 清理多余斜杠
-                        rawPath = rawPath.replace(/\/+/g, '/').replace(/\/+$/,'');
-                        if (rawPath === '') rawPath = '/';
-                        this.listRemotePath(host, rawPath);
                     } catch (e) {
                         console.warn('解析初始目录失败，回退到根目录', e);
                         this.listRemotePath(host, '.');

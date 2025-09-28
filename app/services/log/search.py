@@ -93,9 +93,10 @@ class LogSearchService:
 					stdout.encode('utf-8')
 				except Exception:
 					stdout = decode_bytes(stdout.encode('latin-1', errors='ignore'))
-			# 解析 grep 输出，移除行号/分隔符，保持与真实日志内容一致
+			# 解析输出：当命令包含 grep -n 时才移除行号/分隔符；否则保留原样（避免时间戳如 10:xx 被误删为 xx）
 			lines = stdout.strip().split('\n') if stdout.strip() else []
-			results, matches = self._parse_grep_output(lines, resolved_file_path)
+			has_line_numbers = ('grep -n' in command)
+			results, matches = self._parse_grep_output(lines, resolved_file_path, has_line_numbers=has_line_numbers)
 			# 后端行数限制（保护前端渲染性能）
 			truncated = False
 			original_total = len(results)
@@ -272,15 +273,18 @@ class LogSearchService:
 				files.append({'filename': filename, 'full_path': os.path.join(log_dir, filename), 'size': size, 'birth_time': modified, 'modified_time': modified, 'host': host})
 		return files
 
-	def _parse_grep_output(self, lines: List[str], file_path: str) -> Tuple[List[str], List[Dict[str, Any]]]:
-		"""Parse grep -n / -nC output removing line numbers & context separators.
+	def _parse_grep_output(self, lines: List[str], file_path: str, has_line_numbers: bool = True) -> Tuple[List[str], List[Dict[str, Any]]]:
+		"""Parse command output into clean lines and match metadata.
 
-		Supports patterns like:
+		If has_line_numbers is True (i.e., grep -n/-nC was used), remove the leading
+		"<lineno><sep>" prefix where <sep> is one of ':', '-', '=' and skip grep's
+		context separator lines "--". Otherwise, keep lines as-is to avoid stripping
+		timestamps like "10:58:05.901" that naturally start with digits and a colon.
+
+		Examples when has_line_numbers=True:
 		  123:actual log line
 		  123-actual log line (before context)
 		  123=actual log line (after context)
-		And ignores lines that are exactly '--' (grep context separator).
-		Returns cleaned lines and match metadata with original line numbers when available.
 		"""
 		clean_results: List[str] = []
 		matches: List[Dict[str, Any]] = []
@@ -288,19 +292,20 @@ class LogSearchService:
 		for raw in lines:
 			if not raw.strip():
 				continue
-			if raw.strip() == '--':  # grep context separator
+			if has_line_numbers and raw.strip() == '--':  # grep context separator
 				continue
 			orig_line_number = None
 			content = raw
-			m = line_num_pattern.match(raw)
-			if m:
-				try:
-					orig_line_number = int(m.group(1))
-					content = m.group(3)
-				except Exception:
-					orig_line_number = None
-			# 再次剥离前导冒号/空白
-			content = content.lstrip(':').lstrip()
+			if has_line_numbers:
+				m = line_num_pattern.match(raw)
+				if m:
+					try:
+						orig_line_number = int(m.group(1))
+						content = m.group(3)
+					except Exception:
+						orig_line_number = None
+				# 再次剥离前导冒号/空白（仅在存在行号时需要）
+				content = content.lstrip(':').lstrip()
 			clean_results.append(content)
 			matches.append({'file_path': file_path, 'line_number': orig_line_number, 'content': content})
 		return clean_results, matches

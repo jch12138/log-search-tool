@@ -6,11 +6,12 @@ from flask import Blueprint, request, send_file
 from app.middleware import api_response
 from app.services import ConfigService, LogSearchService, SSHConnectionManager
 from app.models import SearchParams
-from config import Config
+from app.config.system_settings import Settings
 
 logs_bp = Blueprint('logs', __name__)
 
-config_service = ConfigService(Config.CONFIG_FILE_PATH)
+_settings = Settings()
+config_service = ConfigService(_settings.CONFIG_FILE_PATH)
 search_service = LogSearchService()
 logger = logging.getLogger(__name__)
 

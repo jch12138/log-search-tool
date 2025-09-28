@@ -6,7 +6,7 @@ from flask import Flask, render_template
 from flask_socketio import SocketIO, join_room, leave_room, rooms
 from flask_cors import CORS
 
-from .config.settings import Settings
+from .config.system_settings import Settings
 from .middleware import register_error_handlers, setup_middleware
 from .api.routes import register_routes
 

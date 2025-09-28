@@ -6,7 +6,7 @@ from flask import Blueprint, request, jsonify
 from app.services.terminal import TerminalService  # direct service if needed
 from app.services.terminal.manager import terminal_service  # singleton
 from app.services import ConfigService
-from config import Config
+from app.config.system_settings import Settings
 
 terminals_bp = Blueprint('terminals', __name__)
 
@@ -20,7 +20,7 @@ def _create_from_server_id(server_id: str, data: dict):
 		port = int(port_s)
 	except Exception:
 		return None, (jsonify({'success': False,'error': {'code':'INVALID_REQUEST','message':'无效的服务器ID'}}), 400)
-	cfg = ConfigService(Config.CONFIG_FILE_PATH)
+	cfg = ConfigService(Settings().CONFIG_FILE_PATH)
 	password = None
 	for item in cfg.get_log_summary():  # summary names
 		log_cfg = cfg.get_log_by_name(item['name'])
@@ -43,7 +43,7 @@ def _create_from_server_id(server_id: str, data: dict):
 
 
 def _create_from_log_config(log_name, ssh_index, data):
-	cfg = ConfigService(Config.CONFIG_FILE_PATH)
+	cfg = ConfigService(Settings().CONFIG_FILE_PATH)
 	log_cfg = cfg.get_log_by_name(log_name)
 	if not log_cfg:
 		return None, (jsonify({'success': False,'error': {'code':'NOT_FOUND','message': f'未找到日志配置: {log_name}'}}), 404)

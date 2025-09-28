@@ -8,11 +8,11 @@ from __future__ import annotations
 
 from flask import Blueprint, request
 from app.services import ConfigService
-from config import Config
+from app.config.system_settings import Settings
 from app.middleware import api_response
 
 servers_bp = Blueprint('servers', __name__)
-_config_service = ConfigService(Config.CONFIG_FILE_PATH)
+_config_service = ConfigService(Settings().CONFIG_FILE_PATH)
 
 
 @servers_bp.route('/servers', methods=['GET'])

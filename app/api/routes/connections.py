@@ -58,7 +58,8 @@ def cleanup_connections():
 @connections_bp.route('/connections/settings', methods=['GET'])
 @api_response
 def get_connection_settings():
-	from config import Config  # local import for compatibility
+	from app.config.system_settings import Settings
+	_settings = Settings()
 	return {
 		'ping_timeout': 60,
 		'ping_interval': 25,
@@ -66,7 +67,7 @@ def get_connection_settings():
 		'cleanup_interval': 120,
 		'inactive_timeout': 900,
 		'auto_cleanup_enabled': True,
-		'ssh_timeout': Config.SSH_TIMEOUT,
+		'ssh_timeout': _settings.SSH_TIMEOUT,
 		'max_connections': 20
 	}
 

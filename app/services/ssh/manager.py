@@ -7,6 +7,7 @@ import logging
 from typing import Dict, Any, Optional
 from concurrent.futures import ThreadPoolExecutor, Future
 from app.services.utils.encoding import decode_bytes
+from app.config.system_settings import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,7 @@ class SSHConnection:
 		self.connected = False
 		self.last_used = time.time()
 		self.lock = threading.Lock()
+		self._settings = Settings()
 
 	def connect(self) -> bool:
 		try:
@@ -29,7 +31,7 @@ class SSHConnection:
 				'hostname': self.config['host'],
 				'port': self.config.get('port', 22),
 				'username': self.config['username'],
-				'timeout': 30
+				'timeout': self._settings.SSH_TIMEOUT
 			}
 			if 'password' in self.config:
 				params['password'] = self.config['password']
@@ -46,11 +48,12 @@ class SSHConnection:
 				self.client = None
 			return False
 
-	def execute_command(self, command: str, timeout: int = 30) -> tuple[str, str, int]:
+	def execute_command(self, command: str, timeout: int | None = None) -> tuple[str, str, int]:
 		if not self.connected or not self.client:
 			raise RuntimeError("SSH连接未建立")
 		with self.lock:
-			stdin, stdout, stderr = self.client.exec_command(command, timeout=timeout)
+			_effective_timeout = timeout if timeout is not None else self._settings.SSH_TIMEOUT
+			stdin, stdout, stderr = self.client.exec_command(command, timeout=_effective_timeout)
 			raw_out = stdout.read() or b""
 			raw_err = stderr.read() or b""
 			out = decode_bytes(raw_out)

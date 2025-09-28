@@ -21,7 +21,7 @@ from flask import Blueprint, request, jsonify, send_file
 from werkzeug.utils import secure_filename
 
 from app.services import SFTPService, ConfigService
-from config import Config
+from app.config.system_settings import Settings
 
 sftp_bp = Blueprint('sftp', __name__)
 _sftp_service = SFTPService()
@@ -61,7 +61,7 @@ def connect_sftp_by_config():
 		ssh_index = data.get('ssh_index')
 		if log_name is None or ssh_index is None:
 			return jsonify({'success': False,'error': {'code':'INVALID_REQUEST','message':'缺少必需字段: log_name 或 ssh_index'}}), 400
-		cfg = ConfigService(Config.CONFIG_FILE_PATH)
+		cfg = ConfigService(Settings().CONFIG_FILE_PATH)
 		log_cfg = cfg.get_log_by_name(log_name)
 		if not log_cfg:
 			return jsonify({'success': False,'error': {'code':'NOT_FOUND','message': f'未找到日志配置: {log_name}'}}), 404

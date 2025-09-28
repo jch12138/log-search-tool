@@ -1,5 +1,5 @@
 import app as app_pkg  # type: ignore
-from app.config.settings import Settings  # type: ignore
+from app.config.system_settings import Settings  # type: ignore
 
 settings = Settings()
 app = app_pkg.create_app()

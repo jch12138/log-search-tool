@@ -5,11 +5,11 @@ from __future__ import annotations
 from flask import Blueprint, request
 from app.middleware import api_response
 from app.services import ConfigService
-from config import Config
+from app.config.system_settings import Settings
 from datetime import datetime
 
 config_bp = Blueprint('config', __name__)
-_config_service = ConfigService(Config.CONFIG_FILE_PATH)
+_config_service = ConfigService(Settings().CONFIG_FILE_PATH)
 
 
 @config_bp.route('/config', methods=['GET'])

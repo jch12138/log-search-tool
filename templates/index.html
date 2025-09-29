@@ -42,13 +42,16 @@
             <!-- 主内容区域 -->
             <div class="main-content">
                 <!-- 左侧日志列表 -->
-                <aside class="left-panel" :class="{ 'collapsed': sidebarCollapsed }" aria-label="日志配置列表">
+                <aside class="left-panel" :class="{ 'collapsed': sidebarCollapsed && !sidebarPinned }" aria-label="日志配置列表">
                     <!-- 折叠状态下的指示图标（仅装饰，悬停自动展开） -->
                     <div v-if="sidebarCollapsed" class="sidebar-toggle" title="悬停展开">
                         🔍
                     </div>
                     <div class="panel-header">
                         <h3>🔍 日志聚合搜索</h3>
+                        <button type="button" class="pin-btn" :class="{ active: sidebarPinned }" @click.stop="toggleSidebarPin" :aria-pressed="sidebarPinned ? 'true' : 'false'" :title="sidebarPinned ? '取消固定' : '固定侧边栏'">
+                            <span aria-hidden="true">📌</span>
+                        </button>
                     </div>
                     <div class="log-list" v-loading="logsLoading">
                         <div v-if="logs.length === 0 && !logsLoading" class="empty-state">
@@ -253,6 +256,7 @@
                     logs: [],
                     selectedLog: null,
                     sidebarCollapsed: true,
+                    sidebarPinned: false,
                     logsLoading: false,
                     searching: false,
                     hasSearched: false,
@@ -398,6 +402,13 @@
 
             mounted() {
                 this.loadLogs();
+                // 读取侧边栏固定状态
+                try {
+                    const pin = localStorage.getItem('sidebarPinned');
+                    this.sidebarPinned = pin === '1';
+                    // 如果固定，则展开
+                    if (this.sidebarPinned) this.sidebarCollapsed = false;
+                } catch (e) { /* ignore */ }
 
                 // 添加全局回车键监听
                 document.addEventListener('keydown', this.handleGlobalKeydown);
@@ -424,6 +435,16 @@
             },
 
             methods: {
+                toggleSidebarPin() {
+                    this.sidebarPinned = !this.sidebarPinned;
+                    if (this.sidebarPinned) {
+                        this.sidebarCollapsed = false;
+                    } else {
+                        // 取消固定后，恢复为折叠模式
+                        this.sidebarCollapsed = true;
+                    }
+                    try { localStorage.setItem('sidebarPinned', this.sidebarPinned ? '1' : '0'); } catch(e) { /* ignore */ }
+                },
                 // 通用错误处理方法
                 handleApiError(error, defaultMessage = '操作失败') {
                     const errorInfo = error.response?.data?.error || error.error || {};

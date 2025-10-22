@@ -15,7 +15,7 @@ logs:
 - description: ''
   group: UAT
   name: surge
-  path: /Users/chenway/Library/Logs/Surge/Surge-2025-09-27-172235.log
+  path: /Users/chenway/Library/Logs/Surge/Surge-2025-10-22-194417.log
   sshs:
   - host: 127.0.0.1
     password: jch12138

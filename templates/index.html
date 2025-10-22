@@ -93,9 +93,16 @@
                             <div class="flex items-center gap-8">
                                 <div class="search-input-container flex items-center gap-8 flex-1" :class="{ focused: searchInputFocused }">
                                     <input type="text" v-model="searchForm.keyword" placeholder="输入搜索关键词，留空则显示最新日志"
-                                        class="search-input" @focus="searchInputFocused = true"
+                                        class="search-input" @focus="searchInputFocused = true" @click="searchInputFocused = true"
                                         @blur="searchInputFocused = false" @keyup.enter="executeSearch"
                                         :disabled="!selectedLog" />
+                                    
+                                    <!-- 搜索历史 -->
+                                    <div v-if="searchInputFocused && searchHistory.length > 0" class="search-history" @mousedown.prevent>
+                                        <div v-for="(item, index) in searchHistory" :key="index" class="search-history-item" @click="selectHistory(item)">
+                                            [[ item ]]
+                                        </div>
+                                    </div>
 
                                     <!-- 搜索设置按钮组 -->
                                     <div class="search-buttons">
@@ -290,6 +297,7 @@
                         max_lines: 2000 // 每次搜索的最大行数
                     },
                     searchResults: null,
+                    searchHistory: [],
                     // 多标签管理
                     tabs: [],
                     activeTabId: null,
@@ -402,6 +410,7 @@
 
             mounted() {
                 this.loadLogs();
+                this.loadSearchHistory();
                 // 读取侧边栏固定状态
                 try {
                     const pin = localStorage.getItem('sidebarPinned');
@@ -504,6 +513,10 @@
                 },
                 // 执行搜索
                 async executeSearch() {
+                    if (this.searchForm.keyword) {
+                        this.addSearchHistory(this.searchForm.keyword);
+                    }
+                    this.searchInputFocused = false;
                     const tab = this.activeTab;
                     if (!tab || !this.selectedLog) {
                         ElMessage.warning('请先选择一个日志配置');
@@ -550,6 +563,45 @@
                         // 高度无需重新计算
                     }
                 },
+                // 搜索历史
+                loadSearchHistory() {
+                    try {
+                        const history = localStorage.getItem('searchHistory');
+                        if (history) {
+                            this.searchHistory = JSON.parse(history);
+                        }
+                    } catch (e) {
+                        console.error('Failed to load search history', e);
+                        this.searchHistory = [];
+                    }
+                },
+                saveSearchHistory() {
+                    try {
+                        localStorage.setItem('searchHistory', JSON.stringify(this.searchHistory));
+                    } catch (e) {
+                        console.error('Failed to save search history', e);
+                    }
+                },
+                addSearchHistory(keyword) {
+                    if (!keyword) return;
+                    // 移除已存在的相同记录
+                    const index = this.searchHistory.indexOf(keyword);
+                    if (index > -1) {
+                        this.searchHistory.splice(index, 1);
+                    }
+                    // 添加到最前面
+                    this.searchHistory.unshift(keyword);
+                    // 只保留最近10条
+                    if (this.searchHistory.length > 10) {
+                        this.searchHistory.pop();
+                    }
+                    this.saveSearchHistory();
+                },
+                selectHistory(item) {
+                    this.searchForm.keyword = item;
+                    this.searchInputFocused = false;
+                },
+
                 // 构建占位结果
                 buildPlaceholderResults(tab=null) {
                     tab = tab || this.activeTab;

@@ -104,6 +104,10 @@ html, body { height:100%; font-family:'Microsoft YaHei','微软雅黑','Segoe UI
 :root { --log-bg:#282c34; --log-fg:#abb2bf; --log-accent:#409eff; --log-border:#e4e7ed; --log-radius:12px; --log-radius-sm:6px; }
 .results-hosts-row { display:flex; flex-direction:row; gap:12px; align-items:stretch; flex-wrap:nowrap; width:100%; flex:1; min-height:0; }
 .results-hosts-row>.host-result-box { flex:1; }
+/* 2x2 网格布局（当恰好 4 个分组时启用） */
+.results-hosts-row.grid-2x2 { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); grid-auto-rows:minmax(260px, 1fr); gap:12px; align-items:stretch; }
+.results-hosts-row.grid-2x2 > .host-result-box { min-width:0 !important; height:auto; }
+@media (max-width: 767px){ .results-hosts-row.grid-2x2 { grid-template-columns:1fr; grid-auto-rows:auto; } }
 .host-result-box { flex:1; min-width:0; border:1px solid var(--log-border); border-radius:var(--log-radius-sm); overflow:hidden; background:#fff; display:flex; flex-direction:column; height:100%; min-height:0; }
 .host-result-box.fullscreen-active { position:fixed; inset:12px 14px 14px; z-index:9999; background:#fff; border:1px solid var(--log-border); border-radius:var(--log-radius); box-shadow:0 12px 32px rgba(0,0,0,.45); width:auto!important; height:auto!important; max-width:none; max-height:none; }
 .host-result-box.fullscreen-active .host-results { background:var(--log-bg); }
@@ -111,7 +115,8 @@ body.fullscreen-log-freeze { overflow:hidden; }
 @media (min-width:768px){ .results-hosts-row>.host-result-box { min-width:300px; } }
 @media (max-width:767px){ .results-hosts-row { flex-direction:column!important; gap:10px; } .results-hosts-row>.host-result-box { min-height:200px; max-height:300px; } }
 .host-header { background:linear-gradient(135deg,#f8f9fa 0%,#e9ecef 100%); padding:6px 12px; border-bottom:1px solid var(--log-border); position:sticky; top:0; z-index:10; }
-.host-info { display:flex; align-items:center; gap:8px; justify-content:space-between; }
+.host-info { display:flex; align-items:center; gap:8px; justify-content:space-between; flex-wrap:nowrap; overflow:hidden; }
+.host-left-info { min-width:0; }
 .host-left-info { display:flex; align-items:center; gap:8px; }
 .host-icon { font-size:16px; }
 .host-name { font-weight:600; color:#303133; font-size:14px; }
@@ -128,6 +133,14 @@ body.fullscreen-log-freeze { overflow:hidden; }
 .action-btn.is-active { background:var(--log-accent); color:#fff; border-color:var(--log-accent); box-shadow:0 2px 6px rgba(64,158,255,.35); }
 .action-btn svg { width:14px; height:14px; display:block; fill:currentColor; }
 .action-btn.text-label { padding:6px 12px; }
+/* 折叠“更多”菜单样式 */
+.host-actions .action-menu { position:relative; }
+.host-actions .more-btn { padding:6px 8px; }
+.host-actions .menu-popover { position:absolute; right:0; top:calc(100% + 6px); min-width:140px; background:#fff; border:1px solid var(--log-border); border-radius:8px; box-shadow:0 10px 24px rgba(0,0,0,.12); padding:6px; z-index:50; }
+.host-actions .menu-item { width:100%; display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:6px; background:#fff; color:#606266; border:0; cursor:pointer; text-align:left; font-size:13px; }
+.host-actions .menu-item:hover { background:#f5f7fa; color:#303133; }
+.host-actions .menu-item .mi-icon { width:16px; height:16px; display:inline-flex; align-items:center; justify-content:center; color:#606266; }
+.host-actions .menu-item .mi-icon svg { width:16px; height:16px; }
 .host-results { flex:1; overflow-y:auto; padding:0 0 12px; background:var(--log-bg); min-height:0; }
 .host-results::-webkit-scrollbar { width:8px; }
 .host-results::-webkit-scrollbar-track { background:#f1f1f1; border-radius:4px; }

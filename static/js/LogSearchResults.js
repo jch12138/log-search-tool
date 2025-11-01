@@ -9,9 +9,13 @@ const LogSearchResults = {
     },
     mounted() {
         window.addEventListener('keydown', this.handleKeyDown);
+        window.addEventListener('resize', this.recomputeCompaction);
+        this.$nextTick(()=> this.recomputeCompaction());
     },
     beforeUnmount() {
         window.removeEventListener('keydown', this.handleKeyDown);
+        window.removeEventListener('resize', this.recomputeCompaction);
+        document.removeEventListener('click', this.handleDocumentClick, { capture:true });
         // Ensure body scroll freeze is cleared if component unmounts while fullscreen
         if (this.fullscreenKey) {
             document.body.classList.remove('fullscreen-log-freeze');
@@ -141,15 +145,68 @@ const LogSearchResults = {
         }
     },
     
+    watch: {
+        searchResults: {
+            handler(){
+                this.$nextTick(()=> this.recomputeCompaction());
+            },
+            deep: true
+        },
+        showHostGrouping(){
+            this.$nextTick(()=> this.recomputeCompaction());
+        }
+    },
+    
     data() {
         return {
             // 依赖加载状态
             dependenciesLoaded: false,
-            fullscreenKey: null
+            fullscreenKey: null,
+            // key -> 是否需要折叠（溢出）
+            compactState: {},
+            // 当前打开的更多菜单 key
+            openOverflowFor: null
         };
     },
     
     methods: {
+        // 计算每个 host-header 是否溢出，溢出则折叠工具按钮
+        recomputeCompaction(){
+            this.$nextTick(()=>{
+                // 将作用域限定在当前组件根元素
+                const root = this.$el instanceof HTMLElement ? this.$el : (this.$el && this.$el.$el) || document;
+                const infos = root.querySelectorAll('.host-header .host-info[data-group-key]');
+                const nextState = {};
+                infos.forEach(el => {
+                    const key = el.getAttribute('data-group-key');
+                    if(!key) return;
+                    // 使用 scrollWidth 对比 clientWidth 判断溢出
+                    const isOverflow = el.scrollWidth > el.clientWidth + 1; // +1 容错
+                    nextState[key] = !!isOverflow;
+                });
+                this.compactState = nextState;
+            });
+        },
+        // 切换更多菜单
+        toggleOverflowMenu(key){
+            this.openOverflowFor = (this.openOverflowFor === key) ? null : key;
+            this.$nextTick(()=>{
+                if(this.openOverflowFor){
+                    document.addEventListener('click', this.handleDocumentClick, { capture:true, once:false });
+                } else {
+                    document.removeEventListener('click', this.handleDocumentClick, { capture:true });
+                }
+            });
+        },
+        handleDocumentClick(e){
+            // 点击菜单外关闭
+            const root = this.$el instanceof HTMLElement ? this.$el : (this.$el && this.$el.$el) || document;
+            const menu = root.querySelector('.host-actions .action-menu.open');
+            if(menu && !menu.contains(e.target)){
+                this.openOverflowFor = null;
+                document.removeEventListener('click', this.handleDocumentClick, { capture:true });
+            }
+        },
         toggleFullscreen(key){
             if(this.fullscreenKey === key){
                 this.fullscreenKey = null;
@@ -163,6 +220,7 @@ const LogSearchResults = {
                 const root = this.$el instanceof HTMLElement ? this.$el : (this.$el && this.$el.$el) || document;
                 const el = root.querySelector('.host-result-box.fullscreen-active .host-results');
                 if(el){ el.scrollTop = el.scrollTop; }
+                this.recomputeCompaction();
             });
         },
         handleKeyDown(e){
@@ -193,9 +251,11 @@ const LogSearchResults = {
                 }
                 
                 this.dependenciesLoaded = true;
+                this.$nextTick(()=> this.recomputeCompaction());
             } catch (error) {
                 console.warn('Failed to initialize dependencies:', error);
                 this.dependenciesLoaded = true; // 即使失败也继续工作
+                this.$nextTick(()=> this.recomputeCompaction());
             }
         },
         
@@ -507,11 +567,11 @@ const LogSearchResults = {
         <template v-else>
             <!-- 显示主机结果盒：有匹配结果 或 处于占位预搜索状态 -->
             <template v-if="searchResults && searchResults.hosts && searchResults.hosts.length && (searchResults.total_matches > 0 || searchResults.pre_search)">
-                <div class="results-hosts-row">
+                <div class="results-hosts-row" :class="{ 'grid-2x2': showHostGrouping && groupedResults.length === 4 }">
                 <div class="host-result-box" :class="{ 'fullscreen-active': fullscreenKey === group.key }" v-for="group in groupedResults" :key="group.key">
                     <!-- 主机头部 -->
                     <div class="host-header" v-if="showHostGrouping">
-                        <div class="host-info">
+                        <div class="host-info" :data-group-key="group.key">
                             <div class="host-left-info host-tags">
                                 <span class="host-icon" aria-hidden="true" style="color:#409eff;display:inline-flex;">\
                                     <svg viewBox="0 0 24 24" width="16" height="16" role="img" focusable="false" aria-hidden="true">\
@@ -529,39 +589,95 @@ const LogSearchResults = {
                                                                 </span>
                             </div>
                             <div class="host-actions">
-                                                                <button class="action-btn" @click="openSftp(group.hostResult)" :title="'文件管理 '+group.host" aria-label="文件管理">
-                                                                    <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
-                                                                        <path d="M4 6h4.2c.4 0 .78.16 1.06.44l1.3 1.3c.28.28.66.44 1.06.44H19a1 1 0 0 1 1 1v7.5A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5V6Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>
-                                                                    </svg>
-                                                                </button>
-                                                                <button class="action-btn" @click="openTerminal(group.hostResult)" :title="'在线终端 '+group.host" aria-label="在线终端">
-                                                                    <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
-                                                                        <path d="M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.2" fill="none"/>
-                                                                        <path d="m7 9 3.5 3L7 15" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-                                                                        <path d="M11.5 15H17" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-                                                                    </svg>
-                                                                </button>
-                                <button class="action-btn" :class="{ 'is-active': fullscreenKey === group.key }" @click="toggleFullscreen(group.key)" :title="fullscreenKey === group.key ? '退出全屏 (Esc)' : '放大查看'" aria-label="放大/还原">
-                                    <svg v-if="fullscreenKey !== group.key" viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
-                                        <path d="M4 9V5a1 1 0 0 1 1-1h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                                        <path d="M20 15v4a1 1 0 0 1-1 1h-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                                        <path d="M15 4h4a1 1 0 0 1 1 1v4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                                        <path d="M9 20H5a1 1 0 0 1-1-1v-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                                    </svg>
-                                    <svg v-else viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
-                                        <path d="M9 9H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                                        <path d="M15 15h4a1 1 0 0 1 1 1v3.99a1 1 0 0 1-1.01 1.01H15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                                        <path d="M20 9h-4a1 1 0 0 1-1-1V4.99A1 1 0 0 1 15.99 4H20a1 1 0 0 1 1 1v4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                                        <path d="M4 15h4a1 1 0 0 1 1 1v4.01A1 1 0 0 1 8.01 21H4a1 1 0 0 1-1-1v-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                                    </svg>
-                                </button>
-                                <button class="action-btn" @click="downloadLogFile(group.hostResult)" title="下载日志文件" aria-label="下载日志">
-                                    <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
-                                        <path d="M12 4v11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-                                        <path d="m7 10 5 5 5-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-                                        <path d="M5 19h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-                                    </svg>
-                                </button>
+                                <!-- 折叠模式：显示更多菜单按钮 -->
+                                <template v-if="compactState[group.key]">
+                                    <div class="action-menu" :class="{ open: openOverflowFor===group.key }">
+                                        <button class="action-btn more-btn" @click.stop="toggleOverflowMenu(group.key)" title="更多操作" aria-label="更多">
+                                            <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                                                <circle cx="5" cy="12" r="1.6" fill="currentColor"/>
+                                                <circle cx="12" cy="12" r="1.6" fill="currentColor"/>
+                                                <circle cx="19" cy="12" r="1.6" fill="currentColor"/>
+                                            </svg>
+                                        </button>
+                                        <div class="menu-popover" v-show="openOverflowFor===group.key">
+                                            <button class="menu-item" @click="openOverflowFor=null; openSftp(group.hostResult)">
+                                                <span class="mi-icon">
+                                                    <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                                                        <path d="M4 6h4.2c.4 0 .78.16 1.06.44l1.3 1.3c.28.28.66.44 1.06.44H19a1 1 0 0 1 1 1v7.5A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5V6Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>
+                                                    </svg>
+                                                </span>
+                                                <span>文件管理</span>
+                                            </button>
+                                            <button class="menu-item" @click="openOverflowFor=null; openTerminal(group.hostResult)">
+                                                <span class="mi-icon">
+                                                    <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                                                        <path d="M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.2" fill="none"/>
+                                                        <path d="m7 9 3.5 3L7 15" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                                                        <path d="M11.5 15H17" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                                                    </svg>
+                                                </span>
+                                                <span>在线终端</span>
+                                            </button>
+                                            <button class="menu-item" @click="openOverflowFor=null; toggleFullscreen(group.key)">
+                                                <span class="mi-icon">
+                                                    <svg viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+                                                        <path d="M4 9V5a1 1 0 0 1 1-1h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                        <path d="M20 15v4a1 1 0 0 1-1 1h-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                        <path d="M15 4h4a1 1 0 0 1 1 1v4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                        <path d="M9 20H5a1 1 0 0 1-1-1v-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                    </svg>
+                                                </span>
+                                                <span>放大查看</span>
+                                            </button>
+                                            <button class="menu-item" @click="openOverflowFor=null; downloadLogFile(group.hostResult)">
+                                                <span class="mi-icon">
+                                                    <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                                                        <path d="M12 4v11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                                                        <path d="m7 10 5 5 5-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                                                        <path d="M5 19h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                                                    </svg>
+                                                </span>
+                                                <span>下载日志</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </template>
+                                <!-- 常规模式：逐个按钮展示 -->
+                                <template v-else>
+                                    <button class="action-btn" @click="openSftp(group.hostResult)" :title="'文件管理 '+group.host" aria-label="文件管理">
+                                        <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                                            <path d="M4 6h4.2c.4 0 .78.16 1.06.44l1.3 1.3c.28.28.66.44 1.06.44H19a1 1 0 0 1 1 1v7.5A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5V6Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>
+                                        </svg>
+                                    </button>
+                                    <button class="action-btn" @click="openTerminal(group.hostResult)" :title="'在线终端 '+group.host" aria-label="在线终端">
+                                        <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                                            <path d="M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.2" fill="none"/>
+                                            <path d="m7 9 3.5 3L7 15" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                                            <path d="M11.5 15H17" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                                        </svg>
+                                    </button>
+                                    <button class="action-btn" :class="{ 'is-active': fullscreenKey === group.key }" @click="toggleFullscreen(group.key)" :title="fullscreenKey === group.key ? '退出全屏 (Esc)' : '放大查看'" aria-label="放大/还原">
+                                        <svg v-if="fullscreenKey !== group.key" viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+                                            <path d="M4 9V5a1 1 0 0 1 1-1h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M20 15v4a1 1 0 0 1-1 1h-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M15 4h4a1 1 0 0 1 1 1v4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M9 20H5a1 1 0 0 1-1-1v-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                        <svg v-else viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+                                            <path d="M9 9H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M15 15h4a1 1 0 0 1 1 1v3.99a1 1 0 0 1-1.01 1.01H15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M20 9h-4a1 1 0 0 1-1-1V4.99A1 1 0 0 1 15.99 4H20a1 1 0 0 1 1 1v4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M4 15h4a1 1 0 0 1 1 1v4.01A1 1 0 0 1 8.01 21H4a1 1 0 0 1-1-1v-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                    </button>
+                                    <button class="action-btn" @click="downloadLogFile(group.hostResult)" title="下载日志文件" aria-label="下载日志">
+                                        <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                                            <path d="M12 4v11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                                            <path d="m7 10 5 5 5-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                                            <path d="M5 19h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                                        </svg>
+                                    </button>
+                                </template>
                             </div>
                         </div>
                     </div>

@@ -12,6 +12,10 @@ const LogSearchResults = {
     },
     beforeUnmount() {
         window.removeEventListener('keydown', this.handleKeyDown);
+        // Ensure body scroll freeze is cleared if component unmounts while fullscreen
+        if (this.fullscreenKey) {
+            document.body.classList.remove('fullscreen-log-freeze');
+        }
     },
     
     props: {
@@ -110,7 +114,7 @@ const LogSearchResults = {
                 this.searchResults.hosts.forEach(h => {
                     if (h && h.success && Array.isArray(h.results)) allResults.push(...h.results);
                 });
-                return [{ host: 'all', results: allResults.slice(0, this.maxResults) }];
+                return [{ key: 'all', host: 'all', results: allResults.slice(0, this.maxResults) }];
             }
             const groups = [];
             this.searchResults.hosts.forEach(hostResult => {
@@ -121,7 +125,11 @@ const LogSearchResults = {
                     hostResults = hostResults.slice(0, this.maxResults);
                     isTruncated = true;
                 }
+                const key = (hostResult && (hostResult.ssh_index !== undefined && hostResult.ssh_index !== null))
+                    ? `${hostResult.host}|${hostResult.ssh_index}`
+                    : `${(hostResult && hostResult.host) || 'unknown'}|0`;
                 groups.push({
+                    key,
                     host: hostResult.host,
                     results: hostResults,
                     hostResult: hostResult,
@@ -137,27 +145,29 @@ const LogSearchResults = {
         return {
             // 依赖加载状态
             dependenciesLoaded: false,
-            fullscreenHost: null
+            fullscreenKey: null
         };
     },
     
     methods: {
-        toggleFullscreen(host){
-            if(this.fullscreenHost === host){
-                this.fullscreenHost = null;
+        toggleFullscreen(key){
+            if(this.fullscreenKey === key){
+                this.fullscreenKey = null;
                 document.body.classList.remove('fullscreen-log-freeze');
             } else {
-                this.fullscreenHost = host;
+                this.fullscreenKey = key;
                 document.body.classList.add('fullscreen-log-freeze');
             }
             this.$nextTick(()=>{
-                const el = document.querySelector('.host-result-box.fullscreen-active .host-results');
+                // Scope the query to this component instance to avoid cross-instance mismatch
+                const root = this.$el instanceof HTMLElement ? this.$el : (this.$el && this.$el.$el) || document;
+                const el = root.querySelector('.host-result-box.fullscreen-active .host-results');
                 if(el){ el.scrollTop = el.scrollTop; }
             });
         },
         handleKeyDown(e){
-            if(e.key === 'Escape' && this.fullscreenHost){
-                this.toggleFullscreen(this.fullscreenHost);
+            if(e.key === 'Escape' && this.fullscreenKey){
+                this.toggleFullscreen(this.fullscreenKey);
             }
         },
         // 动态加载依赖
@@ -498,7 +508,7 @@ const LogSearchResults = {
             <!-- 显示主机结果盒：有匹配结果 或 处于占位预搜索状态 -->
             <template v-if="searchResults && searchResults.hosts && searchResults.hosts.length && (searchResults.total_matches > 0 || searchResults.pre_search)">
                 <div class="results-hosts-row">
-                <div class="host-result-box" :class="{ 'fullscreen-active': fullscreenHost === group.host }" v-for="group in groupedResults" :key="group.host">
+                <div class="host-result-box" :class="{ 'fullscreen-active': fullscreenKey === group.key }" v-for="group in groupedResults" :key="group.key">
                     <!-- 主机头部 -->
                     <div class="host-header" v-if="showHostGrouping">
                         <div class="host-info">
@@ -531,8 +541,8 @@ const LogSearchResults = {
                                                                         <path d="M11.5 15H17" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
                                                                     </svg>
                                                                 </button>
-                                <button class="action-btn" :class="{ 'is-active': fullscreenHost === group.host }" @click="toggleFullscreen(group.host)" :title="fullscreenHost === group.host ? '退出全屏 (Esc)' : '放大查看'" aria-label="放大/还原">
-                                    <svg v-if="fullscreenHost !== group.host" viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+                                <button class="action-btn" :class="{ 'is-active': fullscreenKey === group.key }" @click="toggleFullscreen(group.key)" :title="fullscreenKey === group.key ? '退出全屏 (Esc)' : '放大查看'" aria-label="放大/还原">
+                                    <svg v-if="fullscreenKey !== group.key" viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
                                         <path d="M4 9V5a1 1 0 0 1 1-1h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                                         <path d="M20 15v4a1 1 0 0 1-1 1h-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                                         <path d="M15 4h4a1 1 0 0 1 1 1v4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>

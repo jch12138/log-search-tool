@@ -15,12 +15,28 @@ logs:
 - description: ''
   group: UAT
   name: surge
-  path: /Users/chenway/Library/Logs/Surge/Surge-2025-10-22-194417.log
+  
   sshs:
   - host: 127.0.0.1
     password: jch12138
     port: 22
     username: chenway
+    path: /Users/chenway/Desktop/log-search-tool/logs/app.log
+  - host: 127.0.0.1
+    password: jch12138
+    port: 22
+    username: chenway
+    path: /Users/chenway/Library/Logs/Surge/Surge-2025-10-26-212447.log
+  - host: 127.0.0.1
+    password: jch12138
+    port: 22
+    username: chenway
+    path: /Users/chenway/Library/Logs/Surge/Surge-2025-10-26-212447.log
+  - host: 127.0.0.1
+    password: jch12138
+    port: 22
+    username: chenway
+    path: /Users/chenway/Library/Logs/Surge/Surge-2025-10-26-212447.log
 - description: ''
   group: ''
   name: test

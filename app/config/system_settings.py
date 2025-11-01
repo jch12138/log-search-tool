@@ -11,7 +11,9 @@ Environment variables (override defaults):
 - APP_LOG_LEVEL: Root log level (DEBUG/INFO/WARN/ERROR, default: INFO)
 - APP_LOG_DIR: Directory for application logs (default: logs)
 - APP_LOG_FILE: Log file name (default: app.log)
+- APP_LOG_PATH: Full path for application log file; when set, overrides APP_LOG_DIR/APP_LOG_FILE
 - APP_LOG_BACKUP: Number of daily log backups to keep (default: 7)
+- APP_USE_WATCHED_LOG: Use WatchedFileHandler for multi-process friendly logging (default: 0)
 - TERMINAL_IDLE_TIMEOUT: Idle seconds before closing a terminal session (default: 1800)
 - TERMINAL_IDLE_CHECK_INTERVAL: Seconds between idle checks (default: 30)
 - MAX_SEARCH_RESULTS: Max lines returned by grep/tail on server side (default: 10000)
@@ -31,6 +33,7 @@ Notes:
 
 import os
 from dataclasses import dataclass
+from typing import Optional
 
 
 def _get_bool(env_name: str, default: bool) -> bool:
@@ -71,10 +74,13 @@ class Settings:
     PORT: int = _get_int("APP_PORT", 8000)
     DEBUG: bool = _get_bool("APP_DEBUG", False)
 
-    LOG_LEVEL: str = os.getenv("APP_LOG_LEVEL", "DEBUG")
+    LOG_LEVEL: str = os.getenv("APP_LOG_LEVEL", "INFO")
     LOG_DIR: str = os.getenv("APP_LOG_DIR", "logs")
     LOG_FILE_NAME: str = os.getenv("APP_LOG_FILE", "app.log")
+    # When LOG_PATH is set (or APP_LOG_PATH env present), it overrides LOG_DIR/LOG_FILE_NAME
+    LOG_PATH: str = os.getenv("APP_LOG_PATH", "./app.log")
     LOG_BACKUP_COUNT: int = _get_int("APP_LOG_BACKUP", 7)
+    USE_WATCHED_LOG: bool = _get_bool("APP_USE_WATCHED_LOG", False)
 
     TERMINAL_IDLE_TIMEOUT: int = _get_int("TERMINAL_IDLE_TIMEOUT", 1800)
     TERMINAL_IDLE_CHECK_INTERVAL: int = _get_int("TERMINAL_IDLE_CHECK_INTERVAL", 30)

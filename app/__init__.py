@@ -1,7 +1,7 @@
 import os
 import sys
 import logging
-from logging.handlers import TimedRotatingFileHandler
+from logging.handlers import TimedRotatingFileHandler, WatchedFileHandler
 from flask import Flask, render_template
 from flask_socketio import SocketIO, join_room, leave_room, rooms
 from flask_cors import CORS
@@ -171,8 +171,22 @@ def _configure_logging(settings: Settings):
     root_logger.addHandler(console)
 
     try:
-        os.makedirs(settings.LOG_DIR, exist_ok=True)
-        file_handler = TimedRotatingFileHandler(os.path.join(settings.LOG_DIR, settings.LOG_FILE_NAME), when='midnight', backupCount=settings.LOG_BACKUP_COUNT, encoding='utf-8')
+        # Determine log file path: prefer explicit LOG_PATH; else compose from DIR + FILE
+        if getattr(settings, 'LOG_PATH', ''):
+            log_file = settings.LOG_PATH
+            log_dir = os.path.dirname(log_file) or '.'
+        else:
+            log_dir = settings.LOG_DIR
+            log_file = os.path.join(settings.LOG_DIR, settings.LOG_FILE_NAME)
+        os.makedirs(log_dir, exist_ok=True)
+        # In multi-process environments (debug reloader, multiple workers), TimedRotatingFileHandler
+        # can leave some processes writing to the rotated file. Allow opting into WatchedFileHandler
+        # which cooperates with external rotation tools (logrotate/newsyslog) and is safe for multi-proc.
+        use_watched = bool(getattr(settings, 'USE_WATCHED_LOG', False))
+        if use_watched:
+            file_handler = WatchedFileHandler(log_file, encoding='utf-8')
+        else:
+            file_handler = TimedRotatingFileHandler(log_file, when='midnight', backupCount=settings.LOG_BACKUP_COUNT, encoding='utf-8')
         file_handler.setLevel(level)
         file_handler.setFormatter(formatter)
         root_logger.addHandler(file_handler)

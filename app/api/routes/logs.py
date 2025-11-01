@@ -92,7 +92,52 @@ def search_log(log_name: str):
 		selected_files=data.get('selected_files'),
 		max_lines=int(data['max_lines']) if 'max_lines' in data and str(data['max_lines']).isdigit() else None
 	)
-	logger.info(f"[SEARCH] IP: {client_ip} | Log: {log_name} | Keyword: '{search_params.keyword}' | Mode: {search_params.search_mode}")
+	# 组装目标日志信息（不打印搜索结果，仅打印目标与参数）
+	try:
+		targets = []
+		sshs = getattr(log_config, 'sshs', []) or []
+		for ssh in sshs:
+			try:
+				host = ssh.get('host', 'unknown') if isinstance(ssh, dict) else 'unknown'
+				path = ssh.get('path') if isinstance(ssh, dict) else None
+				path = path or getattr(log_config, 'path', '') or ''
+				targets.append({'host': host, 'path': path})
+			except Exception:
+				continue
+		# 文件筛选信息（若开启文件过滤，仅打印关键字段，不打印内容）
+		filter_info = {}
+		if getattr(search_params, 'use_file_filter', False):
+			if getattr(search_params, 'selected_file', None):
+				filter_info['selected_file'] = search_params.selected_file
+			if getattr(search_params, 'selected_files', None):
+				try:
+					sel_files = search_params.selected_files or {}
+					# 为避免日志过长，只打印最多 3 条样例
+					sample = []
+					for k, v in list(sel_files.items())[:3]:
+						sample.append({k: v})
+					filter_info['selected_files_count'] = len(sel_files)
+					if sample:
+						filter_info['selected_files_sample'] = sample
+				except Exception:
+					pass
+		logger.info(
+			"[SEARCH] ip=%s log=%s keyword=%r mode=%s regex=%s reverse=%s ctx=%s max_lines=%s ssh_hosts=%s targets=%s filter=%s",
+			client_ip,
+			log_name,
+			search_params.keyword,
+			search_params.search_mode,
+			bool(search_params.use_regex),
+			bool(search_params.reverse_order),
+			int(search_params.context_span or 0),
+			getattr(search_params, 'max_lines', None),
+			len(targets),
+			targets[:5],  # 最多打印前 5 个目标
+			filter_info or {}
+		)
+	except Exception:
+		# 日志不能影响业务流程
+		pass
 	result = search_service.search_multi_host(log_config.to_dict(), search_params)
 	logger.info(f"[SEARCH RESULT] IP: {client_ip} | Log: {log_name} | Matches: {result.total_results} | Time: {result.total_search_time:.3f}s")
 	return result.to_dict()

@@ -12,11 +12,9 @@
     <link rel="stylesheet" href="/static/css/element-plus.css" />
     <!-- Prism.js CSS主题 -->
     <link rel="stylesheet" href="/static/css/prism-okaidia.min.css" />
-    <!-- Consolidated page CSS (replaces main/groups/search/results/compact/index/log-results/utilities) -->
+    <!-- Consolidated page CSS -->
     <link rel="stylesheet" href="/static/fonts/microsoft-yahei.css" />
     <link rel="stylesheet" href="/static/css/index.css" />
-    <!-- Optional per-project overrides loaded last -->
-    <link rel="stylesheet" href="/static/css/main.css" />
     
     <!-- 本地JavaScript库 -->
     <script src="/static/js/vendor/vue.global.js"></script>
@@ -37,8 +35,6 @@
 
 <body data-app-page="{{ page|default('') }}">
     <div id="app" class="app-root">
-
-
             <!-- 主内容区域 -->
             <div class="main-content">
                 <!-- 左侧日志列表 -->
@@ -149,7 +145,7 @@
                                 </div>
                                 
                                 <!-- 搜索按钮 - 移到外面 -->
-                                <button type="button" class="execute-search-btn" @click="executeSearch">
+                                <button type="button" class="execute-search-btn" @click="executeSearch" :disabled="!selectedLog">
                                     搜索
                                 </button>
                             </div>
@@ -199,7 +195,7 @@
                                             <template #default="scope">[[ scope.row.size_human ]]</template>
                                         </el-table-column>
                                         <el-table-column label="修改时间" width="180">
-                                            <template #default="scope">[[ formatFileTime(scope.row.modified_time) ]]</template>
+                                            <template #default="scope">[[ formatDateTime(scope.row.modified_time) ]]</template>
                                         </el-table-column>
                                     </el-table>
                                     <div v-if="!browsing.items.length" class="p-12 text-center text-muted text-13">目录为空或无权限</div>
@@ -252,7 +248,14 @@
 
     <script>
         const { createApp } = Vue;
-        const { ElMessage, ElMessageBox, ElLoading } = ElementPlus;
+        const { ElMessage } = ElementPlus;
+
+        // 常量定义
+        const CONSTANTS = {
+            SEARCH_HISTORY_MAX: 10,
+            DEFAULT_CONTEXT_SPAN: 30,
+            MAX_LINES: 2000
+        };
 
     const app = createApp({
             components: {
@@ -260,17 +263,37 @@
             },
             data() {
                 return {
+                    // 日志列表
                     logs: [],
                     selectedLog: null,
+                    logsLoading: false,
+                    
+                    // 侧边栏状态
                     sidebarCollapsed: true,
                     sidebarPinned: false,
-                    logsLoading: false,
+                    collapsedGroups: new Set(),
+                    
+                    // 搜索状态
                     searching: false,
                     hasSearched: false,
-                    resultsVersion: 0, // 每次搜索递增以重建结果组件，释放内存
-                    highlightKeyword: '', // 仅在搜索完成后用于高亮的关键词
+                    resultsVersion: 0,
+                    highlightKeyword: '',
                     searchInputFocused: false,
-                    availableFiles: [], // 可用文件列表 (基于日志配置返回)
+                    searchHistory: [],
+                    
+                    // 搜索表单
+                    searchForm: {
+                        keyword: '',
+                        search_mode: 'context',
+                        context_span: CONSTANTS.DEFAULT_CONTEXT_SPAN,
+                        use_regex: false,
+                        reverse_order: false,
+                        use_file_filter: false,
+                        selected_files: {},
+                        max_lines: CONSTANTS.MAX_LINES
+                    },
+                    
+                    // SFTP 浏览器状态
                     browsing: {
                         visible: false,
                         currentHost: '',
@@ -278,26 +301,13 @@
                         currentPath: '',
                         parentPath: null,
                         items: [],
-                        connectionIds: {}, // host -> connection_id
+                        connectionIds: {},
                         loading: {}
                     },
-                    filesLoading: false, // 文件列表加载状态
-                    collapsedGroups: new Set(), // 折叠的分组
-                    showMoreMenu: false, // 更多菜单显示状态
-                    // 已废弃：使用纯 CSS flex 自适应高度
-                    searchForm: {
-                        keyword: '',
-                        search_mode: 'context', // keyword 或 context
-                        context_span: 5,
-                        use_regex: false,
-                        reverse_order: false,
-                        use_file_filter: false,
-                        selected_file: '',  // 保持向后兼容
-                        selected_files: {},  // 新增：主机到文件的映射
-                        max_lines: 2000 // 每次搜索的最大行数
-                    },
+                    
+                    // 搜索结果
                     searchResults: null,
-                    searchHistory: [],
+                    
                     // 多标签管理
                     tabs: [],
                     activeTabId: null,
@@ -322,259 +332,330 @@
                         logs: groups[groupName].sort((a, b) => a.name.localeCompare(b.name)),
                         isCollapsed: this.collapsedGroups.has(groupName)
                     })).sort((a, b) => {
-                        // 默认分组排在最后
                         if (a.name === '默认分组' && b.name !== '默认分组') return 1;
                         if (b.name === '默认分组' && a.name !== '默认分组') return -1;
                         return a.name.localeCompare(b.name);
                     });
                 },
                 
-                // 按主机(含重复IP)分组的文件列表，区分同一IP的多个 SSH 配置
+                // 按主机分组的文件列表
                 groupedFiles() {
-                    if (!this.selectedLog || !this.selectedLog.sshs || !this.selectedLog.sshs.length) {
+                    if (!this.selectedLog?.sshs?.length) {
                         return [];
                     }
+                    
                     const sshs = this.selectedLog.sshs;
                     const hostCount = {};
-                    sshs.forEach(s => { const h = s.host || 'unknown'; hostCount[h] = (hostCount[h] || 0) + 1; });
-                    const groups = [];
-                    sshs.forEach((s, idx) => {
+                    sshs.forEach(s => { 
+                        const h = s.host || 'unknown'; 
+                        hostCount[h] = (hostCount[h] || 0) + 1; 
+                    });
+                    
+                    return sshs.map((s, idx) => {
                         const host = s.host || 'unknown';
                         const displayHost = hostCount[host] > 1 ? `${host}#${idx + 1}` : host;
-                        const key = `${host}|${idx}`; // 传给后端的唯一键
+                        const key = `${host}|${idx}`;
+                        
                         let files = [];
-                        // 若当前浏览窗口指向该 ssh index，合并浏览目录中的文件（非目录）
-                        if (this.browsing.currentHost === host && this.browsing.currentHostIndex === idx && this.browsing.items.length) {
-                            const fileItems = this.browsing.items.filter(i => !i.is_directory).map(i => ({
-                                host,
-                                filename: i.name,
-                                full_path: (this.browsing.currentPath === '/' ? '/' : this.browsing.currentPath + '/') + i.name
-                            }));
-                            const existing = new Set(files.map(f => f.full_path));
-                            fileItems.forEach(f => { if (!existing.has(f.full_path)) files.push(f); });
+                        if (this.browsing.currentHost === host && 
+                            this.browsing.currentHostIndex === idx && 
+                            this.browsing.items.length) {
+                            files = this.browsing.items
+                                .filter(i => !i.is_directory)
+                                .map(i => ({
+                                    host,
+                                    filename: i.name,
+                                    full_path: this.joinPath(this.browsing.currentPath, i.name)
+                                }));
                         }
-                        files.sort((a, b) => a.filename.localeCompare(b.filename));
-                        groups.push({ key, host: displayHost, originalHost: host, sshIndex: idx, files });
+                        
+                        return { 
+                            key, 
+                            host: displayHost, 
+                            originalHost: host, 
+                            sshIndex: idx, 
+                            files: files.sort((a, b) => a.filename.localeCompare(b.filename))
+                        };
                     });
-                    return groups;
                 },
+                
+                // 浏览器加载状态
                 isBrowsingLoading() {
-                    if (!this.browsing || !this.browsing.currentHost) return false;
-                    return !!this.browsing.loading[this.browsing.currentHost];
+                    return this.browsing?.currentHost && !!this.browsing.loading[this.browsing.currentHost];
                 },
 
                 // 当前激活标签
-                activeTab() { return this.tabs.find(t => t.id === this.activeTabId) || null; },
-
-                // 高亮器开关：仅在搜索完成后启用（按当前标签）
-                effectiveHighlighters() {
-                    const tab = this.activeTab;
-                    if (!tab || !tab.hasSearched || tab.searching || !tab.searchResults) {
-                        return {
-                            logLevels: false,
-                            timestamps: false,
-                            network: false,
-                            xml: false,
-                            sql: false,
-                            json: false,
-                            filePaths: false,
-                            urls: false,
-                            emails: false,
-                            uuids: false
-                        };
-                    }
-                    return {
-                        logLevels: true,
-                        timestamps: true,
-                        network: true,
-                        xml: true,
-                        sql: true,
-                        json: true,
-                        filePaths: true,
-                        urls: true,
-                        emails: true,
-                        uuids: true
-                    };
+                activeTab() { 
+                    return this.tabs.find(t => t.id === this.activeTabId) || null; 
                 },
 
-                // 检查是否所有必需的文件都已选择
-                isFileFilterValid() {
-                    // 不再自动加载文件列表，改为纯 SFTP 浏览选择
-
-                    // 检查每个主机是否都选择了文件
-                    return this.groupedFiles.every(group =>
-                        this.searchForm.selected_files[group.key]
-                    );
+                // 高亮器开关
+                effectiveHighlighters() {
+                    const tab = this.activeTab;
+                    const isReady = tab && tab.hasSearched && !tab.searching && tab.searchResults;
+                    
+                    return {
+                        logLevels: isReady,
+                        timestamps: isReady,
+                        network: isReady,
+                        xml: isReady,
+                        sql: isReady,
+                        json: isReady,
+                        filePaths: isReady,
+                        urls: isReady,
+                        emails: isReady,
+                        uuids: isReady
+                    };
                 }
             },
 
             mounted() {
                 this.loadLogs();
                 this.loadSearchHistory();
-                // 读取侧边栏固定状态
-                try {
-                    const pin = localStorage.getItem('sidebarPinned');
-                    this.sidebarPinned = pin === '1';
-                    // 如果固定，则展开
-                    if (this.sidebarPinned) this.sidebarCollapsed = false;
-                } catch (e) { /* ignore */ }
-
-                // 添加全局回车键监听
-                document.addEventListener('keydown', this.handleGlobalKeydown);
+                this.loadSidebarPinState();
                 
-                // 添加点击外部关闭菜单的监听
-                document.addEventListener('click', this.handleClickOutside);
-
-                // 初次计算高度
-                // 动态高度事件已移除（由 flex 布局替代）
-
-                // 如果通过独立页面进入 (sftp / terminals / config)
-                const appPage = document.body.getAttribute('data-app-page');
-                if (appPage && ['sftp','terminals','config'].includes(appPage)) {
-                    // 延迟让组件初始化完成
-                    setTimeout(()=>{ this.navigateToPage(appPage); }, 300);
-                }
+                // 全局回车键监听
+                document.addEventListener('keydown', this.handleGlobalKeydown);
             },
 
             beforeUnmount() {
-                // 清理事件监听器
                 document.removeEventListener('keydown', this.handleGlobalKeydown);
-                document.removeEventListener('click', this.handleClickOutside);
-                // 已无窗口 resize 监听需要清理
             },
 
             methods: {
+                // ============ 侧边栏控制 ============
                 toggleSidebarPin() {
                     this.sidebarPinned = !this.sidebarPinned;
-                    if (this.sidebarPinned) {
-                        this.sidebarCollapsed = false;
-                    } else {
-                        // 取消固定后，恢复为折叠模式
-                        this.sidebarCollapsed = true;
-                    }
-                    try { localStorage.setItem('sidebarPinned', this.sidebarPinned ? '1' : '0'); } catch(e) { /* ignore */ }
+                    this.sidebarCollapsed = !this.sidebarPinned;
+                    this.saveSidebarPinState();
                 },
-                // 通用错误处理方法
+                
+                loadSidebarPinState() {
+                    try {
+                        const pin = localStorage.getItem('sidebarPinned');
+                        this.sidebarPinned = pin === '1';
+                        if (this.sidebarPinned) this.sidebarCollapsed = false;
+                    } catch (e) { 
+                        console.warn('Failed to load sidebar state:', e);
+                    }
+                },
+                
+                saveSidebarPinState() {
+                    try { 
+                        localStorage.setItem('sidebarPinned', this.sidebarPinned ? '1' : '0'); 
+                    } catch(e) { 
+                        console.warn('Failed to save sidebar state:', e);
+                    }
+                },
+                
+                toggleGroup(groupName) {
+                    if (this.collapsedGroups.has(groupName)) {
+                        this.collapsedGroups.delete(groupName);
+                    } else {
+                        this.collapsedGroups.add(groupName);
+                    }
+                },
+                
+                // ============ 错误处理 ============
                 handleApiError(error, defaultMessage = '操作失败') {
                     const errorInfo = error.response?.data?.error || error.error || {};
                     let errorMessage = defaultMessage;
                     
-                    // 根据错误类型显示不同的消息
-                    switch (errorInfo.code) {
-                        case 'VALIDATION_ERROR':
-                            errorMessage = `参数错误: ${errorInfo.message}`;
-                            break;
-                        case 'INVALID_CONTEXT_SPAN':
-                            errorMessage = '上下文行数设置无效，请设置为0-50之间的整数';
-                            break;
-                        case 'INVALID_SEARCH_MODE':
-                            errorMessage = '搜索模式无效，请选择正确的搜索方式';
-                            break;
-                        case 'INVALID_FILE_FILTER':
-                            errorMessage = '文件过滤设置无效，启用过滤时请指定要搜索的文件';
-                            break;
-                        case 'CONNECTION_ERROR':
-                            errorMessage = `连接失败: ${errorInfo.message || '请检查网络连接'}`;
-                            break;
-                        case 'DEADLINE_EXCEEDED':
-                            errorMessage = `操作超时: ${errorInfo.message || '请稍后重试'}`;
-                            break;
-                        case 'NOT_FOUND':
-                            // 针对不同场景提供更具体的错误消息
-                            if (defaultMessage.includes('日志')) {
-                                errorMessage = '日志配置文件不存在，请先配置日志';
-                            } else {
-                                errorMessage = errorInfo.message || '资源不存在';
-                            }
-                            break;
-                        case 'PERMISSION_DENIED':
-                            // 针对不同场景提供更具体的错误消息
-                            if (defaultMessage.includes('日志')) {
-                                errorMessage = '权限不足，无法访问日志配置';
-                            } else if (defaultMessage.includes('文件')) {
-                                errorMessage = '权限不足，无法访问文件列表';
-                            } else {
-                                errorMessage = `权限不足: ${errorInfo.message || '请联系管理员'}`;
-                            }
-                            break;
-                        case 'INTERNAL':
-                            errorMessage = '服务器内部错误，请稍后重试';
-                            break;
-                        default:
-                            errorMessage = errorInfo.message || defaultMessage;
-                    }
+                    const errorMessages = {
+                        'VALIDATION_ERROR': `参数错误: ${errorInfo.message}`,
+                        'INVALID_CONTEXT_SPAN': '上下文行数设置无效，请设置为0-50之间的整数',
+                        'INVALID_SEARCH_MODE': '搜索模式无效，请选择正确的搜索方式',
+                        'INVALID_FILE_FILTER': '文件过滤设置无效，启用过滤时请指定要搜索的文件',
+                        'CONNECTION_ERROR': `连接失败: ${errorInfo.message || '请检查网络连接'}`,
+                        'DEADLINE_EXCEEDED': `操作超时: ${errorInfo.message || '请稍后重试'}`,
+                        'NOT_FOUND': errorInfo.message || '资源不存在',
+                        'PERMISSION_DENIED': `权限不足: ${errorInfo.message || '请联系管理员'}`,
+                        'INTERNAL': '服务器内部错误，请稍后重试'
+                    };
                     
+                    errorMessage = errorMessages[errorInfo.code] || errorInfo.message || defaultMessage;
                     ElMessage.error(errorMessage);
                     
-                    // 如果是调试模式，打印详细错误信息
                     if (errorInfo.details) {
                         console.error('详细错误信息:', errorInfo.details);
                     }
                 },
-                // 执行搜索
+                
+                // ============ 日志管理 ============
+                async loadLogs() {
+                    this.logsLoading = true;
+                    try {
+                        const response = await axios.get('/api/v1/logs');
+                        if (response.data.success) {
+                            this.logs = response.data.data.logs || [];
+                            this.initializeGroupsCollapsed();
+                        } else {
+                            this.handleApiError({ response: { data: response.data } }, '加载日志列表失败');
+                        }
+                    } catch (error) {
+                        this.handleApiError(error, '连接服务器失败');
+                        console.error('加载日志失败:', error);
+                    } finally {
+                        this.logsLoading = false;
+                    }
+                },
+                
+                initializeGroupsCollapsed() {
+                    this.collapsedGroups.clear();
+                    const groups = new Set();
+                    this.logs.forEach(log => {
+                        const groupName = log.group || '默认分组';
+                        groups.add(groupName);
+                    });
+                    groups.forEach(groupName => {
+                        this.collapsedGroups.add(groupName);
+                    });
+                },
+
+                selectLog(log) {
+                    if (!log) return;
+                    
+                    // 若已有对应标签则激活
+                    const exist = this.tabs.find(t => t.logName === log.name);
+                    if (exist) { 
+                        this.activateTab(exist.id); 
+                        return; 
+                    }
+                    
+                    // 创建新标签
+                    const tab = this.createTabForLog(log);
+                    this.tabs.push(tab);
+                    this.activeTabId = tab.id;
+                    this.syncActiveTabToRoot();
+                    
+                    // 构建占位 & 拉取详情
+                    this.buildPlaceholderResults(tab);
+                    this.ensureLogDetail(log).then(() => {
+                        if (tab.searchResults?.pre_search) {
+                            this.buildPlaceholderResults(tab);
+                        }
+                    });
+                },
+
+                async ensureLogDetail(log) {
+                    if (!log || log.sshs || !log.name) return;
+                    
+                    try {
+                        const resp = await axios.get(`/api/v1/logs/${log.name}`);
+                        if (resp.data.success && resp.data.data) {
+                            const detail = resp.data.data;
+                            log.sshs = detail.ssh_configs || [];
+                            
+                            if (this.selectedLog === log) {
+                                this.selectedLog.sshs = log.sshs;
+                                if (!this.hasSearched) {
+                                    this.buildPlaceholderResults();
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('获取日志详细配置失败', e);
+                    }
+                },
+                
+                // ============ 搜索功能 ============
                 async executeSearch() {
                     if (this.searchForm.keyword) {
                         this.addSearchHistory(this.searchForm.keyword);
                     }
                     this.searchInputFocused = false;
+                    
                     const tab = this.activeTab;
                     if (!tab || !this.selectedLog) {
                         ElMessage.warning('请先选择一个日志配置');
                         return;
                     }
+                    
                     if (this.searchForm.use_file_filter) {
-                        const totalHosts = this.groupedFiles.length;
-                        const chosen = Object.keys(this.searchForm.selected_files || {}).length;
-                        if (chosen === 0) {
-                            ElMessage.info('未选择任何文件，将使用配置默认路径');
-                        } else if (chosen < totalHosts) {
-                            ElMessage.info(`部分主机未选文件（${chosen}/${totalHosts}），未选的将用默认路径`);
-                        }
+                        this.showFileFilterInfo();
                     }
+                    
                     this.buildPlaceholderResults(tab);
-                    tab.highlightKeyword='';
+                    tab.highlightKeyword = '';
                     await this.$nextTick();
+                    
                     tab.searching = true;
                     tab.hasSearched = true;
+                    
                     try {
-                        const response = await axios.post(`/api/v1/logs/${this.selectedLog.name}/search`, this.searchForm);
+                        const response = await axios.post(
+                            `/api/v1/logs/${this.selectedLog.name}/search`, 
+                            this.searchForm
+                        );
+                        
                         if (response.data.success) {
                             tab.searchResults = response.data.data;
                             if (tab.searchResults) tab.searchResults.pre_search = false;
                             tab.highlightKeyword = this.searchForm.keyword || '';
                             tab.resultsVersion += 1;
-                            if (tab.searchResults.total_matches === 0) {
+                            
+                            const count = tab.searchResults.total_matches;
+                            if (count === 0) {
                                 ElMessage.info('未找到匹配的日志记录');
                             } else {
-                                ElMessage.success(`找到 ${tab.searchResults.total_matches} 个匹配项`);
+                                ElMessage.success(`找到 ${count} 个匹配项`);
                             }
                         } else {
                             this.handleApiError({ response: { data: response.data } }, '搜索失败');
                             tab.searchResults = null;
-                            tab.highlightKeyword='';
+                            tab.highlightKeyword = '';
                         }
                     } catch (e) {
                         this.handleApiError(e, '搜索请求失败');
                         console.error('搜索失败:', e);
-                        tab.searchResults=null;
-                        tab.highlightKeyword='';
+                        tab.searchResults = null;
+                        tab.highlightKeyword = '';
                     } finally {
                         tab.searching = false;
-                        // 高度无需重新计算
                     }
                 },
-                // 搜索历史
+                
+                showFileFilterInfo() {
+                    const totalHosts = this.groupedFiles.length;
+                    const chosen = Object.keys(this.searchForm.selected_files || {}).length;
+                    
+                    if (chosen === 0) {
+                        ElMessage.info('未选择任何文件，将使用配置默认路径');
+                    } else if (chosen < totalHosts) {
+                        ElMessage.info(`部分主机未选文件（${chosen}/${totalHosts}），未选的将用默认路径`);
+                    }
+                },
+                
+                toggleSearchMode() {
+                    this.searchForm.search_mode = this.searchForm.search_mode === 'keyword' ? 'context' : 'keyword';
+                    const mode = this.searchForm.search_mode === 'keyword' ? '关键词搜索' : '上下文搜索';
+                    ElMessage.info(`已切换到${mode}模式`);
+                },
+
+                toggleFileFilter() {
+                    this.searchForm.use_file_filter = !this.searchForm.use_file_filter;
+                    
+                    if (this.searchForm.use_file_filter) {
+                        ElMessage.info('已启用文件过滤，可通过"浏览"选择文件');
+                    } else {
+                        this.searchForm.selected_files = {};
+                        ElMessage.info('已关闭文件过滤');
+                    }
+                },
+                
+                // ============ 搜索历史 ============
                 loadSearchHistory() {
                     try {
                         const history = localStorage.getItem('searchHistory');
                         if (history) {
-                            this.searchHistory = JSON.parse(history);
+                            this.searchHistory = JSON.parse(history).slice(0, CONSTANTS.SEARCH_HISTORY_MAX);
                         }
                     } catch (e) {
                         console.error('Failed to load search history', e);
                         this.searchHistory = [];
                     }
                 },
+                
                 saveSearchHistory() {
                     try {
                         localStorage.setItem('searchHistory', JSON.stringify(this.searchHistory));
@@ -582,46 +663,62 @@
                         console.error('Failed to save search history', e);
                     }
                 },
+                
                 addSearchHistory(keyword) {
                     if (!keyword) return;
-                    // 移除已存在的相同记录
+                    
                     const index = this.searchHistory.indexOf(keyword);
                     if (index > -1) {
                         this.searchHistory.splice(index, 1);
                     }
-                    // 添加到最前面
+                    
                     this.searchHistory.unshift(keyword);
-                    // 只保留最近10条
-                    if (this.searchHistory.length > 10) {
-                        this.searchHistory.pop();
+                    
+                    if (this.searchHistory.length > CONSTANTS.SEARCH_HISTORY_MAX) {
+                        this.searchHistory = this.searchHistory.slice(0, CONSTANTS.SEARCH_HISTORY_MAX);
                     }
+                    
                     this.saveSearchHistory();
                 },
+                
                 selectHistory(item) {
                     this.searchForm.keyword = item;
                     this.searchInputFocused = false;
                 },
 
-                // 构建占位结果
-                buildPlaceholderResults(tab=null) {
+                // ============ 占位结果 ============
+                buildPlaceholderResults(tab = null) {
                     tab = tab || this.activeTab;
                     if (!tab) return;
+                    
                     const logRef = tab.selectedLog || this.selectedLog;
-                    if (!logRef || !logRef.sshs || !logRef.sshs.length) {
+                    if (!logRef?.sshs?.length) {
                         tab.searchResults = null;
                         tab.resultsVersion += 1;
-                        if (tab.id === this.activeTabId) { this.searchResults=null; this.resultsVersion=tab.resultsVersion; }
+                        if (tab.id === this.activeTabId) { 
+                            this.searchResults = null; 
+                            this.resultsVersion = tab.resultsVersion; 
+                        }
                         return;
                     }
-                    const hosts = logRef.sshs.map((s,idx)=>({
+                    
+                    const hosts = logRef.sshs.map((s, idx) => ({
                         host: s.host || 'unknown',
                         ssh_index: idx,
                         results: [],
                         total_results: 0,
                         search_time: 0,
-                        search_result:{ content:'', file_path:'', keyword:'', total_lines:0, search_time:0, matches:[] },
+                        search_result: { 
+                            content: '', 
+                            file_path: '', 
+                            keyword: '', 
+                            total_lines: 0, 
+                            search_time: 0, 
+                            matches: [] 
+                        },
                         success: true
                     }));
+                    
                     tab.searchResults = {
                         log_name: logRef.name,
                         keyword: '',
@@ -634,209 +731,61 @@
                         parallel_execution: false,
                         pre_search: true
                     };
+                    
                     tab.resultsVersion += 1;
+                    
                     if (tab.id === this.activeTabId) {
                         this.searchResults = tab.searchResults;
                         this.resultsVersion = tab.resultsVersion;
                     }
                 },
 
-                // 全局键盘事件处理
+                // ============ 键盘事件 ============
                 handleGlobalKeydown(event) {
-                    // 按下回车键且不在输入框、文本域或其他可编辑元素中
+                    // 回车键搜索
                     if (event.key === 'Enter' &&
                         !['INPUT', 'TEXTAREA'].includes(event.target.tagName) &&
                         !event.target.isContentEditable) {
-
-                        // 防止默认行为和事件冒泡
                         event.preventDefault();
                         event.stopPropagation();
-
-                        // 执行搜索
                         this.executeSearch();
                     }
-                    
-                    // 按ESC键关闭更多菜单
-                    if (event.key === 'Escape' && this.showMoreMenu) {
-                        this.showMoreMenu = false;
-                    }
                 },
 
-                // 点击外部关闭菜单
-                handleClickOutside(event) {
-                    // 检查点击是否在更多按钮区域外
-                    const moreActions = event.target.closest('.more-actions');
-                    if (!moreActions && this.showMoreMenu) {
-                        this.showMoreMenu = false;
-                    }
-                },
-
-                // 分组折叠/展开控制
-                toggleGroup(groupName) {
-                    if (this.collapsedGroups.has(groupName)) {
-                        this.collapsedGroups.delete(groupName);
-                    } else {
-                        this.collapsedGroups.add(groupName);
-                    }
-                },
-
-                // 切换更多菜单显示状态
-                toggleMoreMenu() {
-                    this.showMoreMenu = !this.showMoreMenu;
-                },
-
-                // 页面导航
-                navigateToPage(page) {
-                    this.showMoreMenu = false; // 关闭菜单
-                    
-                    // 页面配置
-                    const pageConfig = {
-                        'config': {
-                            url: '/config',
-                            title: '日志配置',
-                            icon: '⚙️'
-                        },
-                        'sftp': {
-                            url: '/sftp',
-                            title: '文件管理',
-                            icon: '📁'
-                        },
-                        'terminals': {
-                            url: '/terminals',
-                            title: '在线终端',
-                            icon: '💻'
-                        }
-                    };
-                    
-                    const config = pageConfig[page];
-                    if (config) {
-                        // 显示导航提示
-                        ElMessage.info(`正在打开 ${config.icon} ${config.title}...`);
-                        
-                        // 延迟一点时间再打开，让用户看到提示
-                        setTimeout(() => {
-                            // 可以选择在新窗口打开或当前窗口跳转
-                            // 新窗口打开（推荐）
-                            window.open(config.url, '_blank');
-                            
-                            // 如果要在当前窗口跳转，使用：
-                            // window.location.href = config.url;
-                        }, 300);
-                    } else {
-                        ElMessage.warning(`功能 ${page} 暂未开放`);
-                    }
-                },
-
-                async loadLogs() {
-                    this.logsLoading = true;
-                    try {
-                        const response = await axios.get('/api/v1/logs');
-                        if (response.data.success) {
-                            this.logs = response.data.data.logs || [];
-                            // 默认折叠所有分组
-                            this.collapsedGroups.clear();
-                            const groups = new Set();
-                            this.logs.forEach(log => {
-                                const groupName = log.group || '默认分组';
-                                groups.add(groupName);
-                            });
-                            groups.forEach(groupName => {
-                                this.collapsedGroups.add(groupName);
-                            });
-                        } else {
-                            this.handleApiError({ response: { data: response.data } }, '加载日志列表失败');
-                        }
-                    } catch (error) {
-                        this.handleApiError(error, '连接服务器失败');
-                        console.error('加载日志失败:', error);
-                    } finally {
-                        this.logsLoading = false;
-                    }
-                },
-
-                selectLog(log) {
-                    if (!log) return;
-                    // 若已有对应标签则激活
-                    const exist = this.tabs.find(t => t.logName === log.name);
-                    if (exist) { this.activateTab(exist.id); return; }
-                    // 创建新标签
-                    const tab = this._createTabForLog(log);
-                    this.tabs.push(tab);
-                    this.activeTabId = tab.id;
-                    this._syncActiveTabToRoot();
-                    // 构建占位 & 拉取详情
-                    this.buildPlaceholderResults(tab);
-                    this.ensureLogDetail(log).then(()=>{
-                        if (tab.searchResults && tab.searchResults.pre_search) {
-                            this.buildPlaceholderResults(tab); // 更新 sshs
-                        }
-                    });
-                },
-
-                // 确保 selectedLog 拥有 sshs（与后端 detail 接口字段 ssh_configs 对齐）
-                async ensureLogDetail(log) {
-                    if (!log || log.sshs || !log.name) return;
-                    try {
-                        const resp = await axios.get(`/api/v1/logs/${log.name}`);
-                        if (resp.data.success && resp.data.data) {
-                            const detail = resp.data.data;
-                            // 后端返回 ssh_configs；前端统一使用 sshs
-                            const sshs = detail.ssh_configs || [];
-                            // 将 sshs 挂到原 log 对象上，保持引用一致
-                            log.sshs = sshs; // Vue3 直接赋值即可触发响应
-                            // 如果当前 selectedLog 指向该对象，确保属性可用
-                            if (this.selectedLog === log) {
-                                this.selectedLog.sshs = sshs;
-                                if (!this.hasSearched) {
-                                    this.buildPlaceholderResults();
-                                }
-                            }
-                        }
-                    } catch (e) {
-                        // 静默失败，只在用户真正需要时再提示
-                        console.warn('获取日志详细配置失败', e);
-                    }
-                },
-
-                // 切换搜索模式
-                toggleSearchMode() {
-                    this.searchForm.search_mode = this.searchForm.search_mode === 'keyword' ? 'context' : 'keyword';
-                    const mode = this.searchForm.search_mode === 'keyword' ? '关键词搜索' : '上下文搜索';
-                    ElMessage.info(`已切换到${mode}模式`);
-                },
-
-                // 切换文件过滤
-                toggleFileFilter() {
-                    this.searchForm.use_file_filter = !this.searchForm.use_file_filter;
-                    if (this.searchForm.use_file_filter) {
-                        ElMessage.info('已启用文件过滤，可通过“浏览”选择文件');
-                    } else {
-                        this.searchForm.selected_file = '';
-                        this.searchForm.selected_files = {};
-                        this.availableFiles = [];
-                        ElMessage.info('已关闭文件过滤');
-                    }
-                    // 高度无需重新计算
-                },
-
-                // 加载可用文件列表
-                // （废弃）loadAvailableFiles 已移除，文件来源统一通过 SFTP 浏览器
-
-                // 打开浏览器（支持同IP多实例，参数为分组对象或原 host 字符串）
+                // ============ SFTP 浏览器 ============
                 async openSftpBrowser(groupOrHost) {
                     if (!this.selectedLog) {
                         ElMessage.error('请先选择一个日志配置');
                         return;
                     }
-                    // 若还没有 sshs，尝试加载一次
+                    
                     if (!this.selectedLog.sshs) {
                         await this.ensureLogDetail(this.selectedLog);
                     }
+                    
                     if (!this.selectedLog.sshs) {
                         ElMessage.error('当前日志配置缺少 SSH 信息');
                         return;
                     }
+                    
+                    const { sshIndex, host } = this.parseGroupOrHost(groupOrHost);
+                    
+                    if (sshIndex == null || sshIndex < 0 || sshIndex >= this.selectedLog.sshs.length) {
+                        ElMessage.error('未找到对应主机 SSH 配置');
+                        return;
+                    }
+                    
+                    this.browsing.currentHost = host;
+                    this.browsing.currentHostIndex = sshIndex;
+                    this.browsing.visible = true;
+                    
+                    await this.ensureSftpConnection(host, sshIndex);
+                    await this.navigateToInitialPath(host, sshIndex);
+                },
+                
+                parseGroupOrHost(groupOrHost) {
                     let sshIndex, host;
+                    
                     if (typeof groupOrHost === 'string') {
                         host = groupOrHost;
                         sshIndex = this.selectedLog.sshs.findIndex(s => s.host === host);
@@ -844,119 +793,76 @@
                         host = groupOrHost.originalHost;
                         sshIndex = groupOrHost.sshIndex;
                     }
-                    if (sshIndex == null || sshIndex < 0 || sshIndex >= this.selectedLog.sshs.length) {
-                        ElMessage.error('未找到对应主机 SSH 配置');
-                        return;
-                    }
-                    this.browsing.currentHost = host;
-                    this.browsing.currentHostIndex = sshIndex;
-                    this.browsing.visible = true;
-                    await this.ensureSftpConnection(host, sshIndex);
-                    // 更智能的默认路径：
-                    // 1) 若 path 含占位符，先用当前日期替换 {YYYY}/{MM}/{DD}，得到“解析后的完整文件路径”，取其父目录作为首选目录；
-                    //    若该目录下找不到与解析后文件名匹配的文件（或目录不存在），则回退到“占位符之前”的目录。
-                    // 2) 若不含占位符：若是文件路径则取父目录，否则直接用目录。
+                    
+                    return { sshIndex, host };
+                },
+                
+                async navigateToInitialPath(host, sshIndex) {
                     try {
                         const sshCfg = this.selectedLog.sshs[sshIndex] || {};
                         const originalPath = (sshCfg.path || this.selectedLog.path || '/') || '/';
                         const hasPlaceholder = /\{[^}]+\}/.test(originalPath);
 
-                        const normalizeDir = (p) => {
-                            let s = (p || '/').replace(/\/+/g, '/');
-                            if (s !== '/' && s.endsWith('/')) s = s.replace(/\/+$/,'');
-                            if (!s) s = '/';
-                            return s;
-                        };
-                        const parentDir = (p) => {
-                            if (!p) return '/';
-                            const i = p.lastIndexOf('/');
-                            if (i <= 0) return '/';
-                            return p.slice(0, i) || '/';
-                        };
-                        const pad2 = (n) => (n < 10 ? '0' + n : '' + n);
-                        const replaceDatePlaceholders = (p) => {
-                            const now = new Date();
-                            const YYYY = '' + now.getFullYear();
-                            const MM = pad2(now.getMonth() + 1);
-                            const DD = pad2(now.getDate());
-                            return p
-                                .replace(/\{YYYY\}/g, YYYY)
-                                .replace(/\{MM\}/g, MM)
-                                .replace(/\{DD\}/g, DD);
-                        };
-                        const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                        const buildNameMatcher = (basename) => {
-                            if (basename.includes('{N}')) {
-                                const pattern = '^' + escapeRegExp(basename).replace(/\\\{N\\\}/g, '\\d+') + '$';
-                                return new RegExp(pattern);
-                            }
-                            return basename; // exact match string
-                        };
-                        const probePath = async (h, dir) => {
-                            const cid = this.browsing.connectionIds[h];
-                            if (!cid) throw new Error('no connection');
-                            const resp = await axios.post('/api/v1/sftp/list', { connection_id: cid, path: dir });
-                            if (!resp.data.success) throw Object.assign(new Error('list failed'), { response: resp });
-                            return resp.data.data;
-                        };
-
                         if (hasPlaceholder) {
-                            // 解析日期占位符得到期望文件名
-                            const resolvedPath = replaceDatePlaceholders(originalPath);
-                            const primaryDir = normalizeDir(parentDir(resolvedPath.endsWith('/') ? resolvedPath.slice(0, -1) : resolvedPath));
-                            const baseName = resolvedPath.slice(resolvedPath.lastIndexOf('/') + 1) || '';
-                            const nameMatcher = buildNameMatcher(baseName); // RegExp 或字符串
-                            // 备选：截断到第一个占位符之前，再取父目录
-                            const phIdx = originalPath.search(/\{[^}]+\}/);
-                            let fallbackBase = phIdx >= 0 ? originalPath.slice(0, phIdx) : originalPath;
-                            if (!fallbackBase.endsWith('/')) fallbackBase = parentDir(fallbackBase);
-                            const fallbackDir = normalizeDir(fallbackBase || '/');
-
-                            try {
-                                const data = await probePath(host, primaryDir);
-                                const items = Array.isArray(data.items) ? data.items : [];
-                                const found = items.some(it => !it.is_directory && (
-                                    (nameMatcher instanceof RegExp) ? nameMatcher.test(it.name) : (nameMatcher ? it.name === nameMatcher : false)
-                                ));
-                                if (found) {
-                                    this.listRemotePath(host, primaryDir);
-                                    return;
-                                }
-                                // 找不到匹配文件，退回更上层目录
-                                this.listRemotePath(host, fallbackDir);
-                            } catch (err) {
-                                // 目录不存在或无法访问，直接回退
-                                this.listRemotePath(host, fallbackDir);
-                            }
+                            await this.navigateWithPlaceholder(host, originalPath);
                         } else {
-                            // 无占位符：根据是否为文件路径决定目录
-                            let raw = originalPath;
-                            if (!raw.endsWith('/')) raw = parentDir(raw);
-                            raw = normalizeDir(raw);
-                            this.listRemotePath(host, raw);
+                            await this.navigateWithoutPlaceholder(host, originalPath);
                         }
                     } catch (e) {
                         console.error('计算初始目录失败', e);
                     }
                 },
+                
+                async navigateWithPlaceholder(host, originalPath) {
+                    const resolvedPath = this.replaceDatePlaceholders(originalPath);
+                    const primaryDir = this.normalizeDir(this.parentDir(
+                        resolvedPath.endsWith('/') ? resolvedPath.slice(0, -1) : resolvedPath
+                    ));
+                    const baseName = resolvedPath.slice(resolvedPath.lastIndexOf('/') + 1) || '';
+                    const nameMatcher = this.buildNameMatcher(baseName);
+                    
+                    const phIdx = originalPath.search(/\{[^}]+\}/);
+                    let fallbackBase = phIdx >= 0 ? originalPath.slice(0, phIdx) : originalPath;
+                    if (!fallbackBase.endsWith('/')) fallbackBase = this.parentDir(fallbackBase);
+                    const fallbackDir = this.normalizeDir(fallbackBase || '/');
 
-                // 刷新当前浏览目录
+                    try {
+                        const data = await this.probePath(host, primaryDir);
+                        const items = Array.isArray(data.items) ? data.items : [];
+                        const found = items.some(it => !it.is_directory && this.matchesName(it.name, nameMatcher));
+                        
+                        this.listRemotePath(host, found ? primaryDir : fallbackDir);
+                    } catch (err) {
+                        this.listRemotePath(host, fallbackDir);
+                    }
+                },
+                
+                async navigateWithoutPlaceholder(host, originalPath) {
+                    let raw = originalPath;
+                    if (!raw.endsWith('/')) raw = this.parentDir(raw);
+                    raw = this.normalizeDir(raw);
+                    this.listRemotePath(host, raw);
+                },
+
                 async refreshCurrent() {
                     if (!this.selectedLog) return;
+                    
                     const { currentHost, currentHostIndex, currentPath } = this.browsing;
                     if (!currentHost || currentHostIndex == null || currentHostIndex < 0) return;
-                    if (!currentPath) {
-                        this.listRemotePath(currentHost, '/');
-                    } else {
-                        this.listRemotePath(currentHost, currentPath);
-                    }
+                    
+                    this.listRemotePath(currentHost, currentPath || '/');
                 },
 
                 async ensureSftpConnection(host, sshIndex) {
                     if (this.browsing.connectionIds[host]) return;
+                    
                     this.browsing.loading[host] = true;
                     try {
-                        const resp = await axios.post('/api/v1/sftp/connect-by-config', { log_name: this.selectedLog.name, ssh_index: sshIndex });
+                        const resp = await axios.post('/api/v1/sftp/connect-by-config', { 
+                            log_name: this.selectedLog.name, 
+                            ssh_index: sshIndex 
+                        });
+                        
                         if (resp.data.success) {
                             this.browsing.connectionIds[host] = resp.data.data.connection_id;
                         } else {
@@ -972,9 +878,14 @@
                 async listRemotePath(host, path) {
                     const cid = this.browsing.connectionIds[host];
                     if (!cid) return;
+                    
                     this.browsing.loading[host] = true;
                     try {
-                        const resp = await axios.post('/api/v1/sftp/list', { connection_id: cid, path });
+                        const resp = await axios.post('/api/v1/sftp/list', { 
+                            connection_id: cid, 
+                            path 
+                        });
+                        
                         if (resp.data.success) {
                             const data = resp.data.data;
                             this.browsing.currentPath = data.current_path;
@@ -989,14 +900,31 @@
                         this.browsing.loading[host] = false;
                     }
                 },
+                
+                async probePath(host, dir) {
+                    const cid = this.browsing.connectionIds[host];
+                    if (!cid) throw new Error('no connection');
+                    
+                    const resp = await axios.post('/api/v1/sftp/list', { 
+                        connection_id: cid, 
+                        path: dir 
+                    });
+                    
+                    if (!resp.data.success) {
+                        throw Object.assign(new Error('list failed'), { response: resp });
+                    }
+                    
+                    return resp.data.data;
+                },
 
                 handleBrowserDblClick(row) {
                     if (!row) return;
+                    
                     if (row.is_directory) {
-                        const p = (this.browsing.currentPath === '/' ? '' : this.browsing.currentPath) + '/' + row.name;
+                        const p = this.joinPath(this.browsing.currentPath, row.name);
                         this.listRemotePath(this.browsing.currentHost, p);
                     } else {
-                        const full = (this.browsing.currentPath === '/' ? '/' : this.browsing.currentPath + '/') + row.name;
+                        const full = this.joinPath(this.browsing.currentPath, row.name);
                         const key = `${this.browsing.currentHost}|${this.browsing.currentHostIndex}`;
                         this.searchForm.selected_files[key] = full;
                         ElMessage.success('已选择文件: ' + row.name);
@@ -1008,49 +936,20 @@
                     if (!this.browsing.parentPath) return;
                     this.listRemotePath(this.browsing.currentHost, this.browsing.parentPath);
                 },
+                
                 closeBrowser() {
                     this.browsing.visible = false;
                 },
-                refreshCurrentLegacy() {
-                    // legacy name kept if referenced somewhere else
-                    this.refreshCurrent();
-                },
-
-                formatFileTime(timeStr) {
-                    if (!timeStr) return '未知';
-                    try {
-                        const date = new Date(timeStr);
-                        return date.toLocaleString('zh-CN', {
-                            year: 'numeric', month: '2-digit', day: '2-digit',
-                            hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
-                        });
-                    } catch (e) { return timeStr; }
-                },
-                formatDisplayPath(p) {
-                    if (!p) return '';
-                    return p.length > 80 ? p.slice(0,35)+' ... '+p.slice(-35) : p;
-                },
+                
                 clearSelectedFile(group) {
                     if (!group) return;
                     delete this.searchForm.selected_files[group.key];
                 },
-                _defaultSearchForm() {
+                
+                // ============ 标签管理 ============
+                createTabForLog(log) {
                     return {
-                        keyword: '',
-                        search_mode: 'context',
-                        context_span: 5,
-                        use_regex: false,
-                        reverse_order: false,
-                        use_file_filter: false,
-                        selected_file: '',
-                        selected_files: {},
-                        max_lines: 2000
-                    };
-                },
-                _createTabForLog(log) {
-                    // 使用全局搜索表单，不为每个标签复制独立搜索配置
-                    return {
-                        id: 'tab_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
+                        id: 'tab_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
                         logName: log.name,
                         title: log.name,
                         selectedLog: log,
@@ -1062,55 +961,140 @@
                         resultsVersion: 0
                     };
                 },
-                _syncActiveTabToRoot() {
+                
+                syncActiveTabToRoot() {
                     const tab = this.activeTab;
                     if (!tab) return;
+                    
                     this.selectedLog = tab.selectedLog;
-                    // 不再覆盖全局 searchForm，保持关键词与设置在所有标签一致
                     this.searchResults = tab.searchResults;
                     this.highlightKeyword = tab.highlightKeyword;
                     this.hasSearched = tab.hasSearched;
                     this.searching = tab.searching;
                     this.resultsVersion = tab.resultsVersion;
                 },
+                
                 activateTab(id) {
                     if (this.activeTabId === id) return;
+                    
                     const tab = this.tabs.find(t => t.id === id);
                     if (!tab) return;
+                    
                     this.activeTabId = id;
-                    this._syncActiveTabToRoot();
-                        // 高度无需重新计算
+                    this.syncActiveTabToRoot();
                 },
+                
                 closeTab(id) {
                     const idx = this.tabs.findIndex(t => t.id === id);
                     if (idx === -1) return;
+                    
                     const closingActive = this.tabs[idx].id === this.activeTabId;
-                    this.tabs.splice(idx,1);
+                    this.tabs.splice(idx, 1);
+                    
                     if (!this.tabs.length) {
-                        this.selectedLog = null;
-                        this.activeTabId = null;
-                        this.searchForm = this._defaultSearchForm();
-                        this.searchResults = null;
-                        this.highlightKeyword='';
-                        this.hasSearched=false;
-                        this.searching=false;
-                        this.resultsVersion=0;
+                        this.resetToInitialState();
                     } else if (closingActive) {
-                        const newTab = this.tabs[Math.max(0, idx-1)];
+                        const newTab = this.tabs[Math.max(0, idx - 1)];
                         this.activeTabId = newTab.id;
-                        this._syncActiveTabToRoot();
+                        this.syncActiveTabToRoot();
                     }
                 },
-                // (height handled purely by flex layout)
+                
+                resetToInitialState() {
+                    this.selectedLog = null;
+                    this.activeTabId = null;
+                    this.searchForm = {
+                        keyword: '',
+                        search_mode: 'context',
+                        context_span: CONSTANTS.DEFAULT_CONTEXT_SPAN,
+                        use_regex: false,
+                        reverse_order: false,
+                        use_file_filter: false,
+                        selected_files: {},
+                        max_lines: CONSTANTS.MAX_LINES
+                    };
+                    this.searchResults = null;
+                    this.highlightKeyword = '';
+                    this.hasSearched = false;
+                    this.searching = false;
+                    this.resultsVersion = 0;
+                },
+                
+                // ============ 工具函数 ============
+                formatDisplayPath(p) {
+                    if (!p) return '';
+                    return p.length > 80 ? p.slice(0, 35) + ' ... ' + p.slice(-35) : p;
+                },
+                
+                formatDateTime(timeStr) {
+                    if (!timeStr) return '未知';
+                    try {
+                        const date = new Date(timeStr);
+                        return date.toLocaleString('zh-CN', {
+                            year: 'numeric', month: '2-digit', day: '2-digit',
+                            hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+                        });
+                    } catch (e) { 
+                        return timeStr; 
+                    }
+                },
+                
+                // 路径处理工具
+                normalizeDir(p) {
+                    let s = (p || '/').replace(/\/+/g, '/');
+                    if (s !== '/' && s.endsWith('/')) s = s.replace(/\/+$/, '');
+                    if (!s) s = '/';
+                    return s;
+                },
+                
+                parentDir(p) {
+                    if (!p) return '/';
+                    const i = p.lastIndexOf('/');
+                    if (i <= 0) return '/';
+                    return p.slice(0, i) || '/';
+                },
+                
+                joinPath(dir, name) {
+                    return (dir === '/' ? '/' : dir + '/') + name;
+                },
+                
+                replaceDatePlaceholders(p) {
+                    const now = new Date();
+                    const pad2 = (n) => (n < 10 ? '0' + n : '' + n);
+                    const YYYY = '' + now.getFullYear();
+                    const MM = pad2(now.getMonth() + 1);
+                    const DD = pad2(now.getDate());
+                    
+                    return p
+                        .replace(/\{YYYY\}/g, YYYY)
+                        .replace(/\{MM\}/g, MM)
+                        .replace(/\{DD\}/g, DD);
+                },
+                
+                buildNameMatcher(basename) {
+                    if (basename.includes('{N}')) {
+                        const pattern = '^' + basename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+                            .replace(/\\\{N\\\}/g, '\\d+') + '$';
+                        return new RegExp(pattern);
+                    }
+                    return basename;
+                },
+                
+                matchesName(name, matcher) {
+                    if (matcher instanceof RegExp) {
+                        return matcher.test(name);
+                    }
+                    return matcher ? name === matcher : false;
+                }
             }
         });
 
         // 设置插值分隔符
-        if (app.config && app.config.compilerOptions) {
+        if (app.config?.compilerOptions) {
             app.config.compilerOptions.delimiters = ['[[', ']]'];
         }
 
-    app.use(ElementPlus);
+        app.use(ElementPlus);
         app.mount('#app');
     </script>
 </body>

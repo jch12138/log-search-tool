@@ -632,14 +632,22 @@ const LogSearchResults = {
                                             </button>
                                             <button class="menu-item" @click="openOverflowFor=null; toggleFullscreen(group.key)">
                                                 <span class="mi-icon">
-                                                    <svg viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+                                                    <!-- 放大图标：四个向外的箭头 -->
+                                                    <svg v-show="fullscreenKey !== group.key" viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
                                                         <path d="M4 9V5a1 1 0 0 1 1-1h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                                                         <path d="M20 15v4a1 1 0 0 1-1 1h-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                                                         <path d="M15 4h4a1 1 0 0 1 1 1v4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                                                         <path d="M9 20H5a1 1 0 0 1-1-1v-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                                                     </svg>
+                                                    <!-- 缩小图标：四个向内的箭头 -->
+                                                    <svg v-else viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+                                                        <path d="M4 9L9 9L9 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                        <path d="M20 15L15 15L15 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                        <path d="M15 4L15 9L20 9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                        <path d="M9 20L9 15L4 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                    </svg>
                                                 </span>
-                                                <span>放大查看</span>
+                                                <span>[[ fullscreenKey === group.key ? '退出全屏' : '放大查看' ]]</span>
                                             </button>
                                             <button class="menu-item" @click="openOverflowFor=null; downloadLogFile(group.hostResult)">
                                                 <span class="mi-icon">
@@ -669,17 +677,19 @@ const LogSearchResults = {
                                         </svg>
                                     </button>
                                     <button class="action-btn" :class="{ 'is-active': fullscreenKey === group.key }" @click="toggleFullscreen(group.key)" :title="fullscreenKey === group.key ? '退出全屏 (Esc)' : '放大查看'" aria-label="放大/还原">
-                                        <svg v-if="fullscreenKey !== group.key" viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+                                        <!-- 放大图标：四个向外的箭头 -->
+                                        <svg v-show="fullscreenKey !== group.key" viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
                                             <path d="M4 9V5a1 1 0 0 1 1-1h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                                             <path d="M20 15v4a1 1 0 0 1-1 1h-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                                             <path d="M15 4h4a1 1 0 0 1 1 1v4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                                             <path d="M9 20H5a1 1 0 0 1-1-1v-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                                         </svg>
-                                        <svg v-else viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
-                                            <path d="M9 9H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                                            <path d="M15 15h4a1 1 0 0 1 1 1v3.99a1 1 0 0 1-1.01 1.01H15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                                            <path d="M20 9h-4a1 1 0 0 1-1-1V4.99A1 1 0 0 1 15.99 4H20a1 1 0 0 1 1 1v4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                                            <path d="M4 15h4a1 1 0 0 1 1 1v4.01A1 1 0 0 1 8.01 21H4a1 1 0 0 1-1-1v-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <!-- 缩小图标：四个箭头从外向内指向中心 -->
+                                        <svg v-show="fullscreenKey === group.key" viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+                                            <path d="M4 9L9 9L9 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M20 15L15 15L15 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M15 4L15 9L20 9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M9 20L9 15L4 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                                         </svg>
                                     </button>
                                     <button class="action-btn" @click="downloadLogFile(group.hostResult)" title="下载日志文件" aria-label="下载日志">

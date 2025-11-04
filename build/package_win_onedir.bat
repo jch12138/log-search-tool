@@ -45,6 +45,11 @@ echo [4/5] Moving onedir folder to artifacts...
 if exist artifacts\log-search-api-onedir rmdir /S /Q artifacts\log-search-api-onedir
 move dist\log-search-api artifacts\log-search-api-onedir >nul
 
+REM Copy configuration files to package root
+echo Copying configuration files...
+copy /Y settings.ini artifacts\log-search-api-onedir\ >nul 2>&1
+copy /Y config.yaml artifacts\log-search-api-onedir\ >nul 2>&1
+
 REM Add convenience start.bat if prod script exists
 if exist build\start_prod.bat (
   copy /Y build\start_prod.bat artifacts\log-search-api-onedir\ >nul

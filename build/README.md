@@ -14,8 +14,9 @@ Steps performed:
 2. Collect extra start scripts (build/start_prod.bat, build/start_test.bat) if present.
 3. Run PyInstaller in onedir mode including templates & static assets.
 4. Move resulting folder to `artifacts/log-search-api-onedir`.
-5. Add convenience `start.bat` if prod script exists.
-6. Create compressed archive `log-search-api-onedir-windows.zip`.
+5. **Copy configuration files (settings.ini, config.yaml) to package root**.
+6. Add convenience `start.bat` if prod script exists.
+7. Create compressed archive `log-search-api-onedir-windows.zip`.
 
 Requirements:
 - Python 3.11+

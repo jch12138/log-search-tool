@@ -16,8 +16,8 @@ from typing import Dict, Any, List, Tuple, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from app.models import SearchParams, SearchResult, MultiHostSearchResult
 from app.services.ssh import SSHConnectionManager
-from app.services.utils.encoding import smart_decode
 from app.services.utils.filename_resolver import resolve_log_filename
+from app.services.utils.encoding import EncodingDetector, smart_decode
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +44,7 @@ class LogSearchService:
 		# Cache for reverse command detection per unique SSH endpoint (host, port, user)
 		# Key format: "host|port|username" to avoid false sharing across differing accounts/ports
 		self._reverse_cmd_cache: Dict[str, str] = {}
+		self._encoding_detector = EncodingDetector()  # 编码检测器
 		self._external_executor = shared_executor is not None
 		if shared_executor:
 			self._executor = shared_executor
@@ -138,7 +139,31 @@ class LogSearchService:
 	def _search_single_host(self, ssh_config: Dict[str, Any], log_path: str, search_params: SearchParams, ssh_index: int) -> SearchResult:
 		start = time.time()
 		host = ssh_config.get('host', 'unknown')
+		port = ssh_config.get('port', 22)
+		username = ssh_config.get('username') or ssh_config.get('user') or ''
+		
+		# 获取或检测服务器编码
+		cache_key = f"ssh_{host}:{port}:{username}"
+		preferred_encoding = self._encoding_detector.get_cached_encoding(cache_key)
+		
 		try:
+			# 如果没有缓存的编码，先检测
+			if not preferred_encoding:
+				try:
+					conn = self.ssh_manager.get_connection(ssh_config)
+					if conn:
+						stdout_locale, _, _ = conn.execute_command('locale | grep LC_CTYPE', timeout=5)
+						if stdout_locale:
+							detected = self._encoding_detector.detect_from_locale(stdout_locale)
+							if detected:
+								preferred_encoding = detected
+								self._encoding_detector.cache_encoding(cache_key, detected)
+				except Exception as e:
+					logger.debug(f"[{host}] encoding detection failed: {e}")
+			
+			if not preferred_encoding:
+				preferred_encoding = 'utf-8'  # 默认
+			
 			# 同时获取解析后的实际文件路径，避免下载时仍然携带占位符
 			command, resolved_file_path = self._build_search_command(log_path, search_params, ssh_config)
 			conn = self.ssh_manager.get_connection(ssh_config)
@@ -147,18 +172,15 @@ class LogSearchService:
 			stdout, stderr, code = conn.execute_command(command, timeout=SEARCH_EXEC_TIMEOUT)
 			if code != 0 and stderr:
 				raise RuntimeError(f"搜索命令执行失败: {stderr}")
-			# 标准输出编码处理：先直接使用；若检测到替换符或异常，再用 smart_decode
-			encoding_used = 'utf-8'
-			if stdout:
-				try:
-					stdout.encode('utf-8')  # 检测能否无损往返
-				except Exception:
-					decoded, enc_used = smart_decode(stdout.encode('latin-1', errors='ignore'))
-					stdout = decoded
-					encoding_used = enc_used
-			elif not stdout:
-				encoding_used = 'utf-8'
-			lines = stdout.strip().split('\n') if stdout.strip() else []
+			
+			# 使用智能解码
+			decoded_output, used_encoding = smart_decode(stdout.encode('utf-8') if isinstance(stdout, str) else stdout, preferred_encoding=preferred_encoding)
+			
+			# 更新缓存的编码
+			if used_encoding and used_encoding != preferred_encoding:
+				self._encoding_detector.cache_encoding(cache_key, used_encoding)
+			
+			lines = decoded_output.strip().split('\n') if decoded_output.strip() else []
 			has_line_numbers = ('grep -n' in command)
 			results, matches = self._parse_grep_output(lines, resolved_file_path, has_line_numbers=has_line_numbers)
 			# 后端行数限制（保护前端渲染性能）
@@ -186,7 +208,7 @@ class LogSearchService:
 				total_results=len(results),
 				search_time=elapsed,
 				search_result={
-					'content': stdout.strip(),
+					'content': decoded_output.strip(),
 					'file_path': resolved_file_path,
 					'keyword': search_params.keyword,
 					'total_lines': len(results),
@@ -194,7 +216,7 @@ class LogSearchService:
 					'truncated': truncated,
 					'search_time': elapsed,
 					'matches': matches,
-					'encoding_used': encoding_used
+					'encoding_used': used_encoding or preferred_encoding
 				},
 				success=True
 			)

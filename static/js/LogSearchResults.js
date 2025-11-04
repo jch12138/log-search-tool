@@ -1,29 +1,25 @@
-// LogSearchResults 组件
+// LogSearchResults 组件 - 优化版本
 const LogSearchResults = {
     name: 'LogSearchResults',
     
-    // 组件依赖加载
+    // ==================== 生命周期钩子 ====================
     async created() {
         await this.loadDependencies();
-        // this.injectStyles();  // 移除样式注入调用
-    },
-    mounted() {
-        window.addEventListener('keydown', this.handleKeyDown);
-        window.addEventListener('resize', this.recomputeCompaction);
-        this.$nextTick(()=> this.recomputeCompaction());
-    },
-    beforeUnmount() {
-        window.removeEventListener('keydown', this.handleKeyDown);
-        window.removeEventListener('resize', this.recomputeCompaction);
-        document.removeEventListener('click', this.handleDocumentClick, { capture:true });
-        // Ensure body scroll freeze is cleared if component unmounts while fullscreen
-        if (this.fullscreenKey) {
-            document.body.classList.remove('fullscreen-log-freeze');
-        }
     },
     
+    mounted() {
+        this.addEventListeners();
+        this.$nextTick(() => this.recomputeCompaction());
+    },
+    
+    beforeUnmount() {
+        this.removeEventListeners();
+        this.clearFullscreenState();
+    },
+    
+    // ==================== Props 配置 ====================
     props: {
-        // 数据相关参数
+        // 核心数据属性
         searchResults: {
             type: Object,
             default: () => null
@@ -37,18 +33,10 @@ const LogSearchResults = {
             default: false
         },
         
-        // 显示控制参数
-        height: {
-            type: String,
-            default: '400px'
-        },
+        // 显示控制
         maxResults: {
             type: Number,
-            default: 1000  // 每台主机最多显示1000条结果
-        },
-        showSearchStats: {
-            type: Boolean,
-            default: true
+            default: 1000
         },
         showHostGrouping: {
             type: Boolean,
@@ -57,350 +45,278 @@ const LogSearchResults = {
         emptyMessage: {
             type: String,
             default: '暂无搜索结果'
-        },
-        
-        // 高亮配置参数
-        enabledHighlighters: {
-            type: Object,
-            default: () => ({
-                logLevels: true,
-                timestamps: true,
-                network: true,
-                xml: true,
-                sql: true,
-                json: true,
-                filePaths: true,
-                urls: true,
-                emails: true,
-                uuids: true
-            })
-        },
-        
-        // 性能优化参数
-        virtualScroll: {
-            type: Boolean,
-            default: false
-        },
-        lazyLoad: {
-            type: Boolean,
-            default: false
-        },
-        
-        // 样式定制参数
-        customClass: {
-            type: String,
-            default: ''
-        },
-        fontSize: {
-            type: String,
-            default: '14px'  // 调整为适中的字体大小
-        },
-        fontFamily: {
-            type: String,
-            default: "'Microsoft YaHei', '微软雅黑', 'Fira Code', 'SF Mono', 'Monaco', 'Cascadia Code', 'Roboto Mono', monospace"  // 微软雅黑 + Fira Code
-        },
-        lineHeight: {
-            type: Number,
-            default: 1.4
-        },
-        theme: {
-            type: String,
-            default: 'light'
         }
     },
     
+    // ==================== 计算属性 ====================
     computed: {
-        // 按主机分组搜索结果（逻辑保持不变）
         groupedResults() {
-            if (!this.searchResults || !this.searchResults.hosts) return [];
+            if (!this.searchResults?.hosts) return [];
+            
             if (!this.showHostGrouping) {
-                const allResults = [];
-                this.searchResults.hosts.forEach(h => {
-                    if (h && h.success && Array.isArray(h.results)) allResults.push(...h.results);
-                });
-                return [{ key: 'all', host: 'all', results: allResults.slice(0, this.maxResults) }];
+                return this.createSingleGroup();
             }
-            const groups = [];
-            this.searchResults.hosts.forEach(hostResult => {
-                let hostResults = (hostResult && hostResult.success && Array.isArray(hostResult.results)) ? hostResult.results : [];
-                const originalCount = hostResults.length;
-                let isTruncated = false;
-                if (this.maxResults && hostResults.length > this.maxResults) {
-                    hostResults = hostResults.slice(0, this.maxResults);
-                    isTruncated = true;
-                }
-                const key = (hostResult && (hostResult.ssh_index !== undefined && hostResult.ssh_index !== null))
-                    ? `${hostResult.host}|${hostResult.ssh_index}`
-                    : `${(hostResult && hostResult.host) || 'unknown'}|0`;
-                groups.push({
-                    key,
-                    host: hostResult.host,
-                    results: hostResults,
-                    hostResult: hostResult,
-                    originalCount,
-                    isTruncated
-                });
-            });
-            return groups;
+            
+            return this.createHostGroups();
         }
     },
     
+    // ==================== 监听器 ====================
     watch: {
         searchResults: {
-            handler(){
-                this.$nextTick(()=> this.recomputeCompaction());
+            handler() {
+                this.$nextTick(() => this.recomputeCompaction());
             },
             deep: true
         },
-        showHostGrouping(){
-            this.$nextTick(()=> this.recomputeCompaction());
+        showHostGrouping() {
+            this.$nextTick(() => this.recomputeCompaction());
         }
     },
     
+    // ==================== 数据 ====================
     data() {
         return {
-            // 依赖加载状态
+            // 常量配置
+            CONSTANTS: {
+                PRISM_LOAD_DELAY: 100,
+                OVERFLOW_TOLERANCE: 1,
+                MAX_RESULTS_DEFAULT: 1000
+            },
+            
+            // 状态管理
             dependenciesLoaded: false,
             fullscreenKey: null,
-            // key -> 是否需要折叠（溢出）
             compactState: {},
-            // 当前打开的更多菜单 key
             openOverflowFor: null
         };
     },
     
+    // ==================== 方法 ====================
     methods: {
-        // 计算每个 host-header 是否溢出，溢出则折叠工具按钮
-        recomputeCompaction(){
-            this.$nextTick(()=>{
-                // 将作用域限定在当前组件根元素
-                const root = this.$el instanceof HTMLElement ? this.$el : (this.$el && this.$el.$el) || document;
+        // ---------- 生命周期辅助方法 ----------
+        addEventListeners() {
+            window.addEventListener('keydown', this.handleKeyDown);
+            window.addEventListener('resize', this.recomputeCompaction);
+        },
+        
+        removeEventListeners() {
+            window.removeEventListener('keydown', this.handleKeyDown);
+            window.removeEventListener('resize', this.recomputeCompaction);
+            document.removeEventListener('click', this.handleDocumentClick, { capture: true });
+        },
+        
+        clearFullscreenState() {
+            if (this.fullscreenKey) {
+                document.body.classList.remove('fullscreen-log-freeze');
+            }
+        },
+        
+        // ---------- DOM 工具方法 ----------
+        getComponentRoot() {
+            return this.$el instanceof HTMLElement 
+                ? this.$el 
+                : (this.$el?.$el) || document;
+        },
+        
+        // ---------- 结果分组方法 ----------
+        createSingleGroup() {
+            const allResults = this.searchResults.hosts
+                .filter(h => h?.success && Array.isArray(h.results))
+                .flatMap(h => h.results);
+            
+            return [{
+                key: 'all',
+                host: 'all',
+                results: allResults.slice(0, this.maxResults),
+                hostResult: null,
+                originalCount: allResults.length,
+                isTruncated: allResults.length > this.maxResults
+            }];
+        },
+        
+        createHostGroups() {
+            return this.searchResults.hosts.map(hostResult => {
+                const hostResults = (hostResult?.success && Array.isArray(hostResult.results)) 
+                    ? hostResult.results 
+                    : [];
+                
+                const originalCount = hostResults.length;
+                const isTruncated = this.maxResults && hostResults.length > this.maxResults;
+                const results = isTruncated ? hostResults.slice(0, this.maxResults) : hostResults;
+                
+                const key = this.generateHostKey(hostResult);
+                
+                return {
+                    key,
+                    host: hostResult.host,
+                    results,
+                    hostResult,
+                    originalCount,
+                    isTruncated
+                };
+            });
+        },
+        
+        generateHostKey(hostResult) {
+            if (!hostResult) return 'unknown|0';
+            
+            const host = hostResult.host || 'unknown';
+            const index = (hostResult.ssh_index !== undefined && hostResult.ssh_index !== null) 
+                ? hostResult.ssh_index 
+                : 0;
+            
+            return `${host}|${index}`;
+        },
+        
+        // ---------- UI 交互方法 ----------
+        recomputeCompaction() {
+            this.$nextTick(() => {
+                const root = this.getComponentRoot();
                 const infos = root.querySelectorAll('.host-header .host-info[data-group-key]');
                 const nextState = {};
+                
                 infos.forEach(el => {
                     const key = el.getAttribute('data-group-key');
-                    if(!key) return;
-                    // 使用 scrollWidth 对比 clientWidth 判断溢出
-                    const isOverflow = el.scrollWidth > el.clientWidth + 1; // +1 容错
-                    nextState[key] = !!isOverflow;
+                    if (!key) return;
+                    
+                    const isOverflow = el.scrollWidth > el.clientWidth + this.CONSTANTS.OVERFLOW_TOLERANCE;
+                    nextState[key] = isOverflow;
                 });
+                
                 this.compactState = nextState;
             });
         },
-        // 切换更多菜单
-        toggleOverflowMenu(key){
-            this.openOverflowFor = (this.openOverflowFor === key) ? null : key;
-            this.$nextTick(()=>{
-                if(this.openOverflowFor){
-                    document.addEventListener('click', this.handleDocumentClick, { capture:true, once:false });
+        
+        toggleOverflowMenu(key) {
+            const isClosing = this.openOverflowFor === key;
+            this.openOverflowFor = isClosing ? null : key;
+            
+            this.$nextTick(() => {
+                if (this.openOverflowFor) {
+                    document.addEventListener('click', this.handleDocumentClick, { 
+                        capture: true, 
+                        once: false 
+                    });
                 } else {
-                    document.removeEventListener('click', this.handleDocumentClick, { capture:true });
+                    document.removeEventListener('click', this.handleDocumentClick, { 
+                        capture: true 
+                    });
                 }
             });
         },
-        handleDocumentClick(e){
-            // 点击菜单外关闭
-            const root = this.$el instanceof HTMLElement ? this.$el : (this.$el && this.$el.$el) || document;
+        
+        handleDocumentClick(e) {
+            const root = this.getComponentRoot();
             const menu = root.querySelector('.host-actions .action-menu.open');
-            if(menu && !menu.contains(e.target)){
+            
+            if (menu && !menu.contains(e.target)) {
                 this.openOverflowFor = null;
-                document.removeEventListener('click', this.handleDocumentClick, { capture:true });
+                document.removeEventListener('click', this.handleDocumentClick, { 
+                    capture: true 
+                });
             }
         },
-        toggleFullscreen(key){
-            if(this.fullscreenKey === key){
-                this.fullscreenKey = null;
-                document.body.classList.remove('fullscreen-log-freeze');
-            } else {
-                this.fullscreenKey = key;
-                document.body.classList.add('fullscreen-log-freeze');
-            }
-            this.$nextTick(()=>{
-                // Scope the query to this component instance to avoid cross-instance mismatch
-                const root = this.$el instanceof HTMLElement ? this.$el : (this.$el && this.$el.$el) || document;
+        
+        toggleFullscreen(key) {
+            const isExiting = this.fullscreenKey === key;
+            
+            this.fullscreenKey = isExiting ? null : key;
+            document.body.classList.toggle('fullscreen-log-freeze', !isExiting);
+            
+            this.$nextTick(() => {
+                const root = this.getComponentRoot();
                 const el = root.querySelector('.host-result-box.fullscreen-active .host-results');
-                if(el){ el.scrollTop = el.scrollTop; }
+                
+                // 触发重绘以确保滚动条正确显示
+                if (el) el.scrollTop = el.scrollTop;
+                
                 this.recomputeCompaction();
             });
         },
-        handleKeyDown(e){
-            if(e.key === 'Escape' && this.fullscreenKey){
+        
+        handleKeyDown(e) {
+            if (e.key === 'Escape' && this.fullscreenKey) {
                 this.toggleFullscreen(this.fullscreenKey);
             }
         },
-        // 动态加载依赖
+        
+        // ---------- 依赖加载方法 ----------
         async loadDependencies() {
             try {
-                // 检查是否已加载 Prism.js (现在从本地加载)
-                if (typeof window.Prism === 'undefined') {
-                    // 等待一下让本地Prism.js文件加载完成
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                }
+                await this.waitForPrism();
                 
-                // 如果仍然没有加载，说明可能有问题，但继续工作
-                if (typeof window.Prism !== 'undefined') {
-                    // 设置 Prism 手动模式
-                    window.Prism = window.Prism || {};
-                    window.Prism.manual = true;
-                    
-                    // 定义自定义日志语言
-                    this.defineLogLanguage();
-                    console.log('Prism.js loaded successfully with log language (local version)');
+                if (window.Prism) {
+                    this.initializePrism();
+                    console.log('Prism.js loaded successfully with log language');
                 } else {
                     console.warn('Prism.js not available, syntax highlighting disabled');
                 }
                 
                 this.dependenciesLoaded = true;
-                this.$nextTick(()=> this.recomputeCompaction());
+                this.$nextTick(() => this.recomputeCompaction());
             } catch (error) {
                 console.warn('Failed to initialize dependencies:', error);
-                this.dependenciesLoaded = true; // 即使失败也继续工作
-                this.$nextTick(()=> this.recomputeCompaction());
+                this.dependenciesLoaded = true;
+                this.$nextTick(() => this.recomputeCompaction());
             }
         },
         
-        // 定义日志语言语法
+        async waitForPrism() {
+            if (typeof window.Prism !== 'undefined') return;
+            
+            await new Promise(resolve => 
+                setTimeout(resolve, this.CONSTANTS.PRISM_LOAD_DELAY)
+            );
+        },
+        
+        initializePrism() {
+            window.Prism = window.Prism || {};
+            window.Prism.manual = true;
+            this.defineLogLanguage();
+        },
+        
+        // ---------- 语法高亮方法 ----------
         defineLogLanguage() {
             if (!window.Prism) return;
             
-            // 定义日志语言的语法规则
             window.Prism.languages.log = {
-                // 时间戳 - 最高优先级
-                'timestamp': [
-                    {
-                        // ISO 8601 格式: 2024-09-05T14:30:45.123Z
-                        pattern: /\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})?\b/,
-                        alias: 'number'
-                    },
-                    {
-                        // 标准日期时间: 2024-09-05 14:30:45.123
-                        pattern: /\b\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?\b/,
-                        alias: 'number'
-                    },
-                    {
-                        // 月-日 时间格式: 08-07 09:03:57.766
-                        pattern: /\b\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?\b/,
-                        alias: 'number'
-                    },
-                    {
-                        // 简单时间格式: 09:03:57.766
-                        pattern: /\b\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?\b/,
-                        alias: 'number'
-                    },
-                    {
-                        // Unix 时间戳: 1609459200
-                        pattern: /\b1[0-9]{9}\b/,
-                        alias: 'number'
-                    }
-                ],
-                
-                // 日志级别 - 高优先级
-                'log-level': [
-                    {
-                        pattern: /\b(?:FATAL|CRITICAL)\b/i,
-                        alias: 'important'
-                    },
-                    {
-                        pattern: /\bERROR\b/i,
-                        alias: 'important'
-                    },
-                    {
-                        pattern: /\bWARN(?:ING)?\b/i,
-                        alias: 'builtin'
-                    },
-                    {
-                        pattern: /\bINFO\b/i,
-                        alias: 'keyword'
-                    },
-                    {
-                        pattern: /\b(?:DEBUG|TRACE|VERBOSE)\b/i,
-                        alias: 'comment'
-                    }
-                ],
-                
-                // HTTP 状态码
-                'http-status': [
-                    {
-                        pattern: /\b(?:200|201|202|204|301|302|304)\b/,
-                        alias: 'string'
-                    },
-                    {
-                        pattern: /\b(?:400|401|403|404|405|406|408|409|410|422|429)\b/,
-                        alias: 'builtin'
-                    },
-                    {
-                        pattern: /\b(?:500|501|502|503|504|505)\b/,
-                        alias: 'important'
-                    }
-                ],
-                
-                // IP 地址
+                'timestamp': this.getTimestampPatterns(),
+                'log-level': this.getLogLevelPatterns(),
+                'http-status': this.getHttpStatusPatterns(),
                 'ip-address': {
                     pattern: /\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b/,
                     alias: 'variable'
                 },
-                
-                // URL
                 'url': {
                     pattern: /\bhttps?:\/\/[^\s<>"{}|\\^`[\]]+/i,
                     alias: 'url'
                 },
-                
-                // 文件路径
-                'file-path': [
-                    {
-                        // Unix 路径
-                        pattern: /(^|\s)(\/[^\s]*\.(?:log|txt|json|xml|conf|config|yaml|yml|properties|ini))\b/,
-                        lookbehind: true,
-                        alias: 'string'
-                    },
-                    {
-                        // Windows 路径
-                        pattern: /(^|\s)([A-Za-z]:\\[^\s]*\.(?:log|txt|json|xml|conf|config|yaml|yml|properties|ini))\b/,
-                        lookbehind: true,
-                        alias: 'string'
-                    }
-                ],
-                
-                // UUID
+                'file-path': this.getFilePathPatterns(),
                 'uuid': {
                     pattern: /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/i,
                     alias: 'char'
                 },
-                
-                // 邮箱地址
                 'email': {
                     pattern: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/,
                     alias: 'string'
                 },
-                
-                // JSON 对象/数组标识
                 'json-structure': {
                     pattern: /[{}\[\]]/,
                     alias: 'punctuation'
                 },
-                
-                // 引用的字符串
                 'quoted-string': {
                     pattern: /"[^"]*"|'[^']*'/,
                     alias: 'string'
                 },
-                
-                // 数字（简化版本，避免与时间戳冲突）
                 'number': {
                     pattern: /\b\d+\.?\d*\b/
                 },
-                
-                // 特殊符号和分隔符
                 'punctuation': /[{}[\](),.:;]/,
-                
-                // 线程/进程 ID
                 'thread-id': {
                     pattern: /\[(?:Thread-|pool-|http-|worker-)?[0-9]+\]/i,
                     alias: 'variable'
                 },
-                
-                // 异常类名
                 'exception': {
                     pattern: /\b[A-Z][a-zA-Z0-9]*(?:Exception|Error|Throwable)\b/,
                     alias: 'important'
@@ -408,157 +324,253 @@ const LogSearchResults = {
             };
         },
         
-        // 注入组件相关样式
-        injectStyles() {
-            // 移除样式注入：样式已移至静态文件 log-results.css
-            // 保留函数以兼容旧版，现为无操作
+        getTimestampPatterns() {
+            return [
+                {
+                    pattern: /\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})?\b/,
+                    alias: 'number'
+                },
+                {
+                    pattern: /\b\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?\b/,
+                    alias: 'number'
+                },
+                {
+                    pattern: /\b\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?\b/,
+                    alias: 'number'
+                },
+                {
+                    pattern: /\b\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?\b/,
+                    alias: 'number'
+                },
+                {
+                    pattern: /\b1[0-9]{9}\b/,
+                    alias: 'number'
+                }
+            ];
         },
         
-        // 高亮日志内容
+        getLogLevelPatterns() {
+            return [
+                {
+                    pattern: /\b(?:FATAL|CRITICAL)\b/i,
+                    alias: 'important'
+                },
+                {
+                    pattern: /\bERROR\b/i,
+                    alias: 'important'
+                },
+                {
+                    pattern: /\bWARN(?:ING)?\b/i,
+                    alias: 'builtin'
+                },
+                {
+                    pattern: /\bINFO\b/i,
+                    alias: 'keyword'
+                },
+                {
+                    pattern: /\b(?:DEBUG|TRACE|VERBOSE)\b/i,
+                    alias: 'comment'
+                }
+            ];
+        },
+        
+        getHttpStatusPatterns() {
+            return [
+                {
+                    pattern: /\b(?:200|201|202|204|301|302|304)\b/,
+                    alias: 'string'
+                },
+                {
+                    pattern: /\b(?:400|401|403|404|405|406|408|409|410|422|429)\b/,
+                    alias: 'builtin'
+                },
+                {
+                    pattern: /\b(?:500|501|502|503|504|505)\b/,
+                    alias: 'important'
+                }
+            ];
+        },
+        
+        getFilePathPatterns() {
+            return [
+                {
+                    pattern: /(^|\s)(\/[^\s]*\.(?:log|txt|json|xml|conf|config|yaml|yml|properties|ini))\b/,
+                    lookbehind: true,
+                    alias: 'string'
+                },
+                {
+                    pattern: /(^|\s)([A-Za-z]:\\[^\s]*\.(?:log|txt|json|xml|conf|config|yaml|yml|properties|ini))\b/,
+                    lookbehind: true,
+                    alias: 'string'
+                }
+            ];
+        },
+        
         highlightContent(content) {
             if (!content) return '';
             
-            // 如果 Prism.js 还未加载完成，使用简单的转义
-            if (!window.Prism || !window.Prism.languages || !window.Prism.languages.log || !window.Prism.highlight) {
-                const div = document.createElement('div');
-                div.textContent = content;
-                return div.innerHTML;
+            if (!this.isPrismReady()) {
+                return this.escapeHtml(content);
             }
             
             try {
-                // 使用 Prism.js 进行语法高亮
-                let highlighted = window.Prism.highlight(content, window.Prism.languages.log, 'log');
+                let highlighted = window.Prism.highlight(
+                    content, 
+                    window.Prism.languages.log, 
+                    'log'
+                );
                 
-                // 搜索关键词高亮 (最后执行，避免覆盖其他高亮)
-                if (this.searchKeyword && this.searchKeyword.trim()) {
-                    const escapedKeyword = this.searchKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                    if (this.useRegex) {
-                        try {
-                            const regex = new RegExp(this.searchKeyword, 'gi');
-                            highlighted = highlighted.replace(regex, '<mark class="search-highlight">$&</mark>');
-                        } catch (e) {
-                            const regex = new RegExp(escapedKeyword, 'gi');
-                            highlighted = highlighted.replace(regex, '<mark class="search-highlight">$&</mark>');
-                        }
-                    } else {
-                        const regex = new RegExp(escapedKeyword, 'gi');
-                        highlighted = highlighted.replace(regex, '<mark class="search-highlight">$&</mark>');
-                    }
+                if (this.searchKeyword?.trim()) {
+                    highlighted = this.highlightSearchKeyword(highlighted);
                 }
                 
                 return highlighted;
-                
             } catch (error) {
                 console.warn('Prism.js highlighting failed:', error);
-                // 降级到简单的 HTML 转义
-                const div = document.createElement('div');
-                div.textContent = content;
-                return div.innerHTML;
+                return this.escapeHtml(content);
             }
         },
         
-        // 下载日志文件
+        isPrismReady() {
+            return window.Prism?.languages?.log && window.Prism.highlight;
+        },
+        
+        escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        },
+        
+        highlightSearchKeyword(content) {
+            const escapedKeyword = this.searchKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            
+            try {
+                const regex = this.useRegex 
+                    ? new RegExp(this.searchKeyword, 'gi')
+                    : new RegExp(escapedKeyword, 'gi');
+                
+                return content.replace(regex, '<mark class="search-highlight">$&</mark>');
+            } catch (e) {
+                // 正则表达式无效时使用转义版本
+                const regex = new RegExp(escapedKeyword, 'gi');
+                return content.replace(regex, '<mark class="search-highlight">$&</mark>');
+            }
+        },
+        
+        // ---------- 文件操作方法 ----------
         async downloadLogFile(hostResult) {
-            if (!hostResult || !hostResult.search_result) {
+            if (!hostResult?.search_result) {
                 this.$message.error('无法获取日志文件信息');
                 return;
             }
             
+            const { file_path: filePath } = hostResult.search_result;
+            const { host } = hostResult;
+            
+            if (!filePath) {
+                this.$message.error('日志文件路径不存在');
+                return;
+            }
+            
             try {
-                const filePath = hostResult.search_result.file_path;
-                const host = hostResult.host;
-                
-                if (!filePath) {
-                    this.$message.error('日志文件路径不存在');
-                    return;
-                }
-                
-                // 显示下载提示
                 this.$message.info(`正在准备下载 ${host} 的日志文件...`);
                 
-                // 构建下载URL参数
-                const params = new URLSearchParams({
-                    host: host,
-                    file_path: filePath
-                });
+                const downloadUrl = this.buildDownloadUrl(host, filePath);
+                const fileName = this.generateDownloadFileName(host, filePath);
                 
-                // 如果有日志名称，也传递过去
-                if (this.searchResults && this.searchResults.log_name) {
-                    params.append('log_name', this.searchResults.log_name);
-                }
-                
-                const downloadUrl = `/api/v1/logs/download?${params.toString()}`;
-                
-                // 创建隐藏的下载链接
-                const link = document.createElement('a');
-                link.href = downloadUrl;
-                link.download = `${host}_${this.formatFileName(filePath)}_${this.formatDate(new Date())}.log`;
-                link.style.display = 'none';
-                
-                // 添加到文档并触发下载
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
+                this.triggerDownload(downloadUrl, fileName);
                 
                 this.$message.success('下载已开始');
-                
             } catch (error) {
                 console.error('下载失败:', error);
                 this.$message.error('下载失败: ' + error.message);
             }
         },
         
-        // 格式化文件名
+        buildDownloadUrl(host, filePath) {
+            const params = new URLSearchParams({
+                host,
+                file_path: filePath
+            });
+            
+            if (this.searchResults?.log_name) {
+                params.append('log_name', this.searchResults.log_name);
+            }
+            
+            return `/api/v1/logs/download?${params.toString()}`;
+        },
+        
+        generateDownloadFileName(host, filePath) {
+            const baseName = this.formatFileName(filePath);
+            const timestamp = this.formatDate(new Date());
+            return `${host}_${baseName}_${timestamp}.log`;
+        },
+        
+        triggerDownload(url, fileName) {
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            link.style.display = 'none';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        },
+        
+        // ---------- 格式化工具方法 ----------
         formatFileName(filePath) {
             if (!filePath) return 'log';
             
-            // 提取文件名（去掉路径）
             const fileName = filePath.split('/').pop() || filePath.split('\\').pop() || 'log';
-            
-            // 去掉扩展名
             return fileName.replace(/\.[^/.]+$/, '');
         },
         
-        // 格式化日期为文件名友好格式
         formatDate(date) {
+            const pad = (num) => String(num).padStart(2, '0');
+            
             const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            const hour = String(date.getHours()).padStart(2, '0');
-            const minute = String(date.getMinutes()).padStart(2, '0');
-            const second = String(date.getSeconds()).padStart(2, '0');
+            const month = pad(date.getMonth() + 1);
+            const day = pad(date.getDate());
+            const hour = pad(date.getHours());
+            const minute = pad(date.getMinutes());
+            const second = pad(date.getSeconds());
             
             return `${year}${month}${day}_${hour}${minute}${second}`;
-        }
-        ,
-        // 截断显示路径（保留文件名，路径过长时省略前半部分，仅展示末尾若干目录 + 文件名）
+        },
+        
         formatHostPath(fullPath) {
             if (!fullPath) return '';
+            
             const parts = fullPath.split(/[/\\]/).filter(Boolean);
             if (parts.length === 0) return fullPath;
-            const fileName = parts[parts.length - 1];
-            // 若没有目录结构就直接返回文件名
-            if (parts.length === 1) return fileName;
-            // 按需求显示为 ../文件名
-            return `../${fileName}`;
-        }
-        ,
-        openSftp(hostResult){
-            if(!hostResult) return;
-            const logName = (this.searchResults && this.searchResults.log_name) || '';
+            if (parts.length === 1) return parts[0];
+            
+            return `../${parts[parts.length - 1]}`;
+        },
+        
+        // ---------- 导航方法 ----------
+        openSftp(hostResult) {
+            if (!hostResult) return;
+            
+            const logName = this.searchResults?.log_name || '';
             const idx = hostResult.ssh_index;
             const url = `/sftp?single=1&log_name=${encodeURIComponent(logName)}&ssh_index=${encodeURIComponent(idx)}`;
+            
             window.open(url, '_blank');
         },
-        openTerminal(hostResult){
-            if(!hostResult) return;
-            const logName = (this.searchResults && this.searchResults.log_name) || '';
+        
+        openTerminal(hostResult) {
+            if (!hostResult) return;
+            
+            const logName = this.searchResults?.log_name || '';
             const idx = hostResult.ssh_index;
             const url = `/terminals?single=1&log_name=${encodeURIComponent(logName)}&ssh_index=${encodeURIComponent(idx)}`;
+            
             window.open(url, '_blank');
         }
     },
     
+    // ==================== 模板 ====================
     template: `
         <!-- 依赖加载中 -->
         <div v-if="!dependenciesLoaded" class="loading-dependencies" v-loading="true" element-loading-text="正在加载语法高亮组件..." style="min-height: 100px;"></div>
@@ -583,10 +595,10 @@ const LogSearchResults = {
                                 </span>
                                 <span class="el-tag el-tag--primary el-tag--light el-tag--small" :title="'主机: '+group.host">[[ group.host ]]</span>
                                 <span class="el-tag el-tag--info el-tag--light el-tag--small" :title="'匹配条数'">[[ group.results.length ]] 条</span>
-                                                                <span class="el-tag el-tag--warning el-tag--light el-tag--small host-path-tag" v-if="group.hostResult && group.hostResult.search_result && group.hostResult.search_result.file_path"
-                                                                            :title="group.hostResult.search_result.file_path">
-                                                                        [[ formatHostPath(group.hostResult.search_result.file_path) ]]
-                                                                </span>
+                                <span class="el-tag el-tag--warning el-tag--light el-tag--small host-path-tag" v-if="group.hostResult && group.hostResult.search_result && group.hostResult.search_result.file_path"
+                                    :title="group.hostResult.search_result.file_path">
+                                    [[ formatHostPath(group.hostResult.search_result.file_path) ]]
+                                </span>
                             </div>
                             <div class="host-actions">
                                 <!-- 折叠模式：显示更多菜单按钮 -->
@@ -704,7 +716,7 @@ const LogSearchResults = {
                                 <i class="fas fa-clock" style="color: #ffffff80; margin-right: 8px;"></i>
                                 <span style="color: #ffffffb3; font-weight:400;">等待搜索</span>
                                 <div style="margin-top: 4px; color: #ffffff40; font-size: 12px; letter-spacing:.5px;">
-                                    输入关键词并点击 “搜索”
+                                    输入关键词并点击 "搜索"
                                 </div>
                             </div>
                             <!-- 搜索失败的情况 -->

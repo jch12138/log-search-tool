@@ -1,8 +1,6 @@
-"""Utility subpackage (encoding, filename resolution, shared helpers)."""
+"""服务工具模块"""
 
-from .encoding import decode_bytes, ensure_utf8  # noqa: F401
+# 不再导出编码函数
+from .filename_resolver import resolve_log_filename  # noqa: F401
 
-__all__ = [
-    'decode_bytes',
-    'ensure_utf8'
-]
+__all__ = ['resolve_log_filename']

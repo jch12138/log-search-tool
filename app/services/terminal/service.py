@@ -9,10 +9,8 @@ import logging
 from dataclasses import dataclass, asdict
 from typing import Dict, List, Optional, Any
 import paramiko
-from app.services.utils.encoding import decode_bytes, smart_decode
 
-def _smart_decode_chunk(data: bytes, last_good: str | None, forced: str | None):
-	return smart_decode(data, last_good=last_good, forced=forced)
+from app.services.utils.encoding import EncodingDetector, smart_decode
 
 
 @dataclass
@@ -44,6 +42,7 @@ class TerminalService:
 		self._idle_timeout = idle_timeout or 0  # 0 表示不启用
 		self._check_interval = check_interval
 		self._close_listeners = []  # callbacks(payload: dict)
+		self._encoding_detector = EncodingDetector()  # 编码检测器
 		if self._idle_timeout > 0:
 			threading.Thread(target=self._idle_reaper, daemon=True).start()
 
@@ -75,6 +74,22 @@ class TerminalService:
 		ssh_client.connect(**kwargs)
 		channel = ssh_client.invoke_shell(term='xterm-256color')
 		channel.settimeout(0.0)
+		
+		# 检测远程服务器编码
+		detected_encoding = 'utf-8'  # 默认
+		try:
+			# 使用临时 SSH 连接检测编码
+			_, stdout_locale, _ = ssh_client.exec_command('locale | grep LC_CTYPE')
+			locale_output = stdout_locale.read()
+			if locale_output:
+				detected = self._encoding_detector.detect_from_locale(locale_output.decode('utf-8', errors='replace'))
+				if detected:
+					detected_encoding = detected
+					cache_key = f"terminal_{host}:{port}:{username}"
+					self._encoding_detector.cache_encoding(cache_key, detected_encoding)
+		except Exception as e:
+			self._logger.debug(f"[terminal] encoding detection failed for {host}: {e}")
+		
 		session = TerminalSession(
 			terminal_id=terminal_id,
 			session_id=session_id,
@@ -91,8 +106,11 @@ class TerminalService:
 				'channel': channel,
 				'buffer': [],
 				'decoder': codecs.getincrementaldecoder('utf-8')(),
-				'encoding': 'utf-8',          # last successful detected encoding
-				'forced_encoding': None,       # user override via API
+				'encoding': detected_encoding,    # 检测到的编码
+				'forced_encoding': None,          # user override via API
+				'host': host,                     # 保存主机信息用于编码缓存键
+				'port': port,
+				'username': username,
 				'env_init': env_init,
 				'last_locale': None,
 				'lock': threading.Lock(),
@@ -270,8 +288,10 @@ class TerminalService:
 		if not sd:
 			return
 		channel = sd['channel']
-		decoder = sd['decoder']
-		last_good = sd.get('encoding', 'utf-8')
+		# 获取缓存的编码作为首选
+		cache_key = f"terminal_{sd['host']}:{sd['port']}:{sd['username']}"
+		preferred_encoding = sd.get('forced_encoding') or self._encoding_detector.get_cached_encoding(cache_key) or 'utf-8'
+		
 		while True:
 			if channel.closed:
 				break
@@ -280,15 +300,13 @@ class TerminalService:
 					data = channel.recv(8192)
 					if not data:
 						break
-					# We decode per chunk to adjust encoding dynamically if needed
-					forced = sd.get('forced_encoding')
-					text, detected = _smart_decode_chunk(data, last_good, forced)
-					if not forced and detected and detected != last_good:
-						last_good = detected
-						with self._lock:
-							# persist last successful encoding
-							sd['encoding'] = detected
-					# Locale marker parsing
+					# 使用智能解码，带编码检测
+					text, used_encoding = smart_decode(data, preferred_encoding=preferred_encoding)
+					
+				# 如果检测到不同的编码，更新缓存
+				if used_encoding and used_encoding != preferred_encoding:
+					self._encoding_detector.cache_encoding(cache_key, used_encoding)
+					preferred_encoding = used_encoding					# Locale marker parsing
 					if '__AUTO_LOCALE_SET:' in text or '__SET_LOCALE:' in text:
 						marker = None
 						for line in text.splitlines():
@@ -305,13 +323,8 @@ class TerminalService:
 					time.sleep(0.05)
 			except Exception:
 				time.sleep(0.1)
-		try:
-			tail = decoder.decode(b"", final=True)
-		except Exception:
-			tail = ""
+		# 会话结束
 		with sd['lock']:
-			if tail:
-				sd['buffer'].append(tail)
 			sd['buffer'].append("\n[会话已结束]\n")
 		with self._lock:
 			si = self.session_info.get(terminal_id)

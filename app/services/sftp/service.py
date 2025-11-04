@@ -13,7 +13,7 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, asdict
-from app.services.utils.encoding import decode_bytes
+from app.services.utils.encoding import EncodingDetector, smart_decode
 
 logger = logging.getLogger(__name__)
 
@@ -34,11 +34,26 @@ class SFTPService:
 		self.connections: Dict[str, Dict[str, Any]] = {}
 		self.connection_info: Dict[str, SFTPConnection] = {}
 
-	def _decode_filename(self, name: Any) -> str:
+	def _decode_filename(self, name: Any, host: Optional[str] = None) -> str:
+		"""智能解码文件名
+		
+		Args:
+			name: 文件名（可能是 str 或 bytes）
+			host: 主机名（用于获取缓存的编码）
+		"""
 		if isinstance(name, str):
 			return name
 		if isinstance(name, bytes):
-			return decode_bytes(name)
+			# 如果提供了主机名，尝试获取检测到的编码
+			preferred_encoding = None
+			if host:
+				# 尝试从缓存获取该主机的编码
+				cache_key = f"sftp_{host}"
+				preferred_encoding = EncodingDetector.get_cached_encoding(cache_key)
+			
+			# 使用智能解码
+			text, _ = smart_decode(name, preferred_encoding=preferred_encoding)
+			return text
 		return str(name)
 
 	def connect(self, host: str, port: int = 22, username: str = "", password: str = "", connection_name: str = "") -> SFTPConnection:
@@ -49,6 +64,18 @@ class SFTPService:
 		ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 		ssh_client.connect(hostname=host, port=port, username=username, password=password, timeout=10)
 		sftp_client = ssh_client.open_sftp()
+		
+		# 检测远程编码并缓存（用于文件名解码）
+		try:
+			stdin, stdout, stderr = ssh_client.exec_command("locale | grep LC_CTYPE", timeout=5)
+			locale_output = stdout.read().decode('ascii', errors='ignore').strip()
+			encoding = EncodingDetector.detect_from_locale(locale_output)
+			cache_key = f"sftp_{host}"
+			EncodingDetector.cache_encoding(cache_key, encoding)
+			logger.info(f"SFTP 连接编码检测: {encoding} (主机: {host})")
+		except Exception as e:
+			logger.debug(f"SFTP 编码检测失败，使用默认: {e}")
+		
 		info = SFTPConnection(
 			connection_id=connection_id,
 			connection_name=connection_name,
@@ -80,6 +107,9 @@ class SFTPService:
 		if connection_id not in self.connections:
 			raise ValueError("SFTP连接不存在")
 		sftp = self.connections[connection_id]['sftp']
+		info = self.connection_info.get(connection_id)
+		host = info.host if info else 'unknown'
+		
 		home = sftp.getcwd() or '/'
 		if not path or path in ('.', './'):
 			remote_path = home
@@ -102,7 +132,8 @@ class SFTPService:
 		for it in entries:
 			try:
 				original = it.filename
-				converted = self._decode_filename(original)
+				# 传入 host 用于智能解码
+				converted = self._decode_filename(original, host=host)
 				item = {
 					'name': converted,
 					'original_name': original,
@@ -126,17 +157,18 @@ class SFTPService:
 
 	def _list_directory_via_ssh(self, connection_id: str, remote_path: str) -> Dict[str, Any]:  # pragma: no cover
 		ssh = self.connections[connection_id]['ssh']
-		# 不再强制 export LANG/LC_ALL，避免权限不足；直接 ls，必要时前端/解码逻辑兜底
+		info = self.connection_info.get(connection_id)
+		host = info.host if info else 'unknown'
+		
+		# 使用 ls 命令作为备选方案
 		cmd = f"ls -la '{remote_path}'"
 		_, stdout, stderr = None, *ssh.exec_command(cmd)[1:]
 		output = stdout.read()
-		lines = []
-		for enc in ['utf-8', 'gb2312']:
-			try:
-				lines = output.decode(enc).strip().split('\n')[1:]
-				break
-			except Exception:
-				continue
+		
+		# 使用智能解码
+		lines_text, _ = smart_decode(output)
+		lines = lines_text.strip().split('\n')[1:]  # 跳过 total 行
+		
 		items = []
 		for line in lines:
 			if not line.strip():

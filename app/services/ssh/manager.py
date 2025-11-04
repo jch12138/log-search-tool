@@ -6,8 +6,8 @@ import time
 import logging
 from typing import Dict, Any, Optional
 from concurrent.futures import ThreadPoolExecutor, Future
-from app.services.utils.encoding import decode_bytes
 from app.config.system_settings import Settings
+from app.services.utils.encoding import EncodingDetector, smart_decode
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +22,7 @@ class SSHConnection:
 		self.last_used = time.time()
 		self.lock = threading.Lock()
 		self._settings = Settings()
+		self._remote_encoding: Optional[str] = None  # 缓存远程编码
 
 	def connect(self) -> bool:
 		try:
@@ -39,6 +40,10 @@ class SSHConnection:
 			self.connected = True
 			self.last_used = time.time()
 			logger.info(f"SSH连接成功: {self.config['host']}")
+			
+			# 检测远程服务器的编码环境
+			self._detect_remote_encoding()
+			
 			return True
 		except Exception as e:  # pragma: no cover - network dependent
 			logger.error(f"SSH连接失败 {self.config.get('host')}: {e}")
@@ -48,6 +53,35 @@ class SSHConnection:
 				self.client = None
 			return False
 
+	def _detect_remote_encoding(self):
+		"""检测远程服务器的默认编码"""
+		try:
+			# 生成缓存键
+			cache_key = f"{self.config['host']}:{self.config.get('port', 22)}:{self.config['username']}"
+			
+			# 检查缓存
+			cached = EncodingDetector.get_cached_encoding(cache_key)
+			if cached:
+				self._remote_encoding = cached
+				logger.debug(f"使用缓存的编码: {cached} (主机: {self.config['host']})")
+				return
+			
+			# 执行 locale 命令检测编码
+			stdin, stdout, stderr = self.client.exec_command("locale | grep LC_CTYPE", timeout=5)
+			output = stdout.read().decode('ascii', errors='ignore').strip()
+			
+			# 使用 EncodingDetector 解析
+			self._remote_encoding = EncodingDetector.detect_from_locale(output)
+			
+			# 缓存结果
+			EncodingDetector.cache_encoding(cache_key, self._remote_encoding)
+			
+			logger.info(f"检测到远程编码: {self._remote_encoding} (主机: {self.config['host']})")
+		except Exception as e:
+			# 检测失败时默认 UTF-8
+			logger.warning(f"无法检测远程编码，使用 UTF-8: {e}")
+			self._remote_encoding = 'utf-8'
+
 	def execute_command(self, command: str, timeout: int | None = None) -> tuple[str, str, int]:
 		if not self.connected or not self.client:
 			raise RuntimeError("SSH连接未建立")
@@ -56,8 +90,15 @@ class SSHConnection:
 			stdin, stdout, stderr = self.client.exec_command(command, timeout=_effective_timeout)
 			raw_out = stdout.read() or b""
 			raw_err = stderr.read() or b""
-			out = decode_bytes(raw_out)
-			err = decode_bytes(raw_err)
+			
+			# 使用智能解码，传入检测到的编码作为首选
+			out, encoding_used = smart_decode(raw_out, preferred_encoding=self._remote_encoding)
+			err, _ = smart_decode(raw_err, preferred_encoding=self._remote_encoding)
+			
+			# 如果实际使用的编码与检测的不同，记录日志
+			if encoding_used != self._remote_encoding:
+				logger.debug(f"实际使用编码 {encoding_used} 与检测编码 {self._remote_encoding} 不同")
+			
 			exit_code = stdout.channel.recv_exit_status()
 			self.last_used = time.time()
 			return out, err, exit_code

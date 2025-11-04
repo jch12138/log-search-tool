@@ -83,6 +83,11 @@ jobs:
             run.py
           mkdir -p artifacts
           mv dist/log-search-api artifacts/log-search-api-onedir
+          
+          # 复制配置文件到打包目录根目录
+          cp -f settings.ini artifacts/log-search-api-onedir/ 2>/dev/null || true
+          # cp -f config.yaml artifacts/log-search-api-onedir/ 2>/dev/null || true
+          
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             # 额外复制脚本到 onedir 根目录，方便用户直接使用
             cp -f build/start_prod.bat artifacts/log-search-api-onedir/ 2>/dev/null || true

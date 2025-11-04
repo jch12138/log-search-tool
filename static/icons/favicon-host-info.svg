@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><style>.a{fill:#6366f1}.b{fill:#fff;opacity:.95}</style></defs><rect width="64" height="64" rx="12" class="a"/>
+<!-- Host (server rack) + Info (i) symbol -->
+<path class="b" d="M18 18h20a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H18a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2Zm0 14h20a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H18a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2Zm4-11a1 1 0 1 0 0 2h4a1 1 0 1 0 0-2Zm0 14a1 1 0 1 0 0 2h4a1 1 0 1 0 0-2Z"/>
+<circle cx="45" cy="45" r="11" fill="#4f46e5" opacity="0.95"/>
+<path class="b" d="M45 38a2 2 0 1 1 0 4 2 2 0 1 1 0-4Zm-2 6h4v8h-4Z"/>
+</svg>

@@ -1,0 +1,146 @@
+2025-11-02 16:27:45 [INFO] app: 应用初始化完成 (new structure)
+2025-11-02 16:27:45 [INFO] werkzeug: [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8000
+ * Running on http://198.18.0.1:8000
+2025-11-02 16:27:45 [INFO] werkzeug: [33mPress CTRL+C to quit[0m
+2025-11-02 16:27:48 [INFO] app.middleware: Request: GET /
+2025-11-02 16:27:48 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:27:48] "GET / HTTP/1.1" 200 -
+2025-11-02 16:27:48 [INFO] app.middleware: Request: GET /static/css/index.css
+2025-11-02 16:27:48 [INFO] app.middleware: Request: GET /static/css/prism-okaidia.min.css
+2025-11-02 16:27:48 [INFO] app.middleware: Request: GET /static/css/element-plus.css
+2025-11-02 16:27:48 [INFO] app.middleware: Request: GET /static/fonts/microsoft-yahei.css
+2025-11-02 16:27:48 [INFO] app.middleware: Request: GET /static/js/vendor/vue.global.js
+2025-11-02 16:27:48 [INFO] app.middleware: Request: GET /static/css/main.css
+2025-11-02 16:27:48 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:27:48] "[36mGET /static/fonts/microsoft-yahei.css HTTP/1.1[0m" 304 -
+2025-11-02 16:27:48 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:27:48] "[36mGET /static/css/prism-okaidia.min.css HTTP/1.1[0m" 304 -
+2025-11-02 16:27:48 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:27:48] "[36mGET /static/css/index.css HTTP/1.1[0m" 304 -
+2025-11-02 16:27:48 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:27:48] "[36mGET /static/css/element-plus.css HTTP/1.1[0m" 304 -
+2025-11-02 16:27:48 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:27:48] "[36mGET /static/css/main.css HTTP/1.1[0m" 304 -
+2025-11-02 16:27:48 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:27:48] "GET /static/js/vendor/vue.global.js HTTP/1.1" 200 -
+2025-11-02 16:27:48 [INFO] app.middleware: Request: GET /static/js/vendor/element-plus.js
+2025-11-02 16:27:48 [INFO] app.middleware: Request: GET /static/js/vendor/axios.min.js
+2025-11-02 16:27:48 [INFO] app.middleware: Request: GET /static/js/vendor/prism-sql.min.js
+2025-11-02 16:27:48 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:27:48] "[36mGET /static/js/vendor/axios.min.js HTTP/1.1[0m" 304 -
+2025-11-02 16:27:48 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:27:48] "GET /static/js/vendor/element-plus.js HTTP/1.1" 200 -
+2025-11-02 16:27:48 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:27:48] "[36mGET /static/js/vendor/prism-sql.min.js HTTP/1.1[0m" 304 -
+2025-11-02 16:27:48 [INFO] app.middleware: Request: GET /static/js/vendor/prism-core.min.js
+2025-11-02 16:27:48 [INFO] app.middleware: Request: GET /static/js/vendor/prism-markup.min.js
+2025-11-02 16:27:48 [INFO] app.middleware: Request: GET /static/js/vendor/prism-clike.min.js
+2025-11-02 16:27:48 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:27:48] "[36mGET /static/js/vendor/prism-core.min.js HTTP/1.1[0m" 304 -
+2025-11-02 16:27:48 [INFO] app.middleware: Request: GET /static/js/vendor/prism-javascript.min.js
+2025-11-02 16:27:48 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:27:48] "[36mGET /static/js/vendor/prism-markup.min.js HTTP/1.1[0m" 304 -
+2025-11-02 16:27:48 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:27:48] "[36mGET /static/js/vendor/prism-javascript.min.js HTTP/1.1[0m" 304 -
+2025-11-02 16:27:48 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:27:48] "[36mGET /static/js/vendor/prism-clike.min.js HTTP/1.1[0m" 304 -
+2025-11-02 16:27:48 [INFO] app.middleware: Request: GET /static/js/vendor/prism-json.min.js
+2025-11-02 16:27:48 [INFO] app.middleware: Request: GET /static/js/vendor/prism-xml-doc.min.js
+2025-11-02 16:27:48 [INFO] app.middleware: Request: GET /static/js/LogSearchResults.js
+2025-11-02 16:27:48 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:27:48] "[36mGET /static/js/LogSearchResults.js HTTP/1.1[0m" 304 -
+2025-11-02 16:27:48 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:27:48] "[36mGET /static/js/vendor/prism-json.min.js HTTP/1.1[0m" 304 -
+2025-11-02 16:27:48 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:27:48] "[36mGET /static/js/vendor/prism-xml-doc.min.js HTTP/1.1[0m" 304 -
+2025-11-02 16:27:48 [INFO] app.middleware: Request: GET /api/v1/logs
+2025-11-02 16:27:48 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:27:48] "GET /api/v1/logs HTTP/1.1" 200 -
+2025-11-02 16:27:51 [INFO] app.middleware: Request: GET /api/v1/logs/surge
+2025-11-02 16:27:51 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:27:51] "GET /api/v1/logs/surge HTTP/1.1" 200 -
+2025-11-02 16:27:52 [INFO] app.middleware: Request: POST /api/v1/logs/surge/search
+2025-11-02 16:27:52 [INFO] app.api.routes.logs: [SEARCH] ip=127.0.0.1 log=surge keyword='' mode=context regex=False reverse=False ctx=5 max_lines=2000 ssh_hosts=4 targets=[{'host': '127.0.0.1', 'path': '/Users/chenway/Desktop/log-search-tool/logs/app.log'}, {'host': '127.0.0.1', 'path': '/Users/chenway/Library/Logs/Surge/Surge-2025-10-26-212447.log'}, {'host': '127.0.0.1', 'path': '/Users/chenway/Library/Logs/Surge/Surge-2025-10-26-212447.log'}, {'host': '127.0.0.1', 'path': '/Users/chenway/Library/Logs/Surge/Surge-2025-10-26-212447.log'}] filter={}
+2025-11-02 16:27:52 [INFO] paramiko.transport: Connected (version 2.0, client OpenSSH_10.0)
+2025-11-02 16:27:52 [INFO] paramiko.transport: Authentication (publickey) failed.
+2025-11-02 16:27:53 [INFO] paramiko.transport: Authentication (password) successful!
+2025-11-02 16:27:53 [INFO] app.services.ssh.manager: SSH连接成功: 127.0.0.1
+2025-11-02 16:27:53 [INFO] app.api.routes.logs: [SEARCH RESULT] IP: 127.0.0.1 | Log: surge | Matches: 400 | Time: 0.829s
+2025-11-02 16:27:53 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:27:53] "POST /api/v1/logs/surge/search HTTP/1.1" 200 -
+2025-11-02 16:33:45 [INFO] app.services.ssh.manager: 清理老旧连接: 127.0.0.1:22:chenway
+2025-11-02 16:51:09 [INFO] app: 应用初始化完成 (new structure)
+2025-11-02 16:51:09 [INFO] werkzeug: [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8000
+ * Running on http://198.18.0.1:8000
+2025-11-02 16:51:09 [INFO] werkzeug: [33mPress CTRL+C to quit[0m
+2025-11-02 16:51:20 [INFO] app.middleware: Request: GET /
+2025-11-02 16:51:20 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:20] "GET / HTTP/1.1" 200 -
+2025-11-02 16:51:20 [INFO] app.middleware: Request: GET /static/fonts/microsoft-yahei.css
+2025-11-02 16:51:20 [INFO] app.middleware: Request: GET /static/css/main.css
+2025-11-02 16:51:20 [INFO] app.middleware: Request: GET /static/css/element-plus.css
+2025-11-02 16:51:20 [INFO] app.middleware: Request: GET /static/js/vendor/vue.global.js
+2025-11-02 16:51:20 [INFO] app.middleware: Request: GET /static/css/prism-okaidia.min.css
+2025-11-02 16:51:20 [INFO] app.middleware: Request: GET /static/js/vendor/prism-core.min.js
+2025-11-02 16:51:20 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:20] "[36mGET /static/fonts/microsoft-yahei.css HTTP/1.1[0m" 304 -
+2025-11-02 16:51:20 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:20] "[36mGET /static/css/prism-okaidia.min.css HTTP/1.1[0m" 304 -
+2025-11-02 16:51:20 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:20] "[36mGET /static/css/main.css HTTP/1.1[0m" 304 -
+2025-11-02 16:51:20 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:20] "[36mGET /static/css/element-plus.css HTTP/1.1[0m" 304 -
+2025-11-02 16:51:20 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:20] "[36mGET /static/js/vendor/vue.global.js HTTP/1.1[0m" 304 -
+2025-11-02 16:51:20 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:20] "[36mGET /static/js/vendor/prism-core.min.js HTTP/1.1[0m" 304 -
+2025-11-02 16:51:20 [INFO] app.middleware: Request: GET /static/css/index.css
+2025-11-02 16:51:20 [INFO] app.middleware: Request: GET /static/js/vendor/element-plus.js
+2025-11-02 16:51:20 [INFO] app.middleware: Request: GET /static/js/vendor/axios.min.js
+2025-11-02 16:51:20 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:20] "[36mGET /static/js/vendor/element-plus.js HTTP/1.1[0m" 304 -
+2025-11-02 16:51:20 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:20] "[36mGET /static/css/index.css HTTP/1.1[0m" 304 -
+2025-11-02 16:51:20 [INFO] app.middleware: Request: GET /static/js/vendor/prism-markup.min.js
+2025-11-02 16:51:20 [INFO] app.middleware: Request: GET /static/js/vendor/prism-clike.min.js
+2025-11-02 16:51:20 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:20] "[36mGET /static/js/vendor/axios.min.js HTTP/1.1[0m" 304 -
+2025-11-02 16:51:20 [INFO] app.middleware: Request: GET /static/js/vendor/prism-javascript.min.js
+2025-11-02 16:51:20 [INFO] app.middleware: Request: GET /static/js/vendor/prism-json.min.js
+2025-11-02 16:51:20 [INFO] app.middleware: Request: GET /static/js/vendor/prism-sql.min.js
+2025-11-02 16:51:20 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:20] "[36mGET /static/js/vendor/prism-markup.min.js HTTP/1.1[0m" 304 -
+2025-11-02 16:51:20 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:20] "[36mGET /static/js/vendor/prism-clike.min.js HTTP/1.1[0m" 304 -
+2025-11-02 16:51:20 [INFO] app.middleware: Request: GET /static/js/vendor/prism-xml-doc.min.js
+2025-11-02 16:51:20 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:20] "[36mGET /static/js/vendor/prism-javascript.min.js HTTP/1.1[0m" 304 -
+2025-11-02 16:51:20 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:20] "[36mGET /static/js/vendor/prism-json.min.js HTTP/1.1[0m" 304 -
+2025-11-02 16:51:20 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:20] "[36mGET /static/js/vendor/prism-sql.min.js HTTP/1.1[0m" 304 -
+2025-11-02 16:51:20 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:20] "[36mGET /static/js/vendor/prism-xml-doc.min.js HTTP/1.1[0m" 304 -
+2025-11-02 16:51:20 [INFO] app.middleware: Request: GET /static/js/LogSearchResults.js
+2025-11-02 16:51:20 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:20] "[36mGET /static/js/LogSearchResults.js HTTP/1.1[0m" 304 -
+2025-11-02 16:51:20 [INFO] app.middleware: Request: GET /api/v1/logs
+2025-11-02 16:51:20 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:20] "GET /api/v1/logs HTTP/1.1" 200 -
+2025-11-02 16:51:24 [INFO] app.middleware: Request: GET /
+2025-11-02 16:51:24 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:24] "GET / HTTP/1.1" 200 -
+2025-11-02 16:51:24 [INFO] app.middleware: Request: GET /static/css/element-plus.css
+2025-11-02 16:51:24 [INFO] app.middleware: Request: GET /static/css/prism-okaidia.min.css
+2025-11-02 16:51:24 [INFO] app.middleware: Request: GET /static/fonts/microsoft-yahei.css
+2025-11-02 16:51:24 [INFO] app.middleware: Request: GET /static/css/index.css
+2025-11-02 16:51:24 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:24] "[36mGET /static/css/element-plus.css HTTP/1.1[0m" 304 -
+2025-11-02 16:51:24 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:24] "[36mGET /static/css/prism-okaidia.min.css HTTP/1.1[0m" 304 -
+2025-11-02 16:51:24 [INFO] app.middleware: Request: GET /static/css/main.css
+2025-11-02 16:51:24 [INFO] app.middleware: Request: GET /static/js/vendor/vue.global.js
+2025-11-02 16:51:24 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:24] "[36mGET /static/fonts/microsoft-yahei.css HTTP/1.1[0m" 304 -
+2025-11-02 16:51:24 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:24] "[36mGET /static/css/index.css HTTP/1.1[0m" 304 -
+2025-11-02 16:51:24 [INFO] app.middleware: Request: GET /static/js/vendor/element-plus.js
+2025-11-02 16:51:24 [INFO] app.middleware: Request: GET /static/js/vendor/axios.min.js
+2025-11-02 16:51:24 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:24] "[36mGET /static/css/main.css HTTP/1.1[0m" 304 -
+2025-11-02 16:51:24 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:24] "[36mGET /static/js/vendor/vue.global.js HTTP/1.1[0m" 304 -
+2025-11-02 16:51:24 [INFO] app.middleware: Request: GET /static/js/vendor/prism-core.min.js
+2025-11-02 16:51:24 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:24] "[36mGET /static/js/vendor/element-plus.js HTTP/1.1[0m" 304 -
+2025-11-02 16:51:24 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:24] "[36mGET /static/js/vendor/axios.min.js HTTP/1.1[0m" 304 -
+2025-11-02 16:51:24 [INFO] app.middleware: Request: GET /static/js/vendor/prism-markup.min.js
+2025-11-02 16:51:24 [INFO] app.middleware: Request: GET /static/js/vendor/prism-clike.min.js
+2025-11-02 16:51:24 [INFO] app.middleware: Request: GET /static/js/vendor/prism-javascript.min.js
+2025-11-02 16:51:24 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:24] "[36mGET /static/js/vendor/prism-core.min.js HTTP/1.1[0m" 304 -
+2025-11-02 16:51:24 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:24] "[36mGET /static/js/vendor/prism-markup.min.js HTTP/1.1[0m" 304 -
+2025-11-02 16:51:24 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:24] "[36mGET /static/js/vendor/prism-javascript.min.js HTTP/1.1[0m" 304 -
+2025-11-02 16:51:24 [INFO] app.middleware: Request: GET /static/js/vendor/prism-json.min.js
+2025-11-02 16:51:24 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:24] "[36mGET /static/js/vendor/prism-clike.min.js HTTP/1.1[0m" 304 -
+2025-11-02 16:51:24 [INFO] app.middleware: Request: GET /static/js/vendor/prism-sql.min.js
+2025-11-02 16:51:24 [INFO] app.middleware: Request: GET /static/js/vendor/prism-xml-doc.min.js
+2025-11-02 16:51:24 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:24] "[36mGET /static/js/vendor/prism-sql.min.js HTTP/1.1[0m" 304 -
+2025-11-02 16:51:24 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:24] "[36mGET /static/js/vendor/prism-json.min.js HTTP/1.1[0m" 304 -
+2025-11-02 16:51:24 [INFO] app.middleware: Request: GET /static/js/LogSearchResults.js
+2025-11-02 16:51:24 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:24] "[36mGET /static/js/LogSearchResults.js HTTP/1.1[0m" 304 -
+2025-11-02 16:51:24 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:24] "[36mGET /static/js/vendor/prism-xml-doc.min.js HTTP/1.1[0m" 304 -
+2025-11-02 16:51:24 [INFO] app.middleware: Request: GET /api/v1/logs
+2025-11-02 16:51:24 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:24] "GET /api/v1/logs HTTP/1.1" 200 -
+2025-11-02 16:51:24 [INFO] app.middleware: Request: GET /static/icons/favicon-search.svg
+2025-11-02 16:51:24 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:24] "[36mGET /static/icons/favicon-search.svg HTTP/1.1[0m" 304 -
+2025-11-02 16:51:26 [INFO] app.middleware: Request: GET /api/v1/logs/surge
+2025-11-02 16:51:26 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:26] "GET /api/v1/logs/surge HTTP/1.1" 200 -
+2025-11-02 16:51:27 [INFO] app.middleware: Request: POST /api/v1/logs/surge/search
+2025-11-02 16:51:27 [INFO] app.api.routes.logs: [SEARCH] ip=127.0.0.1 log=surge keyword='' mode=context regex=False reverse=False ctx=5 max_lines=2000 ssh_hosts=4 targets=[{'host': '127.0.0.1', 'path': '/Users/chenway/Desktop/log-search-tool/logs/app.log'}, {'host': '127.0.0.1', 'path': '/Users/chenway/Library/Logs/Surge/Surge-2025-10-26-212447.log'}, {'host': '127.0.0.1', 'path': '/Users/chenway/Library/Logs/Surge/Surge-2025-10-26-212447.log'}, {'host': '127.0.0.1', 'path': '/Users/chenway/Library/Logs/Surge/Surge-2025-10-26-212447.log'}] filter={}
+2025-11-02 16:51:27 [INFO] paramiko.transport: Connected (version 2.0, client OpenSSH_10.0)
+2025-11-02 16:51:27 [INFO] paramiko.transport: Authentication (publickey) failed.
+2025-11-02 16:51:28 [INFO] paramiko.transport: Authentication (password) successful!
+2025-11-02 16:51:28 [INFO] app.services.ssh.manager: SSH连接成功: 127.0.0.1
+2025-11-02 16:51:28 [INFO] app.api.routes.logs: [SEARCH RESULT] IP: 127.0.0.1 | Log: surge | Matches: 400 | Time: 0.750s
+2025-11-02 16:51:28 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 16:51:28] "POST /api/v1/logs/surge/search HTTP/1.1" 200 -
+2025-11-02 16:57:09 [INFO] app.services.ssh.manager: 清理老旧连接: 127.0.0.1:22:chenway
+2025-11-02 22:45:45 [INFO] app.middleware: Request: GET /static/js/vendor/element-plus.js
+2025-11-02 22:45:45 [INFO] werkzeug: 127.0.0.1 - - [02/Nov/2025 22:45:45] "GET /static/js/vendor/element-plus.js HTTP/1.1" 200 -

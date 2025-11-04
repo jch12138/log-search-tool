@@ -5,7 +5,21 @@ const LogSearchResults = {
     // 组件依赖加载
     async created() {
         await this.loadDependencies();
-        this.injectStyles();
+        // this.injectStyles();  // 移除样式注入调用
+    },
+    mounted() {
+        window.addEventListener('keydown', this.handleKeyDown);
+        window.addEventListener('resize', this.recomputeCompaction);
+        this.$nextTick(()=> this.recomputeCompaction());
+    },
+    beforeUnmount() {
+        window.removeEventListener('keydown', this.handleKeyDown);
+        window.removeEventListener('resize', this.recomputeCompaction);
+        document.removeEventListener('click', this.handleDocumentClick, { capture:true });
+        // Ensure body scroll freeze is cleared if component unmounts while fullscreen
+        if (this.fullscreenKey) {
+            document.body.classList.remove('fullscreen-log-freeze');
+        }
     },
     
     props: {
@@ -79,7 +93,7 @@ const LogSearchResults = {
         },
         fontSize: {
             type: String,
-            default: '16px'  // 调整为适中的字体大小
+            default: '14px'  // 调整为适中的字体大小
         },
         fontFamily: {
             type: String,
@@ -96,94 +110,124 @@ const LogSearchResults = {
     },
     
     computed: {
-        // 按主机分组搜索结果
+        // 按主机分组搜索结果（逻辑保持不变）
         groupedResults() {
-            if (!this.searchResults || !this.searchResults.hosts) {
-                return [];
-            }
-            
+            if (!this.searchResults || !this.searchResults.hosts) return [];
             if (!this.showHostGrouping) {
-                // 如果不显示主机分组，合并所有主机的结果
                 const allResults = [];
-                this.searchResults.hosts.forEach(hostResult => {
-                    if (hostResult && hostResult.success && Array.isArray(hostResult.results)) {
-                        allResults.push(...hostResult.results);
-                    }
+                this.searchResults.hosts.forEach(h => {
+                    if (h && h.success && Array.isArray(h.results)) allResults.push(...h.results);
                 });
-                return [{
-                    host: 'all',
-                    results: allResults.slice(0, this.maxResults)
-                }];
+                return [{ key: 'all', host: 'all', results: allResults.slice(0, this.maxResults) }];
             }
-            
-            // 直接使用后端返回的主机分组数据
             const groups = [];
-            let totalMatchesCount = 0;
-            
-            console.log('调试 - searchResults.hosts:', this.searchResults.hosts);
-            
             this.searchResults.hosts.forEach(hostResult => {
-                let hostResults = (hostResult && hostResult.success && Array.isArray(hostResult.results))
-                    ? hostResult.results
-                    : [];
-                
+                let hostResults = (hostResult && hostResult.success && Array.isArray(hostResult.results)) ? hostResult.results : [];
                 const originalCount = hostResults.length;
-                totalMatchesCount += originalCount;
-                
-                // 如果该主机结果过多，进行截断
                 let isTruncated = false;
                 if (this.maxResults && hostResults.length > this.maxResults) {
                     hostResults = hostResults.slice(0, this.maxResults);
                     isTruncated = true;
                 }
-                
-                console.log(`调试 - 主机 ${hostResult.host}: 成功=${hostResult.success}, 原始匹配数=${originalCount}, 显示匹配数=${hostResults.length}`);
-                
+                const key = (hostResult && (hostResult.ssh_index !== undefined && hostResult.ssh_index !== null))
+                    ? `${hostResult.host}|${hostResult.ssh_index}`
+                    : `${(hostResult && hostResult.host) || 'unknown'}|0`;
                 groups.push({
+                    key,
                     host: hostResult.host,
                     results: hostResults,
                     hostResult: hostResult,
-                    originalCount: originalCount,
-                    isTruncated: isTruncated
+                    originalCount,
+                    isTruncated
                 });
             });
-            
-            console.log('调试 - 返回的分组数量:', groups.length);
-            console.log('调试 - 总匹配数量:', totalMatchesCount);
-            
             return groups;
+        }
+    },
+    
+    watch: {
+        searchResults: {
+            handler(){
+                this.$nextTick(()=> this.recomputeCompaction());
+            },
+            deep: true
         },
-        
-        // 动态样式
-        containerStyle() {
-            return {
-                height: this.height,
-                fontSize: this.fontSize,
-                fontFamily: this.fontFamily,
-                lineHeight: this.lineHeight
-            };
-        },
-        
-        // 主机容器样式 - 动态高度
-        hostsContainerStyle() {
-            // 计算可用高度 (减去统计信息的高度)
-            const hasStats = this.showSearchStats && this.searchResults && this.searchResults.total_matches > 0;
-            const statsHeight = hasStats ? '60px' : '0px';
-            
-            return {
-                height: `calc(${this.height} - ${statsHeight})`
-            };
+        showHostGrouping(){
+            this.$nextTick(()=> this.recomputeCompaction());
         }
     },
     
     data() {
         return {
             // 依赖加载状态
-            dependenciesLoaded: false
+            dependenciesLoaded: false,
+            fullscreenKey: null,
+            // key -> 是否需要折叠（溢出）
+            compactState: {},
+            // 当前打开的更多菜单 key
+            openOverflowFor: null
         };
     },
     
     methods: {
+        // 计算每个 host-header 是否溢出，溢出则折叠工具按钮
+        recomputeCompaction(){
+            this.$nextTick(()=>{
+                // 将作用域限定在当前组件根元素
+                const root = this.$el instanceof HTMLElement ? this.$el : (this.$el && this.$el.$el) || document;
+                const infos = root.querySelectorAll('.host-header .host-info[data-group-key]');
+                const nextState = {};
+                infos.forEach(el => {
+                    const key = el.getAttribute('data-group-key');
+                    if(!key) return;
+                    // 使用 scrollWidth 对比 clientWidth 判断溢出
+                    const isOverflow = el.scrollWidth > el.clientWidth + 1; // +1 容错
+                    nextState[key] = !!isOverflow;
+                });
+                this.compactState = nextState;
+            });
+        },
+        // 切换更多菜单
+        toggleOverflowMenu(key){
+            this.openOverflowFor = (this.openOverflowFor === key) ? null : key;
+            this.$nextTick(()=>{
+                if(this.openOverflowFor){
+                    document.addEventListener('click', this.handleDocumentClick, { capture:true, once:false });
+                } else {
+                    document.removeEventListener('click', this.handleDocumentClick, { capture:true });
+                }
+            });
+        },
+        handleDocumentClick(e){
+            // 点击菜单外关闭
+            const root = this.$el instanceof HTMLElement ? this.$el : (this.$el && this.$el.$el) || document;
+            const menu = root.querySelector('.host-actions .action-menu.open');
+            if(menu && !menu.contains(e.target)){
+                this.openOverflowFor = null;
+                document.removeEventListener('click', this.handleDocumentClick, { capture:true });
+            }
+        },
+        toggleFullscreen(key){
+            if(this.fullscreenKey === key){
+                this.fullscreenKey = null;
+                document.body.classList.remove('fullscreen-log-freeze');
+            } else {
+                this.fullscreenKey = key;
+                document.body.classList.add('fullscreen-log-freeze');
+            }
+            this.$nextTick(()=>{
+                // Scope the query to this component instance to avoid cross-instance mismatch
+                const root = this.$el instanceof HTMLElement ? this.$el : (this.$el && this.$el.$el) || document;
+                const el = root.querySelector('.host-result-box.fullscreen-active .host-results');
+                if(el){ el.scrollTop = el.scrollTop; }
+                this.recomputeCompaction();
+            });
+        },
+        handleKeyDown(e){
+            if(e.key === 'Escape' && this.fullscreenKey){
+                this.toggleFullscreen(this.fullscreenKey);
+            }
+        },
         // 动态加载依赖
         async loadDependencies() {
             try {
@@ -207,9 +251,11 @@ const LogSearchResults = {
                 }
                 
                 this.dependenciesLoaded = true;
+                this.$nextTick(()=> this.recomputeCompaction());
             } catch (error) {
                 console.warn('Failed to initialize dependencies:', error);
                 this.dependenciesLoaded = true; // 即使失败也继续工作
+                this.$nextTick(()=> this.recomputeCompaction());
             }
         },
         
@@ -364,347 +410,8 @@ const LogSearchResults = {
         
         // 注入组件相关样式
         injectStyles() {
-            if (document.getElementById('log-search-results-styles')) {
-                return; // 样式已注入
-            }
-            
-            const style = document.createElement('style');
-            style.id = 'log-search-results-styles';
-            style.textContent = `
-                /* 日志搜索结果组件样式 */
-                .log-search-results-component {
-                    width: 100%;
-                    height: 100%;
-                    display: flex;
-                    flex-direction: column;
-                }
-                
-                .loading-dependencies {
-                    flex: 1;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    min-height: 200px;
-                }
-                
-                .search-stats {
-                    padding: 12px 0;
-                    border-bottom: 1px solid #ebeef5;
-                    margin-bottom: 16px;
-                }
-                
-                .results-container {
-                    flex: 1;
-                    margin-top: 10px;
-                    display: flex;
-                    flex-direction: column;
-                    /* 背景由内部区域控制，避免影响外层卡片底色 */
-                }
-                
-                .hosts-container {
-                    display: flex;
-                    gap: 20px;
-                    /* height由动态样式控制，不再固定 */
-                }
-                
-                .hosts-container.hosts-1 {
-                    flex-direction: row;
-                }
-                
-                .hosts-container.hosts-2 {
-                    flex-direction: row;
-                }
-                
-                .host-result-box {
-                    flex: 1;
-                    min-width: 0; /* 移除固定最小宽度，让容器能够收缩 */
-                    border: 1px solid #e4e7ed;
-                    border-radius: 8px;
-                    overflow: hidden;
-                    /* 外层容器保持浅色，与页面卡片风格一致 */
-                    background: white;
-                    display: flex;
-                    flex-direction: column;
-                    height: 100%;
-                }
-                
-                /* 只在有足够空间时设置最小宽度 */
-                @media (min-width: 768px) {
-                    .host-result-box {
-                        min-width: 300px;
-                    }
-                    
-                    .hosts-container.hosts-1 .host-result-box {
-                        min-width: 0;
-                    }
-                }
-                
-                /* 小屏幕上垂直排列 */
-                @media (max-width: 767px) {
-                    .hosts-container {
-                        flex-direction: column !important;
-                        gap: 10px;
-                    }
-                    
-                    .host-result-box {
-                        min-height: 200px;
-                        max-height: 300px;
-                    }
-                }
-                
-                .host-header {
-                    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-                    padding: 12px 16px;
-                    border-bottom: 1px solid #e4e7ed;
-                    position: sticky;
-                    top: 0;
-                    z-index: 10;
-                }
-                
-                .host-info {
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    justify-content: space-between;
-                }
-                
-                .host-left-info {
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                }
-                
-                .host-icon {
-                    font-size: 16px;
-                }
-                
-                .host-name {
-                    font-weight: 600;
-                    color: #303133;
-                    font-size: 14px;
-                }
-                
-                .host-count {
-                    color: #909399;
-                    font-size: 12px;
-                    background: #f0f2f5;
-                    padding: 2px 6px;
-                    border-radius: 10px;
-                }
-                
-                .host-actions {
-                    display: flex;
-                    align-items: center;
-                    gap: 6px;
-                }
-                
-                .download-btn {
-                    padding: 6px 12px;
-                    font-size: 12px;
-                    border: 1px solid #e4e7ed;
-                    background: #fafbfc;
-                    color: #909399;
-                    border-radius: 6px;
-                    cursor: pointer;
-                    transition: all 0.2s ease;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    gap: 4px;
-                    min-width: 60px;
-                    text-align: center;
-                    font-weight: 400;
-                    line-height: 1;
-                }
-                
-                .download-btn:hover {
-                    background: #f0f2f5;
-                    border-color: #c0c4cc;
-                    color: #606266;
-                    transform: translateY(-1px);
-                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                }
-                
-                .download-btn:active {
-                    background: #e4e7ed;
-                    border-color: #b3b8c3;
-                    transform: translateY(0);
-                    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-                }
-                
-                .download-btn:focus {
-                    outline: none;
-                    border-color: #409eff;
-                    box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
-                }
-                
-                .download-btn i {
-                    font-size: 11px;
-                    margin: 0;
-                }
-                
-                .download-btn span {
-                    margin: 0;
-                    white-space: nowrap;
-                }
-                
-                .host-results {
-                    flex: 1;
-                    overflow-y: auto;
-                    padding: 0;
-                    /* 仅滚动日志区域使用深色背景，未填满时也保持一致 */
-                    background: #282c34;
-                }
-                
-                .host-results::-webkit-scrollbar {
-                    width: 8px;
-                }
-                
-                .host-results::-webkit-scrollbar-track {
-                    background: #f1f1f1;
-                    border-radius: 4px;
-                }
-                
-                .host-results::-webkit-scrollbar-thumb {
-                    background: #c0c4cc;
-                    border-radius: 4px;
-                }
-                
-                .host-results::-webkit-scrollbar-thumb:hover {
-                    background: #909399;
-                }
-                
-                .result-line {
-                    background: #282c34;
-                    transition: background-color 0.2s;
-                }
-                
-                .result-line:hover {
-                    background: #2c313c;
-                }
-                
-                .result-content {
-                    padding: 8px 16px;
-                    font-family: 'Microsoft YaHei', '微软雅黑', 'Fira Code', 'SF Mono', 'Monaco', 'Cascadia Code', 'Roboto Mono', monospace;
-                    font-size: 16px;  /* 稍微调小字体 */
-                    font-weight: 400;  /* 标准字重 */
-                    line-height: 1.6;  /* 增加行高提升可读性 */
-                    white-space: pre-wrap;
-                    overflow-x: auto;
-                    word-break: break-all;
-                    margin: 0;
-                    /* One Dark Pro 背景和文字颜色 */
-                    background: #282c34;
-                    color: #abb2bf;
-                }
-                
-                .result-content code[class*="language-"],
-                .result-content pre[class*="language-"] {
-                    font-family: 'Microsoft YaHei', '微软雅黑', 'Fira Code', 'SF Mono', 'Monaco', 'Cascadia Code', 'Roboto Mono', monospace;
-                    font-size: 16px;  /* 与主要内容保持一致 */
-                    font-weight: 400;
-                    line-height: 1.6;
-                    background: transparent;
-                    margin: 0;
-                    padding: 0;
-                    border: none;
-                    border-radius: 0;
-                }
-                
-                .empty-results, .no-data {
-                    flex: 1;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    /* 保持与卡片一致的浅色背景 */
-                }
-                
-                /* One Dark Pro 主题配色 */
-                .result-content {
-                    background: #282c34;
-                    color: #abb2bf;
-                }
-                
-                /* Prism.js One Dark Pro 配色扩展 */
-                .token.comment { color: #5c6370; font-style: italic; }
-                .token.keyword { color: #c678dd; font-weight: bold; }
-                .token.builtin { color: #e5c07b; font-weight: bold; }
-                .token.important { color: #e06c75; font-weight: bold; }
-                .token.number { color: #d19a66; }
-                .token.string { color: #98c379; }
-                .token.variable { color: #61afef; }
-                .token.char { color: #56b6c2; }
-                .token.url { color: #61afef; text-decoration: underline; }
-                .token.punctuation { color: #abb2bf; }
-                
-                /* 日志级别专用配色 */
-                .token.log-level.important { color: #e06c75; } /* ERROR, FATAL */
-                .token.log-level.builtin { color: #e5c07b; }    /* WARN */
-                .token.log-level.keyword { color: #61afef; }    /* INFO */
-                .token.log-level.comment { color: #5c6370; }    /* DEBUG, TRACE */
-                
-                /* HTTP 状态码配色 */
-                .token.http-status.string { color: #98c379; }     /* 2xx 成功 */
-                .token.http-status.builtin { color: #e5c07b; }    /* 4xx 客户端错误 */
-                .token.http-status.important { color: #e06c75; }  /* 5xx 服务器错误 */
-                
-                /* 时间戳配色 */
-                .token.timestamp { color: #d19a66; }
-                
-                /* 搜索高亮样式 */
-                mark.search-highlight {
-                    background-color: #e5c07b;
-                    padding: 1px 3px;
-                    border-radius: 3px;
-                    font-weight: bold;
-                    color: #282c34;
-                    box-shadow: 0 1px 3px rgba(229, 192, 123, 0.3);
-                    border: none;
-                }
-                
-                /* 兼容旧样式 */
-                .log-error { color: #e06c75; font-weight: bold; }
-                .log-warn { color: #e5c07b; font-weight: bold; }
-                .log-info { color: #61afef; font-weight: bold; }
-                .log-debug { color: #5c6370; font-weight: bold; }
-                .log-timestamp { color: #d19a66; }
-                .log-ip { color: #61afef; }
-                .log-status-200 { color: #98c379; font-weight: bold; }
-                .log-status-error { color: #e06c75; font-weight: bold; }
-                
-                /* 主机无结果样式 */
-                .host-no-results {
-                    flex: 1;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    padding: 40px 20px;
-                    /* 无结果提示保持浅色背景 */
-                    background: #fafafa;
-                    border-radius: 6px;
-                    margin: 10px;
-                }
-                
-                .no-results-message {
-                    text-align: center;
-                    font-size: 14px;
-                }
-                
-                /* 截断提示样式 */
-                .truncation-notice {
-                    border-top: 1px solid #e4e7ed;
-                    background: #f5f7fa;
-                    padding: 12px 16px;
-                    margin-top: 8px;
-                    border-radius: 0 0 6px 6px;
-                }
-                
-                .truncation-message {
-                    text-align: center;
-                    font-size: 13px;
-                }
-            `;
-            document.head.appendChild(style);
+            // 移除样式注入：样式已移至静态文件 log-results.css
+            // 保留函数以兼容旧版，现为无操作
         },
         
         // 高亮日志内容
@@ -823,133 +530,241 @@ const LogSearchResults = {
             
             return `${year}${month}${day}_${hour}${minute}${second}`;
         }
+        ,
+        // 截断显示路径（保留文件名，路径过长时省略前半部分，仅展示末尾若干目录 + 文件名）
+        formatHostPath(fullPath) {
+            if (!fullPath) return '';
+            const parts = fullPath.split(/[/\\]/).filter(Boolean);
+            if (parts.length === 0) return fullPath;
+            const fileName = parts[parts.length - 1];
+            // 若没有目录结构就直接返回文件名
+            if (parts.length === 1) return fileName;
+            // 按需求显示为 ../文件名
+            return `../${fileName}`;
+        }
+        ,
+        openSftp(hostResult){
+            if(!hostResult) return;
+            const logName = (this.searchResults && this.searchResults.log_name) || '';
+            const idx = hostResult.ssh_index;
+            const url = `/sftp?single=1&log_name=${encodeURIComponent(logName)}&ssh_index=${encodeURIComponent(idx)}`;
+            window.open(url, '_blank');
+        },
+        openTerminal(hostResult){
+            if(!hostResult) return;
+            const logName = (this.searchResults && this.searchResults.log_name) || '';
+            const idx = hostResult.ssh_index;
+            const url = `/terminals?single=1&log_name=${encodeURIComponent(logName)}&ssh_index=${encodeURIComponent(idx)}`;
+            window.open(url, '_blank');
+        }
     },
     
     template: `
-        <div class="log-search-results-component" :class="[customClass, theme]" :style="containerStyle">
-            <!-- 依赖加载中 -->
-            <div v-if="!dependenciesLoaded" class="loading-dependencies" v-loading="true" element-loading-text="正在加载语法高亮组件..." style="min-height: 100px;">
+        <!-- 依赖加载中 -->
+        <div v-if="!dependenciesLoaded" class="loading-dependencies" v-loading="true" element-loading-text="正在加载语法高亮组件..." style="min-height: 100px;"></div>
+        
+        <!-- 有结果：直接渲染 host-result-box 作为外层 results-section 的直接子元素 -->
+        <template v-else>
+            <!-- 显示主机结果盒：有匹配结果 或 处于占位预搜索状态 -->
+            <template v-if="searchResults && searchResults.hosts && searchResults.hosts.length && (searchResults.total_matches > 0 || searchResults.pre_search)">
+                <div class="results-hosts-row" :class="{ 'grid-2x2': showHostGrouping && groupedResults.length === 4 }">
+                <div class="host-result-box" :class="{ 'fullscreen-active': fullscreenKey === group.key }" v-for="group in groupedResults" :key="group.key">
+                    <!-- 主机头部 -->
+                    <div class="host-header" v-if="showHostGrouping">
+                        <div class="host-info" :data-group-key="group.key">
+                            <div class="host-left-info host-tags">
+                                <span class="host-icon" aria-hidden="true" style="color:#409eff;display:inline-flex;">\
+                                    <svg viewBox="0 0 24 24" width="16" height="16" role="img" focusable="false" aria-hidden="true">\
+                                        <rect x="3" y="4" width="18" height="6" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="1.4"/>\
+                                        <rect x="3" y="14" width="18" height="6" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="1.4"/>\
+                                        <circle cx="7" cy="7" r="1" fill="currentColor"/>\
+                                        <circle cx="7" cy="17" r="1" fill="currentColor"/>\
+                                    </svg>\
+                                </span>
+                                <span class="el-tag el-tag--primary el-tag--light el-tag--small" :title="'主机: '+group.host">[[ group.host ]]</span>
+                                <span class="el-tag el-tag--info el-tag--light el-tag--small" :title="'匹配条数'">[[ group.results.length ]] 条</span>
+                                                                <span class="el-tag el-tag--warning el-tag--light el-tag--small host-path-tag" v-if="group.hostResult && group.hostResult.search_result && group.hostResult.search_result.file_path"
+                                                                            :title="group.hostResult.search_result.file_path">
+                                                                        [[ formatHostPath(group.hostResult.search_result.file_path) ]]
+                                                                </span>
+                            </div>
+                            <div class="host-actions">
+                                <!-- 折叠模式：显示更多菜单按钮 -->
+                                <template v-if="compactState[group.key]">
+                                    <div class="action-menu" :class="{ open: openOverflowFor===group.key }">
+                                        <button class="action-btn more-btn" @click.stop="toggleOverflowMenu(group.key)" title="更多操作" aria-label="更多">
+                                            <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                                                <circle cx="5" cy="12" r="1.6" fill="currentColor"/>
+                                                <circle cx="12" cy="12" r="1.6" fill="currentColor"/>
+                                                <circle cx="19" cy="12" r="1.6" fill="currentColor"/>
+                                            </svg>
+                                        </button>
+                                        <div class="menu-popover" v-show="openOverflowFor===group.key">
+                                            <button class="menu-item" @click="openOverflowFor=null; openSftp(group.hostResult)">
+                                                <span class="mi-icon">
+                                                    <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                                                        <path d="M4 6h4.2c.4 0 .78.16 1.06.44l1.3 1.3c.28.28.66.44 1.06.44H19a1 1 0 0 1 1 1v7.5A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5V6Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>
+                                                    </svg>
+                                                </span>
+                                                <span>文件管理</span>
+                                            </button>
+                                            <button class="menu-item" @click="openOverflowFor=null; openTerminal(group.hostResult)">
+                                                <span class="mi-icon">
+                                                    <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                                                        <path d="M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.2" fill="none"/>
+                                                        <path d="m7 9 3.5 3L7 15" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                                                        <path d="M11.5 15H17" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                                                    </svg>
+                                                </span>
+                                                <span>在线终端</span>
+                                            </button>
+                                            <button class="menu-item" @click="openOverflowFor=null; toggleFullscreen(group.key)">
+                                                <span class="mi-icon">
+                                                    <svg viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+                                                        <path d="M4 9V5a1 1 0 0 1 1-1h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                        <path d="M20 15v4a1 1 0 0 1-1 1h-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                        <path d="M15 4h4a1 1 0 0 1 1 1v4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                        <path d="M9 20H5a1 1 0 0 1-1-1v-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                    </svg>
+                                                </span>
+                                                <span>放大查看</span>
+                                            </button>
+                                            <button class="menu-item" @click="openOverflowFor=null; downloadLogFile(group.hostResult)">
+                                                <span class="mi-icon">
+                                                    <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                                                        <path d="M12 4v11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                                                        <path d="m7 10 5 5 5-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                                                        <path d="M5 19h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                                                    </svg>
+                                                </span>
+                                                <span>下载日志</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </template>
+                                <!-- 常规模式：逐个按钮展示 -->
+                                <template v-else>
+                                    <button class="action-btn" @click="openSftp(group.hostResult)" :title="'文件管理 '+group.host" aria-label="文件管理">
+                                        <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                                            <path d="M4 6h4.2c.4 0 .78.16 1.06.44l1.3 1.3c.28.28.66.44 1.06.44H19a1 1 0 0 1 1 1v7.5A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5V6Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>
+                                        </svg>
+                                    </button>
+                                    <button class="action-btn" @click="openTerminal(group.hostResult)" :title="'在线终端 '+group.host" aria-label="在线终端">
+                                        <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                                            <path d="M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.2" fill="none"/>
+                                            <path d="m7 9 3.5 3L7 15" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                                            <path d="M11.5 15H17" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                                        </svg>
+                                    </button>
+                                    <button class="action-btn" :class="{ 'is-active': fullscreenKey === group.key }" @click="toggleFullscreen(group.key)" :title="fullscreenKey === group.key ? '退出全屏 (Esc)' : '放大查看'" aria-label="放大/还原">
+                                        <svg v-if="fullscreenKey !== group.key" viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+                                            <path d="M4 9V5a1 1 0 0 1 1-1h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M20 15v4a1 1 0 0 1-1 1h-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M15 4h4a1 1 0 0 1 1 1v4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M9 20H5a1 1 0 0 1-1-1v-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                        <svg v-else viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+                                            <path d="M9 9H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M15 15h4a1 1 0 0 1 1 1v3.99a1 1 0 0 1-1.01 1.01H15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M20 9h-4a1 1 0 0 1-1-1V4.99A1 1 0 0 1 15.99 4H20a1 1 0 0 1 1 1v4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M4 15h4a1 1 0 0 1 1 1v4.01A1 1 0 0 1 8.01 21H4a1 1 0 0 1-1-1v-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                    </button>
+                                    <button class="action-btn" @click="downloadLogFile(group.hostResult)" title="下载日志文件" aria-label="下载日志">
+                                        <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                                            <path d="M12 4v11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                                            <path d="m7 10 5 5 5-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                                            <path d="M5 19h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                                        </svg>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 主机结果列表 -->
+                    <div class="host-results">
+                        <div v-if="group.results.length > 0">
+                            <div class="result-line" v-for="(line, index) in group.results" :key="index">
+                                <div class="result-content" v-html="highlightContent(line)"></div>
+                            </div>
+                            <!-- 截断提示 -->
+                            <div v-if="group.isTruncated" class="truncation-notice">
+                                <div class="truncation-message">
+                                    <i class="fas fa-info-circle" style="color: #409eff; margin-right: 8px;"></i>
+                                    <span style="color: #606266;">结果过多，已显示前 [[ group.results.length ]] 条</span>
+                                    <div style="margin-top: 4px; color: #909399; font-size: 12px;">
+                                        原始匹配数: [[ group.originalCount ]] 条，请使用更具体的关键词缩小搜索范围
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div v-else class="host-no-results">
+                            <!-- 占位预搜索提示 -->
+                            <div v-if="searchResults.pre_search" class="no-results-message" style="background:transparent;">
+                                <i class="fas fa-clock" style="color: #ffffff80; margin-right: 8px;"></i>
+                                <span style="color: #ffffffb3; font-weight:400;">等待搜索</span>
+                                <div style="margin-top: 4px; color: #ffffff40; font-size: 12px; letter-spacing:.5px;">
+                                    输入关键词并点击 “搜索”
+                                </div>
+                            </div>
+                            <!-- 搜索失败的情况 -->
+                            <div v-else-if="group.hostResult && !group.hostResult.success" class="no-results-message">
+                                <i class="fas fa-exclamation-triangle" style="color: #f56c6c; margin-right: 8px;"></i>
+                                <span style="color: #f56c6c;">搜索失败</span>
+                                <div style="margin-top: 4px; color: #f56c6c; font-size: 12px;">
+                                    错误: [[ group.hostResult.error || '连接失败' ]]
+                                </div>
+                            </div>
+                            <!-- 搜索成功但无匹配结果的情况 -->
+                            <div v-else class="no-results-message">
+                                <i class="fas fa-check-circle" style="color: #67c23a; margin-right: 8px;"></i>
+                                <span style="color: #909399;">搜索完成，未找到匹配内容</span>
+                                <div style="margin-top: 4px; color: #c0c4cc; font-size: 12px;">
+                                    该主机已成功搜索，但没有找到包含关键词的日志
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                </div>
+            </template>
+            
+            <!-- 空结果提示 -->
+            <div v-else-if="searchResults && searchResults.total_matches === 0 && !searchResults.pre_search" class="empty-results">
+                <div class="el-empty">
+                    <div class="el-empty__image">
+                        <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" width="120" height="120">
+                            <g fill="none" stroke="#dcdfe6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="25" cy="25" r="20"/>
+                                <path d="m40 40 15 15"/>
+                                <path d="m18 18 14 14m0-14L18 32" stroke="#f56c6c" stroke-width="2.5"/>
+                            </g>
+                        </svg>
+                    </div>
+                    <div class="el-empty__description">[[ emptyMessage ]]</div>
+                </div>
             </div>
             
-            <!-- 组件内容 -->
-            <div v-else>
-                <!-- 搜索统计信息 -->
-                <div v-if="showSearchStats && searchResults" class="search-stats">
-                    <span class="el-tag el-tag--info el-tag--small">
-                        共找到 {{ searchResults.total_matches }} 个匹配项
-                    </span>
-                    <span class="el-tag el-tag--success el-tag--small" style="margin-left: 8px;">
-                        搜索耗时: {{ searchResults.search_time }}s
-                    </span>
-                    <span class="el-tag el-tag--warning el-tag--small" style="margin-left: 8px;">
-                        主机数: {{ searchResults.hosts_searched }}
-                    </span>
-                </div>
-                
-                <!-- 搜索结果 -->
-                <div class="results-container" v-if="searchResults && searchResults.total_matches > 0">
-                    <div class="hosts-container" :class="'hosts-' + groupedResults.length" :style="hostsContainerStyle">
-                        <div class="host-result-box" v-for="group in groupedResults" :key="group.host">
-                            <!-- 主机头部 -->
-                            <div class="host-header" v-if="showHostGrouping">
-                                <div class="host-info">
-                                    <div class="host-left-info">
-                                        <i class="fas fa-server host-icon"></i>
-                                        <span class="host-name">{{ group.host }}</span>
-                                        <span class="host-count">{{ group.results.length }} 条</span>
-                                    </div>
-                                    <div class="host-actions">
-                                        <button class="download-btn" @click="downloadLogFile(group.hostResult)" title="下载日志文件">
-                                            <span>下载日志</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- 主机结果列表 -->
-                            <div class="host-results">
-                                <div v-if="group.results.length > 0">
-                                    <div class="result-line" v-for="(line, index) in group.results" :key="index">
-                                        <div class="result-content" v-html="highlightContent(line)"></div>
-                                    </div>
-                                    <!-- 截断提示 -->
-                                    <div v-if="group.isTruncated" class="truncation-notice">
-                                        <div class="truncation-message">
-                                            <i class="fas fa-info-circle" style="color: #409eff; margin-right: 8px;"></i>
-                                            <span style="color: #606266;">结果过多，已显示前 {{ group.results.length }} 条</span>
-                                            <div style="margin-top: 4px; color: #909399; font-size: 12px;">
-                                                原始匹配数: {{ group.originalCount }} 条，请使用更具体的关键词缩小搜索范围
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div v-else class="host-no-results">
-                                    <!-- 搜索失败的情况 -->
-                                    <div v-if="group.hostResult && !group.hostResult.success" class="no-results-message">
-                                        <i class="fas fa-exclamation-triangle" style="color: #f56c6c; margin-right: 8px;"></i>
-                                        <span style="color: #f56c6c;">搜索失败</span>
-                                        <div style="margin-top: 4px; color: #f56c6c; font-size: 12px;">
-                                            错误: {{ group.hostResult.error || '连接失败' }}
-                                        </div>
-                                    </div>
-                                    <!-- 搜索成功但无匹配结果的情况 -->
-                                    <div v-else class="no-results-message">
-                                        <i class="fas fa-check-circle" style="color: #67c23a; margin-right: 8px;"></i>
-                                        <span style="color: #909399;">搜索完成，未找到匹配内容</span>
-                                        <div style="margin-top: 4px; color: #c0c4cc; font-size: 12px;">
-                                            该主机已成功搜索，但没有找到包含关键词的日志
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+            <!-- 无数据状态 -->
+            <div v-else class="no-data">
+                <div class="el-empty">
+                    <div class="el-empty__image">
+                        <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" width="120" height="120">
+                            <g fill="none" stroke="#dcdfe6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 8h24l8 8v36a4 4 0 0 1-4 4H14a4 4 0 0 1-4-4V12a4 4 0 0 1 4-4z"/>
+                                <path d="M38 8v8h8"/>
+                                <line x1="18" y1="24" x2="42" y2="24"/>
+                                <line x1="18" y1="32" x2="42" y2="32"/>
+                                <line x1="18" y1="40" x2="30" y2="40"/>
+                                <circle cx="35" cy="45" r="6" stroke="#909399"/>
+                                <path d="m39 49 4 4" stroke="#909399"/>
+                            </g>
+                        </svg>
                     </div>
-                </div>
-                
-                <!-- 空结果提示 -->
-                <div v-else-if="searchResults && searchResults.total_matches === 0" class="empty-results">
-                    <div class="el-empty">
-                        <div class="el-empty__image">
-                            <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" width="120" height="120">
-                                <g fill="none" stroke="#dcdfe6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <!-- 放大镜圆圈 -->
-                                    <circle cx="25" cy="25" r="20"/>
-                                    <!-- 放大镜手柄 -->
-                                    <path d="m40 40 15 15"/>
-                                    <!-- X 标记表示未找到 -->
-                                    <path d="m18 18 14 14m0-14L18 32" stroke="#f56c6c" stroke-width="2.5"/>
-                                </g>
-                            </svg>
-                        </div>
-                        <div class="el-empty__description">{{ emptyMessage }}</div>
-                    </div>
-                </div>
-                
-                <!-- 无数据状态 -->
-                <div v-else class="no-data">
-                    <div class="el-empty">
-                        <div class="el-empty__image">
-                            <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" width="120" height="120">
-                                <g fill="none" stroke="#dcdfe6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <!-- 文档轮廓 -->
-                                    <path d="M14 8h24l8 8v36a4 4 0 0 1-4 4H14a4 4 0 0 1-4-4V12a4 4 0 0 1 4-4z"/>
-                                    <!-- 文档折角 -->
-                                    <path d="M38 8v8h8"/>
-                                    <!-- 文档内容线条 -->
-                                    <line x1="18" y1="24" x2="42" y2="24"/>
-                                    <line x1="18" y1="32" x2="42" y2="32"/>
-                                    <line x1="18" y1="40" x2="30" y2="40"/>
-                                    <!-- 搜索图标 -->
-                                    <circle cx="35" cy="45" r="6" stroke="#909399"/>
-                                    <path d="m39 49 4 4" stroke="#909399"/>
-                                </g>
-                            </svg>
-                        </div>
-                        <div class="el-empty__description">请执行搜索以查看结果</div>
-                    </div>
+                    <div class="el-empty__description">请执行搜索以查看结果</div>
                 </div>
             </div>
-        </div>
+        </template>
     `
 };
 

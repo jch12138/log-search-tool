@@ -1,0 +1,157 @@
+name: build-multi-platform
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: build-${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # 暂时仅启用 Windows 平台，其它平台先禁用
+        os: [windows-latest]
+        # os: [windows-latest, ubuntu-latest, macos-latest]
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Ensure optional data dirs
+        run: |
+          mkdir -p build/scripts || true
+          # 占位文件避免某些工具清理空目录
+          if [ ! -f build/scripts/.keep ]; then echo placeholder > build/scripts/.keep; fi
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller==6.8.0
+
+      - name: Show environment
+        run: |
+          python --version
+          echo RUNNER_OS=$RUNNER_OS
+
+      - name: Build onedir
+        run: |
+          set -e
+          if [[ "$RUNNER_OS" == "Windows" ]]; then sep=';'; else sep=':'; fi
+          EXTRA=""
+          # Windows bat 启动脚本
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            [[ -f build/start_prod.bat ]] && EXTRA+=" --add-data build/start_prod.bat${sep}build"
+            [[ -f build/start_test.bat ]] && EXTRA+=" --add-data build/start_test.bat${sep}build"
+          else
+            # *nix 平台的 sh 脚本（如果存在）
+            [[ -f build/start_prod.sh ]] && EXTRA+=" --add-data build/start_prod.sh${sep}build"
+            [[ -f build/start_test.sh ]] && EXTRA+=" --add-data build/start_test.sh${sep}build"
+          fi
+          SCRIPTS_ARG=""
+          if [[ -d build/scripts ]]; then
+            SCRIPTS_ARG="--add-data build/scripts${sep}build/scripts"
+          fi
+          pyinstaller \
+            --name log-search-api \
+            --onedir \
+            --noconfirm \
+            --clean \
+            --add-data "templates${sep}templates" \
+            --add-data "static${sep}static" \
+            $SCRIPTS_ARG \
+            $EXTRA \
+            --hidden-import engineio \
+            --hidden-import socketio \
+            --hidden-import engineio.async_drivers.threading \
+            --hidden-import socketio.async_drivers.threading \
+            --collect-all paramiko \
+            run.py
+          mkdir -p artifacts
+          mv dist/log-search-api artifacts/log-search-api-onedir
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            # 额外复制脚本到 onedir 根目录，方便用户直接使用
+            cp -f build/start_prod.bat artifacts/log-search-api-onedir/ 2>/dev/null || true
+            cp -f build/start_test.bat artifacts/log-search-api-onedir/ 2>/dev/null || true
+            # 同步放一份一键 start.bat
+            echo @echo off > artifacts/log-search-api-onedir/start.bat
+            echo call start_prod.bat >> artifacts/log-search-api-onedir/start.bat
+          fi
+
+  # Removed onefile build step (previously used --onefile). Only onedir build retained.
+
+      - name: Package onedir
+        run: |
+          cd artifacts
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            powershell -command "Compress-Archive -Path 'log-search-api-onedir\\*' -DestinationPath 'log-search-api-onedir-windows.zip'"
+          elif [[ "$RUNNER_OS" == "Linux" ]]; then
+            tar -czf log-search-api-onedir-linux.tar.gz log-search-api-onedir
+          else
+            tar -czf log-search-api-onedir-macos.tar.gz log-search-api-onedir
+          fi
+
+      - name: Resolve artifact pattern
+        id: resolve_pattern
+        run: |
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            echo "pattern=artifacts/log-search-api-onedir-*.zip" >> "$GITHUB_OUTPUT"
+          else
+            echo "pattern=artifacts/log-search-api-onedir-*.tar.gz" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload artifacts (platform-specific)
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.os }}
+          path: ${{ steps.resolve_pattern.outputs.pattern }}
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+
+  release:
+    name: publish-release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: collected
+
+      - name: Display collected artifacts
+        run: |
+          ls -R collected || true
+
+      - name: Generate checksums
+        run: |
+          cd collected
+          find . -type f -maxdepth 3 -print0 | xargs -0 -I{} sh -c 'sha256sum "{}" >> SHA256SUMS.txt'
+          cat SHA256SUMS.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          prerelease: false
+          files: |
+            collected/**/log-search-api-onedir-*.zip
+            collected/**/log-search-api-onedir-*.tar.gz
+            collected/**/SHA256SUMS.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -7,43 +7,97 @@ from pathlib import Path
 
 def _get_config_file() -> str:
     """获取配置文件路径（环境变量 > 可执行文件目录 > 当前目录）"""
+    import sys
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
     if env_config := os.getenv("SETTINGS_FILE"):
+        logger.info(f"[config] Using config from env: {env_config}")
         return env_config
     
     # PyInstaller 打包后，sys._MEIPASS 指向临时解压目录
     # 配置文件应该在可执行文件同目录，不在 _internal 里
-    import sys
     if getattr(sys, 'frozen', False):
         # 打包后：配置文件在可执行文件同目录
-        exe_dir = Path(sys.executable).parent
-        exe_config = exe_dir / "settings.ini"
-        if exe_config.exists():
-            return str(exe_config)
+        # 使用 os.path.dirname 而不是 Path().parent 以兼容所有 Windows 环境
+        exe_path = sys.executable
+        exe_dir = os.path.dirname(os.path.abspath(exe_path))
+        exe_config = os.path.join(exe_dir, "settings.ini")
+        
+        logger.info(f"[config] Running in frozen mode")
+        logger.info(f"[config] sys.executable: {exe_path}")
+        logger.info(f"[config] exe_dir: {exe_dir}")
+        logger.info(f"[config] Looking for config at: {exe_config}")
+        logger.info(f"[config] Config exists: {os.path.exists(exe_config)}")
+        
+        if os.path.exists(exe_config):
+            logger.info(f"[config] Using config from exe dir: {exe_config}")
+            return exe_config
+        else:
+            logger.warning(f"[config] Config file not found in exe dir: {exe_config}")
+            # 尝试当前工作目录作为备选
+            cwd = os.getcwd()
+            cwd_config = os.path.join(cwd, "settings.ini")
+            if os.path.exists(cwd_config):
+                logger.info(f"[config] Fallback: using config from cwd: {cwd_config}")
+                return cwd_config
     
     # 开发模式：当前工作目录
     cwd_config = Path.cwd() / "settings.ini"
+    logger.info(f"[config] Current working directory: {Path.cwd()}")
+    logger.info(f"[config] Looking for config in cwd: {cwd_config}")
+    
     if cwd_config.exists():
+        logger.info(f"[config] Using config from cwd: {cwd_config}")
         return str(cwd_config)
     
     # 开发模式：项目根目录（兜底）
     root_config = Path(__file__).parent.parent.parent / "settings.ini"
     if root_config.exists():
+        logger.info(f"[config] Using config from root: {root_config}")
         return str(root_config)
     
     # 默认路径（返回当前目录，文件不存在时使用默认值）
+    logger.warning(f"[config] No config file found, using defaults. Would use: {cwd_config}")
     return str(cwd_config)
 
 
 def _load_config() -> configparser.ConfigParser:
     """加载外部配置文件"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     config = configparser.ConfigParser()
     config_file = _get_config_file()
     
+    logger.info(f"[config] Attempting to load config from: {config_file}")
+    logger.info(f"[config] File exists: {os.path.exists(config_file)}")
+    
     if os.path.exists(config_file):
         try:
-            config.read(config_file, encoding='utf-8')
-        except Exception:
-            pass  # 配置文件读取失败，使用默认值
+            # 尝试多种编码
+            encodings = ['utf-8', 'utf-8-sig', 'gbk', 'cp1252', 'latin-1']
+            loaded = False
+            
+            for encoding in encodings:
+                try:
+                    config.read(config_file, encoding=encoding)
+                    if config.sections():
+                        logger.info(f"[config] Successfully loaded config file with encoding: {encoding}")
+                        logger.info(f"[config] Config sections: {config.sections()}")
+                        loaded = True
+                        break
+                except Exception as e:
+                    logger.debug(f"[config] Failed to read with encoding {encoding}: {e}")
+                    continue
+            
+            if not loaded:
+                logger.error(f"[config] Failed to read config file with any encoding")
+        except Exception as e:
+            logger.error(f"[config] Failed to read config file: {e}")
+    else:
+        logger.warning(f"[config] Config file does not exist, using defaults")
     
     return config
 

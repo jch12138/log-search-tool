@@ -42,9 +42,28 @@ const LogSearchResults = {
             type: Boolean,
             default: true
         },
+        showSearchStats: {
+            type: Boolean,
+            default: true
+        },
         emptyMessage: {
             type: String,
             default: '暂无搜索结果'
+        },
+        enabledHighlighters: {
+            type: Object,
+            default: () => ({
+                logLevels: true,
+                timestamps: true,
+                network: true,
+                xml: true,
+                sql: true,
+                json: true,
+                filePaths: true,
+                urls: true,
+                emails: true,
+                uuids: true
+            })
         }
     },
     
@@ -640,7 +659,7 @@ const LogSearchResults = {
                                                         <path d="M9 20H5a1 1 0 0 1-1-1v-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                                                     </svg>
                                                     <!-- 缩小图标：四个向内的箭头 -->
-                                                    <svg v-else viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+                                                    <svg v-show="fullscreenKey === group.key" viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
                                                         <path d="M4 9L9 9L9 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                                                         <path d="M20 15L15 15L15 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                                                         <path d="M15 4L15 9L20 9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>

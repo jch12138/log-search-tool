@@ -31,9 +31,25 @@
   <script src="/static/js/vendor/socket.io.min.js"></script>
   <script>
     const API = '/api/v1';
-    const state = { current:null, sessions:{}, socket:null };
+    const state = { current:null, sessions:{}, socket:null, socketReady:false };
 
     function $(id){ return document.getElementById(id); }
+    
+    // 等待 Socket.IO 连接就绪
+    function waitForSocket() {
+      return new Promise((resolve) => {
+        if (state.socketReady) {
+          resolve();
+        } else {
+          const check = setInterval(() => {
+            if (state.socketReady) {
+              clearInterval(check);
+              resolve();
+            }
+          }, 50);
+        }
+      });
+    }
 
     function updateTitle(u,h){ if(u&&h){ document.title = `${u}@${h}`; } }
 
@@ -51,6 +67,9 @@
 
     async function connectByConfig(logName, sshIndex){
       try {
+        // 等待 Socket.IO 连接就绪
+        await waitForSocket();
+        
         const payload = { log_name: logName, ssh_index: sshIndex };
         const r = await fetch(`${API}/terminals`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
         const j = await r.json();
@@ -81,8 +100,16 @@
   const stabilize = (left=3)=>{ if(left<=0) return; scheduleFit(); setTimeout(()=>stabilize(left-1), left===3?120:left===2?300:600); };        
   setTimeout(scheduleFit, 50);
         if(d.initial_prompt){ term.write(d.initial_prompt.replace(/\n/g,'\r\n')); }
-        term.onData(data => { if(state.socket){ state.socket.emit('input', { terminal_id: d.terminal_id, data }); }});
-        if(state.socket){ state.socket.emit('join', { terminal_id: d.terminal_id }); }
+        term.onData(data => { 
+          if(state.socket){ 
+            state.socket.emit('input', { terminal_id: d.terminal_id, data }); 
+          }
+        });
+        // 确保终端获得焦点以接收键盘输入
+        term.focus();
+        if(state.socket){ 
+          state.socket.emit('join', { terminal_id: d.terminal_id });
+        }
         state.sessions[d.terminal_id] = { term, fitAddon };
         state.current = d.terminal_id;
   window.addEventListener('resize', ()=>{ scheduleFit(); });
@@ -93,6 +120,9 @@
 
     async function connectByServerId(serverId){
       try {
+        // 等待 Socket.IO 连接就绪
+        await waitForSocket();
+        
         const payload = { server_id: serverId };
         const r = await fetch(`${API}/terminals/connect-by-config`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
         const j = await r.json();
@@ -120,7 +150,13 @@
   const stabilize = (left=3)=>{ if(left<=0) return; scheduleFit(); setTimeout(()=>stabilize(left-1), left===3?120:left===2?300:600); };
   setTimeout(scheduleFit, 50);
         if(d.initial_prompt){ term.write(d.initial_prompt.replace(/\n/g,'\r\n')); }
-        term.onData(data => { if(state.socket){ state.socket.emit('input', { terminal_id: d.terminal_id, data }); }});
+        term.onData(data => { 
+          if(state.socket){ 
+            state.socket.emit('input', { terminal_id: d.terminal_id, data }); 
+          }
+        });
+        // 确保终端获得焦点以接收键盘输入
+        term.focus();
         if(state.socket){ state.socket.emit('join', { terminal_id: d.terminal_id }); }
         state.sessions[d.terminal_id] = { term, fitAddon };
         state.current = d.terminal_id;
@@ -132,6 +168,16 @@
 
     document.addEventListener('DOMContentLoaded', ()=>{
       state.socket = io('/', { path:'/socket.io', transports:['websocket'] });
+      
+      // 监听 Socket.IO 连接事件
+      state.socket.on('connect', () => {
+        state.socketReady = true;
+      });
+      
+      state.socket.on('disconnect', () => {
+        state.socketReady = false;
+      });
+      
       state.socket.on('output', msg => {
         const { terminal_id, data } = msg || {}; if(!terminal_id) return; const s = state.sessions[terminal_id]; if(!s) return; if(data){ s.term.write(String(data).replace(/\n/g,'\r\n')); }
       });

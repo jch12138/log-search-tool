@@ -303,10 +303,12 @@ class TerminalService:
 					# 使用智能解码，带编码检测
 					text, used_encoding = smart_decode(data, preferred_encoding=preferred_encoding)
 					
-				# 如果检测到不同的编码，更新缓存
-				if used_encoding and used_encoding != preferred_encoding:
-					self._encoding_detector.cache_encoding(cache_key, used_encoding)
-					preferred_encoding = used_encoding					# Locale marker parsing
+					# 如果检测到不同的编码，更新缓存
+					if used_encoding and used_encoding != preferred_encoding:
+						self._encoding_detector.cache_encoding(cache_key, used_encoding)
+						preferred_encoding = used_encoding
+					
+					# Locale marker parsing
 					if '__AUTO_LOCALE_SET:' in text or '__SET_LOCALE:' in text:
 						marker = None
 						for line in text.splitlines():
@@ -317,6 +319,8 @@ class TerminalService:
 						if marker:
 							with self._lock:
 								sd['last_locale'] = marker
+					
+					# 将解码后的文本添加到缓冲区
 					with sd['lock']:
 						sd['buffer'].append(text)
 				else:

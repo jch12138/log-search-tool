@@ -103,6 +103,7 @@ def create_app() -> Flask:
         except Exception:
             pass
 
+
     @socketio.on('resize')  # pragma: no cover - realtime
     def handle_resize(data):  # noqa
         try:

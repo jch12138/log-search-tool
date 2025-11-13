@@ -118,11 +118,11 @@
                                             .*
                                         </button>
 
-                                        <!-- 逆序搜索 -->
+                                        <!-- 逆序浏览 -->
                                         <button type="button" class="search-button"
                                             :class="{ active: searchForm.reverse_order }"
                                             @click="searchForm.reverse_order = !searchForm.reverse_order"
-                                            :disabled="!selectedLog" title="逆序搜索">
+                                            :disabled="!selectedLog" title="逆序浏览（从末尾开始看）">
                                             <span v-if="searchForm.reverse_order">⬆️</span>
                                             <span v-else>⬇️</span>
                                         </button>
@@ -235,6 +235,7 @@
                             :search-results="activeTab ? activeTab.searchResults : searchResults"
                             :search-keyword="activeTab ? activeTab.highlightKeyword : highlightKeyword"
                             :use-regex="searchForm.use_regex"
+                            :reverse-order="searchForm.reverse_order"
                             :max-results="5000"
                             :show-search-stats="false"
                             :show-host-grouping="true"
@@ -287,7 +288,7 @@
                         search_mode: 'context',
                         context_span: CONSTANTS.DEFAULT_CONTEXT_SPAN,
                         use_regex: false,
-                        reverse_order: false,
+                        reverse_order: true,  // 默认倒序浏览（从末尾开始看）
                         use_file_filter: false,
                         selected_files: {},
                         max_lines: CONSTANTS.MAX_LINES
@@ -583,9 +584,15 @@
                     tab.hasSearched = true;
                     
                     try {
+                        // 准备请求数据，排除 reverse_order（现在只用于前端展示）
+                        const searchParams = {
+                            ...this.searchForm,
+                            reverse_order: false  // 后端始终返回正序结果，前端自行处理浏览顺序
+                        };
+                        
                         const response = await axios.post(
                             `/api/v1/logs/${this.selectedLog.name}/search`, 
-                            this.searchForm
+                            searchParams
                         );
                         
                         if (response.data.success) {
@@ -1008,7 +1015,7 @@
                         search_mode: 'context',
                         context_span: CONSTANTS.DEFAULT_CONTEXT_SPAN,
                         use_regex: false,
-                        reverse_order: false,
+                        reverse_order: true,  // 默认倒序浏览（从末尾开始看）
                         use_file_filter: false,
                         selected_files: {},
                         max_lines: CONSTANTS.MAX_LINES

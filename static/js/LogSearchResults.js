@@ -9,7 +9,13 @@ const LogSearchResults = {
     
     mounted() {
         this.addEventListeners();
-        this.$nextTick(() => this.recomputeCompaction());
+        this.$nextTick(() => {
+            this.recomputeCompaction();
+            // 如果 searchResults 已存在，初始化分页
+            if (this.searchResults) {
+                this.initializePagination();
+            }
+        });
     },
     
     beforeUnmount() {
@@ -29,6 +35,10 @@ const LogSearchResults = {
             default: ''
         },
         useRegex: {
+            type: Boolean,
+            default: false
+        },
+        reverseOrder: {
             type: Boolean,
             default: false
         },
@@ -72,24 +82,48 @@ const LogSearchResults = {
         groupedResults() {
             if (!this.searchResults?.hosts) return [];
             
-            if (!this.showHostGrouping) {
-                return this.createSingleGroup();
-            }
+            const groups = this.showHostGrouping 
+                ? this.createHostGroups() 
+                : this.createSingleGroup();
             
-            return this.createHostGroups();
+            // 为每个 group 添加 visibleLines
+            return groups.map(group => {
+                const state = this.paginationState[group.key];
+                if (state && group.results.length > 0) {
+                    group.visibleLines = group.results.slice(state.loadedStart, state.loadedEnd + 1);
+                    group.browseMode = state.mode;
+                } else {
+                    group.visibleLines = group.results;
+                    group.browseMode = 'forward';
+                }
+                return group;
+            });
         }
     },
     
     // ==================== 监听器 ====================
     watch: {
         searchResults: {
-            handler() {
-                this.$nextTick(() => this.recomputeCompaction());
+            handler(newVal) {
+                if (newVal) {
+                    this.initializePagination();
+                }
+                this.$nextTick(() => {
+                    this.recomputeCompaction();
+                    this.addScrollListeners();
+                });
             },
             deep: true
         },
         showHostGrouping() {
-            this.$nextTick(() => this.recomputeCompaction());
+            this.$nextTick(() => {
+                this.recomputeCompaction();
+                this.addScrollListeners();
+            });
+        },
+        reverseOrder(newVal) {
+            // 当全局的正序/倒序设置改变时，应用到所有主机
+            this.applyGlobalBrowseMode(newVal ? 'reverse' : 'forward');
         }
     },
     
@@ -100,14 +134,19 @@ const LogSearchResults = {
             CONSTANTS: {
                 PRISM_LOAD_DELAY: 100,
                 OVERFLOW_TOLERANCE: 1,
-                MAX_RESULTS_DEFAULT: 1000
+                MAX_RESULTS_DEFAULT: 1000,
+                PAGE_SIZE: 100,  // 每次加载的行数
+                SCROLL_THRESHOLD: 60  // 触发加载的滚动阈值（px）
             },
             
             // 状态管理
             dependenciesLoaded: false,
             fullscreenKey: null,
             compactState: {},
-            openOverflowFor: null
+            openOverflowFor: null,
+            
+            // 分页状态管理
+            paginationState: {}  // { [groupKey]: { mode, loadedStart, loadedEnd, pageSize, total, loading } }
         };
     },
     
@@ -136,6 +175,234 @@ const LogSearchResults = {
             return this.$el instanceof HTMLElement 
                 ? this.$el 
                 : (this.$el?.$el) || document;
+        },
+        
+        // ---------- 分页管理方法 ----------
+        initializePagination() {
+            const groups = this.showHostGrouping 
+                ? this.createHostGroups() 
+                : this.createSingleGroup();
+            
+            // 根据全局的 reverseOrder prop 决定初始模式
+            const initialMode = this.reverseOrder ? 'reverse' : 'forward';
+            
+            const newState = {};
+            groups.forEach(group => {
+                const total = group.results.length;
+                const pageSize = Math.min(this.CONSTANTS.PAGE_SIZE, total);
+                
+                if (initialMode === 'forward') {
+                    newState[group.key] = {
+                        mode: 'forward',
+                        loadedStart: 0,
+                        loadedEnd: Math.max(0, pageSize - 1),
+                        pageSize: this.CONSTANTS.PAGE_SIZE,
+                        total: total,
+                        loading: false
+                    };
+                } else {
+                    newState[group.key] = {
+                        mode: 'reverse',
+                        loadedStart: Math.max(0, total - pageSize),
+                        loadedEnd: total - 1,
+                        pageSize: this.CONSTANTS.PAGE_SIZE,
+                        total: total,
+                        loading: false
+                    };
+                }
+            });
+            
+            this.paginationState = newState;
+            
+            // 如果是倒序模式，需要调整滚动位置
+            if (initialMode === 'reverse') {
+                this.$nextTick(() => {
+                    this.scrollAllToBottom();
+                });
+            }
+        },
+        
+        applyGlobalBrowseMode(mode) {
+            // 为所有主机应用相同的浏览模式
+            Object.keys(this.paginationState).forEach(groupKey => {
+                this.setBrowseMode(groupKey, mode);
+            });
+        },
+        
+        scrollAllToBottom() {
+            // 将所有结果容器滚动到底部（用于倒序模式初始化）
+            const root = this.getComponentRoot();
+            const containers = root.querySelectorAll('.host-results');
+            
+            containers.forEach(container => {
+                setTimeout(() => {
+                    container.scrollTop = container.scrollHeight;
+                }, 0);
+            });
+        },
+        
+        setBrowseMode(groupKey, mode) {
+            const state = this.paginationState[groupKey];
+            if (!state) {
+                return;
+            }
+            
+            // 找到对应的 group
+            const groups = this.showHostGrouping 
+                ? this.createHostGroups() 
+                : this.createSingleGroup();
+            const group = groups.find(g => g.key === groupKey);
+            if (!group || group.results.length === 0) {
+                return;
+            }
+            
+            const total = state.total;
+            const pageSize = state.pageSize;
+            
+            // 创建新的状态对象（确保响应式更新）
+            const newState = {
+                mode: mode,
+                pageSize: state.pageSize,
+                total: state.total,
+                loading: false,
+                loadedStart: 0,
+                loadedEnd: 0
+            };
+            
+            if (mode === 'forward') {
+                // 正序：从头开始
+                newState.loadedStart = 0;
+                newState.loadedEnd = Math.min(pageSize - 1, total - 1);
+            } else {
+                // 倒序：从尾开始
+                newState.loadedEnd = total - 1;
+                newState.loadedStart = Math.max(0, total - pageSize);
+            }
+            
+            // 使用 Vue.set 或直接替换整个状态对象以触发响应式更新
+            this.paginationState = {
+                ...this.paginationState,
+                [groupKey]: newState
+            };
+            
+            // 调整滚动位置
+            this.$nextTick(() => {
+                const root = this.getComponentRoot();
+                const container = root.querySelector(`.host-result-box[data-group-key="${groupKey}"] .host-results`);
+                
+                if (container) {
+                    if (mode === 'forward') {
+                        container.scrollTop = 0;
+                    } else {
+                        setTimeout(() => {
+                            container.scrollTop = container.scrollHeight;
+                        }, 0);
+                    }
+                }
+            });
+        },
+        
+        loadMoreForward(groupKey) {
+            const state = this.paginationState[groupKey];
+            if (!state || state.loading) return;
+            if (state.loadedEnd >= state.total - 1) return;  // 已经加载完
+            
+            state.loading = true;
+            
+            // 计算下一批数据
+            const nextStart = state.loadedEnd + 1;
+            const nextEnd = Math.min(state.loadedEnd + state.pageSize, state.total - 1);
+            
+            // 模拟异步加载
+            setTimeout(() => {
+                // 创建新状态对象以触发响应式更新
+                this.paginationState = {
+                    ...this.paginationState,
+                    [groupKey]: {
+                        ...state,
+                        loadedEnd: nextEnd,
+                        loading: false
+                    }
+                };
+            }, 50);
+        },
+        
+        loadMoreReverse(groupKey) {
+            const state = this.paginationState[groupKey];
+            if (!state || state.loading) return;
+            if (state.loadedStart <= 0) return;  // 已经加载完
+            
+            state.loading = true;
+            
+            // 找到对应的容器，记录旧的高度和滚动位置
+            const root = this.getComponentRoot();
+            const container = root.querySelector(`.host-result-box[data-group-key="${groupKey}"] .host-results`);
+            const oldScrollHeight = container ? container.scrollHeight : 0;
+            const oldScrollTop = container ? container.scrollTop : 0;
+            
+            // 计算上一批数据
+            const prevEnd = state.loadedStart - 1;
+            const prevStart = Math.max(0, state.loadedStart - state.pageSize);
+            
+            // 模拟异步加载
+            setTimeout(() => {
+                // 创建新状态对象以触发响应式更新
+                this.paginationState = {
+                    ...this.paginationState,
+                    [groupKey]: {
+                        ...state,
+                        loadedStart: prevStart,
+                        loading: false
+                    }
+                };
+                
+                // 调整滚动位置，保持视觉不跳动
+                this.$nextTick(() => {
+                    if (container) {
+                        const newScrollHeight = container.scrollHeight;
+                        container.scrollTop = newScrollHeight - oldScrollHeight + oldScrollTop;
+                    }
+                });
+            }, 50);
+        },
+        
+        addScrollListeners() {
+            const root = this.getComponentRoot();
+            const containers = root.querySelectorAll('.host-results');
+            
+            containers.forEach(container => {
+                // 移除旧的监听器
+                container.removeEventListener('scroll', this.handleGroupScroll);
+                // 添加新的监听器
+                container.addEventListener('scroll', this.handleGroupScroll, { passive: true });
+            });
+        },
+        
+        handleGroupScroll(e) {
+            const container = e.target;
+            const box = container.closest('.host-result-box');
+            if (!box) return;
+            
+            const groupKey = box.getAttribute('data-group-key');
+            if (!groupKey) return;
+            
+            const state = this.paginationState[groupKey];
+            if (!state) return;
+            
+            const threshold = this.CONSTANTS.SCROLL_THRESHOLD;
+            
+            if (state.mode === 'forward') {
+                // 正序：触底加载
+                const distanceToBottom = container.scrollHeight - (container.scrollTop + container.clientHeight);
+                if (distanceToBottom < threshold) {
+                    this.loadMoreForward(groupKey);
+                }
+            } else {
+                // 倒序：触顶加载
+                if (container.scrollTop < threshold) {
+                    this.loadMoreReverse(groupKey);
+                }
+            }
         },
         
         // ---------- 结果分组方法 ----------
@@ -599,7 +866,7 @@ const LogSearchResults = {
             <!-- 显示主机结果盒：有匹配结果 或 处于占位预搜索状态 -->
             <template v-if="searchResults && searchResults.hosts && searchResults.hosts.length && (searchResults.total_matches > 0 || searchResults.pre_search)">
                 <div class="results-hosts-row" :class="{ 'grid-2x2': showHostGrouping && groupedResults.length === 4 }">
-                <div class="host-result-box" :class="{ 'fullscreen-active': fullscreenKey === group.key }" v-for="group in groupedResults" :key="group.key">
+                <div class="host-result-box" :class="{ 'fullscreen-active': fullscreenKey === group.key }" :data-group-key="group.key" v-for="group in groupedResults" :key="group.key">
                     <!-- 主机头部 -->
                     <div class="host-header" v-if="showHostGrouping">
                         <div class="host-info" :data-group-key="group.key">
@@ -724,8 +991,8 @@ const LogSearchResults = {
                     </div>
                     <!-- 主机结果列表 -->
                     <div class="host-results">
-                        <div v-if="group.results.length > 0">
-                            <div class="result-line" v-for="(line, index) in group.results" :key="index">
+                        <div v-if="group.visibleLines && group.visibleLines.length > 0">
+                            <div class="result-line" v-for="(line, index) in group.visibleLines" :key="index">
                                 <div class="result-content" v-html="highlightContent(line)"></div>
                             </div>
                             <!-- 截断提示 -->

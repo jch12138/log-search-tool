@@ -26,17 +26,17 @@ logs:
     password: jch12138
     port: 22
     username: chenway
-    path: /Users/chenway/Library/Logs/Surge/Surge-2025-10-26-212447.log
+    path: /Users/chenway/Desktop/log-search-tool/logs/app.log.2025-11-04
   - host: 127.0.0.1
     password: jch12138
     port: 22
     username: chenway
-    path: /Users/chenway/Library/Logs/Surge/Surge-2025-10-26-212447.log
+    path: /Users/chenway/Desktop/log-search-tool/logs/app.log.2025-11-05
   - host: 127.0.0.1
     password: jch12138
     port: 22
     username: chenway
-    path: /Users/chenway/Library/Logs/Surge/Surge-2025-10-26-212447.log
+    path: /Users/chenway/Desktop/log-search-tool/logs/app.log.2025-11-06
 - description: ''
   group: ''
   name: test

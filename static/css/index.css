@@ -60,8 +60,8 @@ html, body { height:100%; font-family:'Microsoft YaHei','微软雅黑','Segoe UI
 .empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:200px; color:#909399; font-size:1.1rem; padding:12px; }
 
 /* === Right Panel & Sections === */
-.right-panel { flex:1; display:flex; flex-direction:column; gap:12px; min-width:0; min-height:0; overflow:hidden; height:calc(100vh - 12px); }
-.search-section, .results-section { background:#fff; border-radius:12px; padding:12px; }
+.right-panel { flex:1; display:flex; flex-direction:column; gap:6px; min-width:0; min-height:0; overflow:hidden; height:calc(100vh - 12px); }
+.search-section, .results-section { background:#fff; border-radius:6px; padding:6px; }
 .results-section { flex:1; display:flex; flex-direction:column; min-height:0; width:100%; max-width:100%; margin:0; min-width:0; overflow:hidden; justify-content:center; }
 .results-section .log-results-root, .results-section .log-results-scroller { flex:1; min-height:0; overflow:auto; }
 
@@ -85,8 +85,8 @@ html, body { height:100%; font-family:'Microsoft YaHei','微软雅黑','Segoe UI
 .context-span-input { width:54px; border:1px solid #dcdfe6; border-radius:4px; padding:3px 6px; font-size:12px; text-align:center; margin-left:4px; }
 
 /* === Tabs Bar (index.css) === */
-.log-tabs-bar { display:flex; flex-wrap:wrap; gap:8px 10px; padding:12px; background:#fff; border-radius:12px; margin:0; }
-.log-tab-item { user-select:none; display:flex; align-items:center; gap:8px; max-width:240px; padding:8px 18px; font-size:14px; line-height:1.25; border-radius:12px; background:#fff; color:var(--el-text-color-regular,#606266); cursor:pointer; position:relative; box-shadow:0 2px 4px rgba(0,0,0,.08), inset 0 0 0 1px var(--el-border-color-extra-light,#ebeef5); transition:background .15s ease,color .15s ease,box-shadow .18s ease,transform .16s ease; }
+.log-tabs-bar { display:flex; flex-wrap:wrap; gap:8px 10px; padding:6px; background:#fff; border-radius:6px; margin:0; }
+.log-tab-item { user-select:none; display:flex; align-items:center; gap:8px; max-width:240px; padding:8px 18px; font-size:14px; line-height:1.25; border-radius:6px; background:#fff; color:var(--el-text-color-regular,#606266); cursor:pointer; position:relative; box-shadow:0 2px 4px rgba(0,0,0,.08), inset 0 0 0 1px var(--el-border-color-extra-light,#ebeef5); transition:background .15s ease,color .15s ease,box-shadow .18s ease,transform .16s ease; }
 .log-tab-item:hover { background:#f5f7fa; }
 .log-tab-item.active { background:#ecf5ff; color:var(--el-color-primary,#409eff); font-weight:600; box-shadow:0 1px 4px rgba(64,158,255,.25), inset 0 0 0 1px var(--el-color-primary-light-5,#a0cfff); }
 .log-tab-item .tab-title { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:center; }
@@ -104,10 +104,10 @@ html, body { height:100%; font-family:'Microsoft YaHei','微软雅黑','Segoe UI
 
 /* === LogSearchResults Component Host Styles (subset) === */
 :root { --log-bg:#282c34; --log-fg:#abb2bf; --log-accent:#409eff; --log-border:#e4e7ed; --log-radius:12px; --log-radius-sm:6px; }
-.results-hosts-row { display:flex; flex-direction:row; gap:12px; align-items:stretch; flex-wrap:nowrap; width:100%; flex:1; min-height:0; }
+.results-hosts-row { display:flex; flex-direction:row; gap:6px; align-items:stretch; flex-wrap:nowrap; width:100%; flex:1; min-height:0; }
 .results-hosts-row>.host-result-box { flex:1; }
 /* 2x2 网格布局（当恰好 4 个分组时启用） */
-.results-hosts-row.grid-2x2 { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); grid-auto-rows:minmax(260px, 1fr); gap:12px; align-items:stretch; }
+.results-hosts-row.grid-2x2 { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); grid-auto-rows:minmax(260px, 1fr); gap:6px; align-items:stretch; }
 .results-hosts-row.grid-2x2 > .host-result-box { min-width:0 !important; height:auto; }
 @media (max-width: 767px){ .results-hosts-row.grid-2x2 { grid-template-columns:1fr; grid-auto-rows:auto; } }
 .host-result-box { flex:1; min-width:0; border:1px solid var(--log-border); border-radius:var(--log-radius-sm); overflow:hidden; background:#fff; display:flex; flex-direction:column; height:100%; min-height:0; }
@@ -115,7 +115,7 @@ html, body { height:100%; font-family:'Microsoft YaHei','微软雅黑','Segoe UI
 .host-result-box.fullscreen-active .host-results { background:var(--log-bg); }
 body.fullscreen-log-freeze { overflow:hidden; }
 @media (min-width:768px){ .results-hosts-row>.host-result-box { min-width:300px; } }
-@media (max-width:767px){ .results-hosts-row { flex-direction:column!important; gap:10px; } .results-hosts-row>.host-result-box { min-height:200px; max-height:300px; } }
+@media (max-width:767px){ .results-hosts-row { flex-direction:column!important; gap:6px; } .results-hosts-row>.host-result-box { min-height:200px; max-height:300px; } }
 .host-header { background:linear-gradient(135deg,#f8f9fa 0%,#e9ecef 100%); padding:6px 12px; border-bottom:1px solid var(--log-border); position:sticky; top:0; z-index:10; }
 .host-info { display:flex; align-items:center; gap:8px; justify-content:space-between; flex-wrap:nowrap; overflow:hidden; }
 .host-left-info { min-width:0; display:flex; align-items:center; gap:8px; }

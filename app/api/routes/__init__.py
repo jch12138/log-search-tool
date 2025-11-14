@@ -6,11 +6,15 @@ from .terminals import terminals_bp  # noqa
 from .connections import connections_bp  # noqa
 from .config import config_bp  # noqa
 from .servers import servers_bp  # noqa
+from .account import account_bp  # noqa
 
 def register_routes(app):
     """Register all API blueprints under /api/v1 prefix."""
     for bp in (logs_bp, sftp_bp, terminals_bp, connections_bp, config_bp, servers_bp):
         app.register_blueprint(bp, url_prefix='/api/v1')
+    
+    # account_bp 需要单独注册，因为它有子路径
+    app.register_blueprint(account_bp, url_prefix='/api/v1/account')
 
 __all__ = ['register_routes']
 

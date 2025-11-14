@@ -42,6 +42,10 @@ def create_app() -> Flask:
     def terminals_page():  # pragma: no cover
         return render_template('terminals.html', page='terminals')
 
+    @app.route('/account')
+    def account_page():  # pragma: no cover
+        return render_template('account.html', page='account')
+
     global socketio
     socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 

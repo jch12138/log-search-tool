@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>账户查询 - Account API</title>
+    <link rel="stylesheet" href="/static/css/element-plus.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 32px;
+            margin: 0 0 10px 0;
+        }
+        
+        .header p {
+            font-size: 16px;
+            opacity: 0.9;
+            margin: 0;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+        
+        .card-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #303133;
+            margin: 0 0 20px 0;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #409eff;
+        }
+        
+        .form-row {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        
+        .form-item {
+            flex: 1;
+            min-width: 200px;
+        }
+        
+        .form-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+        
+        .result-card {
+            background: #f5f7fa;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+        
+        .result-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #606266;
+            margin-bottom: 12px;
+        }
+        
+        .json-viewer {
+            background: #282c34;
+            color: #abb2bf;
+            padding: 16px;
+            border-radius: 6px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            overflow-x: auto;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #909399;
+        }
+    </style>
+</head>
+<body>
+    <div id="app" class="container">
+        <div class="header">
+            <h1>🏦 账户查询系统</h1>
+            <p>Account Query System - ESB Integration</p>
+        </div>
+        
+        <!-- 余额查询 -->
+        <div class="card">
+            <h2 class="card-title">💰 余额查询</h2>
+            <div class="form-row">
+                <div class="form-item">
+                    <el-input 
+                        v-model="balanceForm.account" 
+                        placeholder="请输入账号"
+                        clearable>
+                        <template #prepend>账号</template>
+                    </el-input>
+                </div>
+                <div class="form-item" style="flex: 0 0 200px;">
+                    <el-select v-model="balanceForm.env" placeholder="选择环境">
+                        <el-option label="SIT-A" value="sita"></el-option>
+                        <el-option label="SIT-B" value="sitb"></el-option>
+                        <el-option label="UAT" value="uat"></el-option>
+                        <el-option label="默认" value=""></el-option>
+                    </el-select>
+                </div>
+            </div>
+            <div class="form-actions">
+                <el-button @click="clearBalanceResult">清除结果</el-button>
+                <el-button type="primary" @click="queryBalance" :loading="balanceLoading">
+                    查询余额
+                </el-button>
+            </div>
+            <div v-if="balanceResult" class="result-card">
+                <div class="result-title">查询结果</div>
+                <pre class="json-viewer" v-text="formatJson(balanceResult)"></pre>
+            </div>
+        </div>
+        
+        <!-- 交易明细查询 -->
+        <div class="card">
+            <h2 class="card-title">📋 交易明细查询</h2>
+            <div class="form-row">
+                <div class="form-item">
+                    <el-input 
+                        v-model="detailForm.account" 
+                        placeholder="请输入账号"
+                        clearable>
+                        <template #prepend>账号</template>
+                    </el-input>
+                </div>
+                <div class="form-item" style="flex: 0 0 200px;">
+                    <el-select v-model="detailForm.env" placeholder="选择环境">
+                        <el-option label="SIT-A" value="sita"></el-option>
+                        <el-option label="SIT-B" value="sitb"></el-option>
+                        <el-option label="UAT" value="uat"></el-option>
+                        <el-option label="默认" value=""></el-option>
+                    </el-select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-item">
+                    <el-date-picker
+                        v-model="detailForm.dateRange"
+                        type="daterange"
+                        range-separator="至"
+                        start-placeholder="开始日期"
+                        end-placeholder="结束日期"
+                        value-format="YYYY-MM-DD"
+                        style="width: 100%">
+                    </el-date-picker>
+                </div>
+                <div class="form-item" style="flex: 0 0 150px;">
+                    <el-input-number 
+                        v-model="detailForm.begTms" 
+                        :min="0" 
+                        placeholder="起始条数"
+                        style="width: 100%">
+                    </el-input-number>
+                </div>
+                <div class="form-item" style="flex: 0 0 150px;">
+                    <el-input-number 
+                        v-model="detailForm.quryTms" 
+                        :min="1" 
+                        :max="100"
+                        placeholder="查询条数"
+                        style="width: 100%">
+                    </el-input-number>
+                </div>
+            </div>
+            <div class="form-actions">
+                <el-button @click="clearDetailResult">清除结果</el-button>
+                <el-button type="primary" @click="queryDetail" :loading="detailLoading">
+                    查询明细
+                </el-button>
+            </div>
+            <div v-if="detailResult" class="result-card">
+                <div class="result-title">查询结果</div>
+                <pre class="json-viewer" v-text="formatJson(detailResult)"></pre>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/vendor/vue.global.js"></script>
+    <script src="/static/js/vendor/element-plus.js"></script>
+    <script src="/static/js/vendor/axios.min.js"></script>
+    <script>
+        const { createApp, ref } = Vue;
+        const API = '/api/v1/account';
+
+        createApp({
+            setup() {
+                // 余额查询表单
+                const balanceForm = ref({
+                    account: '',
+                    env: 'sita'
+                });
+                const balanceResult = ref(null);
+                const balanceLoading = ref(false);
+
+                // 交易明细查询表单
+                const detailForm = ref({
+                    account: '',
+                    env: 'sita',
+                    dateRange: [],
+                    begTms: 0,
+                    quryTms: 20
+                });
+                const detailResult = ref(null);
+                const detailLoading = ref(false);
+
+                // 查询余额
+                const queryBalance = async () => {
+                    if (!balanceForm.value.account) {
+                        ElementPlus.ElMessage.warning('请输入账号');
+                        return;
+                    }
+
+                    balanceLoading.value = true;
+                    balanceResult.value = null;
+
+                    try {
+                        const response = await axios.post(`${API}/balance-query`, {
+                            account: balanceForm.value.account,
+                            env: balanceForm.value.env
+                        });
+                        balanceResult.value = response.data;
+                        ElementPlus.ElMessage.success('查询成功');
+                    } catch (error) {
+                        console.error('Balance query error:', error);
+                        ElementPlus.ElMessage.error(error.response?.data?.error || '查询失败');
+                        balanceResult.value = { error: error.response?.data || error.message };
+                    } finally {
+                        balanceLoading.value = false;
+                    }
+                };
+
+                // 查询交易明细
+                const queryDetail = async () => {
+                    if (!detailForm.value.account) {
+                        ElementPlus.ElMessage.warning('请输入账号');
+                        return;
+                    }
+
+                    detailLoading.value = true;
+                    detailResult.value = null;
+
+                    try {
+                        const payload = {
+                            account: detailForm.value.account,
+                            env: detailForm.value.env,
+                            begTms: detailForm.value.begTms,
+                            quryTms: detailForm.value.quryTms
+                        };
+
+                        // 添加日期范围
+                        if (detailForm.value.dateRange && detailForm.value.dateRange.length === 2) {
+                            payload.beginDate = detailForm.value.dateRange[0];
+                            payload.endDate = detailForm.value.dateRange[1];
+                        }
+
+                        const response = await axios.post(`${API}/query-detail`, payload);
+                        detailResult.value = response.data;
+                        ElementPlus.ElMessage.success('查询成功');
+                    } catch (error) {
+                        console.error('Detail query error:', error);
+                        ElementPlus.ElMessage.error(error.response?.data?.error || '查询失败');
+                        detailResult.value = { error: error.response?.data || error.message };
+                    } finally {
+                        detailLoading.value = false;
+                    }
+                };
+
+                // 清除结果
+                const clearBalanceResult = () => {
+                    balanceResult.value = null;
+                };
+
+                const clearDetailResult = () => {
+                    detailResult.value = null;
+                };
+
+                // 格式化 JSON
+                const formatJson = (obj) => {
+                    return JSON.stringify(obj, null, 2);
+                };
+
+                return {
+                    balanceForm,
+                    balanceResult,
+                    balanceLoading,
+                    detailForm,
+                    detailResult,
+                    detailLoading,
+                    queryBalance,
+                    queryDetail,
+                    clearBalanceResult,
+                    clearDetailResult,
+                    formatJson
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>

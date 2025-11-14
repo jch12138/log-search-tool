@@ -1016,10 +1016,7 @@ const LogSearchResults = {
                             <!-- 搜索成功但无匹配结果的情况 -->
                             <div v-else class="no-results-message">
                                 <i class="fas fa-check-circle" style="color: #67c23a; margin-right: 8px;"></i>
-                                <span style="color: #909399;">搜索完成，未找到匹配内容</span>
-                                <div style="margin-top: 4px; color: #c0c4cc; font-size: 12px;">
-                                    该主机已成功搜索，但没有找到包含关键词的日志
-                                </div>
+                                <span style="color: #909399;">该主机已成功搜索，但没有找到包含关键词的日志</span>
                             </div>
                         </div>
                     </div>
@@ -1027,23 +1024,178 @@ const LogSearchResults = {
                 </div>
             </template>
             
-            <!-- 空结果提示 -->
-            <div v-else-if="searchResults && searchResults.total_matches === 0 && !searchResults.pre_search" class="empty-results">
-                <div class="el-empty">
-                    <div class="el-empty__image">
-                        <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" width="120" height="120">
-                            <g fill="none" stroke="#dcdfe6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <circle cx="25" cy="25" r="20"/>
-                                <path d="m40 40 15 15"/>
-                                <path d="m18 18 14 14m0-14L18 32" stroke="#f56c6c" stroke-width="2.5"/>
-                            </g>
-                        </svg>
+            <!-- 无数据状态或全局无结果：都显示主机盒子，在各主机盒子内显示具体提示 -->
+            <template v-else-if="searchResults && searchResults.hosts && searchResults.hosts.length">
+                <div class="results-hosts-row" :class="{ 'grid-2x2': showHostGrouping && groupedResults.length === 4 }">
+                <div class="host-result-box" :class="{ 'fullscreen-active': fullscreenKey === group.key }" :data-group-key="group.key" v-for="group in groupedResults" :key="group.key">
+                    <!-- 主机头部 -->
+                    <div class="host-header" v-if="showHostGrouping">
+                        <div class="host-info" :data-group-key="group.key">
+                            <div class="host-left-info host-tags">
+                                <span class="host-icon" aria-hidden="true" style="color:#409eff;display:inline-flex;">\
+                                    <svg viewBox="0 0 24 24" width="16" height="16" role="img" focusable="false" aria-hidden="true">\
+                                        <rect x="3" y="4" width="18" height="6" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="1.4"/>\
+                                        <rect x="3" y="14" width="18" height="6" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="1.4"/>\
+                                        <circle cx="7" cy="7" r="1" fill="currentColor"/>\
+                                        <circle cx="7" cy="17" r="1" fill="currentColor"/>\
+                                    </svg>\
+                                </span>
+                                <span class="el-tag el-tag--primary el-tag--light el-tag--small" :title="'主机: '+group.host">[[ group.host ]]</span>
+                                <span class="el-tag el-tag--info el-tag--light el-tag--small" :title="'匹配条数'">[[ group.results.length ]] 条</span>
+                                <span class="el-tag el-tag--warning el-tag--light el-tag--small host-path-tag" v-if="group.hostResult && group.hostResult.search_result && group.hostResult.search_result.file_path"
+                                    :title="group.hostResult.search_result.file_path">
+                                    [[ formatHostPath(group.hostResult.search_result.file_path) ]]
+                                </span>
+                            </div>
+                            <div class="host-actions">
+                                <!-- 折叠模式：显示更多菜单按钮 -->
+                                <template v-if="compactState[group.key]">
+                                    <div class="action-menu" :class="{ open: openOverflowFor===group.key }">
+                                        <button class="action-btn more-btn" @click.stop="toggleOverflowMenu(group.key)" title="更多操作" aria-label="更多">
+                                            <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                                                <circle cx="5" cy="12" r="1.6" fill="currentColor"/>
+                                                <circle cx="12" cy="12" r="1.6" fill="currentColor"/>
+                                                <circle cx="19" cy="12" r="1.6" fill="currentColor"/>
+                                            </svg>
+                                        </button>
+                                        <div class="menu-popover" v-show="openOverflowFor===group.key">
+                                            <button class="menu-item" @click="openOverflowFor=null; openSftp(group.hostResult)">
+                                                <span class="mi-icon">
+                                                    <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                                                        <path d="M4 6h4.2c.4 0 .78.16 1.06.44l1.3 1.3c.28.28.66.44 1.06.44H19a1 1 0 0 1 1 1v7.5A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5V6Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>
+                                                    </svg>
+                                                </span>
+                                                <span>文件管理</span>
+                                            </button>
+                                            <button class="menu-item" @click="openOverflowFor=null; openTerminal(group.hostResult)">
+                                                <span class="mi-icon">
+                                                    <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                                                        <path d="M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.2" fill="none"/>
+                                                        <path d="m7 9 3.5 3L7 15" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                                                        <path d="M11.5 15H17" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                                                    </svg>
+                                                </span>
+                                                <span>在线终端</span>
+                                            </button>
+                                            <button class="menu-item" @click="openOverflowFor=null; toggleFullscreen(group.key)">
+                                                <span class="mi-icon">
+                                                    <!-- 放大图标：四个向外的箭头 -->
+                                                    <svg v-show="fullscreenKey !== group.key" viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+                                                        <path d="M4 9V5a1 1 0 0 1 1-1h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                        <path d="M20 15v4a1 1 0 0 1-1 1h-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                        <path d="M15 4h4a1 1 0 0 1 1 1v4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                        <path d="M9 20H5a1 1 0 0 1-1-1v-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                    </svg>
+                                                    <!-- 缩小图标：四个向内的箭头 -->
+                                                    <svg v-show="fullscreenKey === group.key" viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+                                                        <path d="M4 9L9 9L9 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                        <path d="M20 15L15 15L15 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                        <path d="M15 4L15 9L20 9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                        <path d="M9 20L9 15L4 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                    </svg>
+                                                </span>
+                                                <span>[[ fullscreenKey === group.key ? '退出全屏' : '放大查看' ]]</span>
+                                            </button>
+                                            <button class="menu-item" @click="openOverflowFor=null; downloadLogFile(group.hostResult)">
+                                                <span class="mi-icon">
+                                                    <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                                                        <path d="M12 4v11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                                                        <path d="m7 10 5 5 5-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                                                        <path d="M5 19h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                                                    </svg>
+                                                </span>
+                                                <span>下载日志</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </template>
+                                <!-- 常规模式：逐个按钮展示 -->
+                                <template v-else>
+                                    <button class="action-btn" @click="openSftp(group.hostResult)" :title="'文件管理 '+group.host" aria-label="文件管理">
+                                        <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                                            <path d="M4 6h4.2c.4 0 .78.16 1.06.44l1.3 1.3c.28.28.66.44 1.06.44H19a1 1 0 0 1 1 1v7.5A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5V6Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>
+                                        </svg>
+                                    </button>
+                                    <button class="action-btn" @click="openTerminal(group.hostResult)" :title="'在线终端 '+group.host" aria-label="在线终端">
+                                        <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                                            <path d="M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.2" fill="none"/>
+                                            <path d="m7 9 3.5 3L7 15" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                                            <path d="M11.5 15H17" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                                        </svg>
+                                    </button>
+                                    <button class="action-btn" :class="{ 'is-active': fullscreenKey === group.key }" @click="toggleFullscreen(group.key)" :title="fullscreenKey === group.key ? '退出全屏 (Esc)' : '放大查看'" aria-label="放大/还原">
+                                        <!-- 放大图标：四个向外的箭头 -->
+                                        <svg v-show="fullscreenKey !== group.key" viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+                                            <path d="M4 9V5a1 1 0 0 1 1-1h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M20 15v4a1 1 0 0 1-1 1h-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M15 4h4a1 1 0 0 1 1 1v4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M9 20H5a1 1 0 0 1-1-1v-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                        <!-- 缩小图标：四个箭头从外向内指向中心 -->
+                                        <svg v-show="fullscreenKey === group.key" viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+                                            <path d="M4 9L9 9L9 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M20 15L15 15L15 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M15 4L15 9L20 9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M9 20L9 15L4 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                    </button>
+                                    <button class="action-btn" @click="downloadLogFile(group.hostResult)" title="下载日志文件" aria-label="下载日志">
+                                        <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                                            <path d="M12 4v11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                                            <path d="m7 10 5 5 5-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                                            <path d="M5 19h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                                        </svg>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
                     </div>
-                    <div class="el-empty__description">[[ emptyMessage ]]</div>
+                    <!-- 主机结果列表 -->
+                    <div class="host-results">
+                        <div v-if="group.visibleLines && group.visibleLines.length > 0">
+                            <div class="result-line" v-for="(line, index) in group.visibleLines" :key="index">
+                                <div class="result-content" v-html="highlightContent(line)"></div>
+                            </div>
+                            <!-- 截断提示 -->
+                            <div v-if="group.isTruncated" class="truncation-notice">
+                                <div class="truncation-message">
+                                    <i class="fas fa-info-circle" style="color: #409eff; margin-right: 8px;"></i>
+                                    <span style="color: #606266;">结果过多，已显示前 [[ group.results.length ]] 条</span>
+                                    <div style="margin-top: 4px; color: #909399; font-size: 12px;">
+                                        原始匹配数: [[ group.originalCount ]] 条，请使用更具体的关键词缩小搜索范围
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div v-else class="host-no-results">
+                            <!-- 占位预搜索提示 -->
+                            <div v-if="searchResults.pre_search" class="no-results-message" style="background:transparent;">
+                                <i class="fas fa-clock" style="color: #ffffff80; margin-right: 8px;"></i>
+                                <span style="color: #ffffffb3; font-weight:400;">等待搜索</span>
+                                <div style="margin-top: 4px; color: #ffffff40; font-size: 12px; letter-spacing:.5px;">
+                                    输入关键词并点击 "搜索"
+                                </div>
+                            </div>
+                            <!-- 搜索失败的情况 -->
+                            <div v-else-if="group.hostResult && !group.hostResult.success" class="no-results-message">
+                                <i class="fas fa-exclamation-triangle" style="color: #f56c6c; margin-right: 8px;"></i>
+                                <span style="color: #f56c6c;">搜索失败</span>
+                                <div style="margin-top: 4px; color: #f56c6c; font-size: 12px;">
+                                    错误: [[ group.hostResult.error || '连接失败' ]]
+                                </div>
+                            </div>
+                            <!-- 搜索成功但无匹配结果的情况 -->
+                            <div v-else class="no-results-message">
+                                <i class="fas fa-check-circle" style="color: #67c23a; margin-right: 8px;"></i>
+                                <span style="color: #909399;">该主机已成功搜索，但没有找到包含关键词的日志</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
+                </div>
+            </template>
             
-            <!-- 无数据状态 -->
+            <!-- 无数据状态（未执行搜索） -->
             <div v-else class="no-data">
                 <div class="el-empty">
                     <div class="el-empty__image">

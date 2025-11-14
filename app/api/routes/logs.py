@@ -122,13 +122,12 @@ def search_log(log_name: str):
 				except Exception:
 					pass
 		logger.info(
-			"[SEARCH] ip=%s log=%s keyword=%r mode=%s regex=%s reverse=%s ctx=%s max_lines=%s ssh_hosts=%s targets=%s filter=%s",
+			"[SEARCH] ip=%s log=%s keyword=%r mode=%s regex=%s ctx=%s max_lines=%s ssh_hosts=%s targets=%s filter=%s",
 			client_ip,
 			log_name,
 			search_params.keyword,
 			search_params.search_mode,
 			bool(search_params.use_regex),
-			bool(search_params.reverse_order),
 			int(search_params.context_span or 0),
 			getattr(search_params, 'max_lines', None),
 			len(targets),

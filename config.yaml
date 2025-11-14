@@ -21,7 +21,7 @@ logs:
     password: jch12138
     port: 22
     username: chenway
-    path: /Users/chenway/Desktop/log-search-tool/logs/app.log
+    path: /Users/chenway/Library/Logs/Surge/Surge-2025-11-10-041342.log
   - host: 127.0.0.1
     password: jch12138
     port: 22

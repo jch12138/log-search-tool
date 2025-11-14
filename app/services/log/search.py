@@ -18,18 +18,20 @@ from app.models import SearchParams, SearchResult, MultiHostSearchResult
 from app.services.ssh import SSHConnectionManager
 from app.services.utils.filename_resolver import resolve_log_filename
 from app.services.utils.encoding import EncodingDetector, smart_decode
+from app.config.system_settings import Settings
 
 logger = logging.getLogger(__name__)
 
 # ---------------- Module constants (avoid magic numbers sprinkled in code) ----------------
-REVERSE_CMD_DETECT_TIMEOUT = 5  # seconds for 'which tac'
 SINGLE_HOST_TAIL_RECENT = 100   # default recent lines when no keyword
-MAX_GREP_LINES_LIMIT = 10000    # cap for grep results (head/tail)
 MIN_TAIL_LINES = 100            # minimum lines for tail mode
 SEARCH_EXEC_TIMEOUT = 30        # remote command execution timeout
 
 # Precompiled regex for grep output line numbers
 LINE_NUM_RE = re.compile(r'^(\d+)([:=\-])(.*)$')
+
+# Load settings
+settings = Settings()
 
 
 class LogSearchService:
@@ -41,9 +43,6 @@ class LogSearchService:
 		max_workers: if provided (and no shared_executor), create internal executor capped 1..20
 		"""
 		self.ssh_manager = SSHConnectionManager()
-		# Cache for reverse command detection per unique SSH endpoint (host, port, user)
-		# Key format: "host|port|username" to avoid false sharing across differing accounts/ports
-		self._reverse_cmd_cache: Dict[str, str] = {}
 		self._encoding_detector = EncodingDetector()  # 编码检测器
 		self._external_executor = shared_executor is not None
 		if shared_executor:
@@ -53,28 +52,6 @@ class LogSearchService:
 				max_workers = 10
 			max_workers = max(1, min(20, max_workers))
 			self._executor = ThreadPoolExecutor(max_workers=max_workers)
-
-	def _get_reverse_command(self, ssh_config: Dict[str, Any]) -> str:
-		host = ssh_config.get('host', 'localhost')
-		port = ssh_config.get('port', 22)
-		user = ssh_config.get('username') or ssh_config.get('user') or ''
-		cache_key = f"{host}|{port}|{user}"
-		if cache_key in self._reverse_cmd_cache:
-			return self._reverse_cmd_cache[cache_key]
-		try:  # pragma: no cover - network
-			conn = self.ssh_manager.get_connection(ssh_config)
-			if conn:
-				stdout, _, code = conn.execute_command("which tac", timeout=REVERSE_CMD_DETECT_TIMEOUT)
-				if code == 0 and stdout.strip():
-					cmd = 'tac'
-				else:
-					cmd = "sed '1!G;h;$!d'"
-			else:
-				cmd = "sed '1!G;h;$!d'"
-		except Exception:
-			cmd = "sed '1!G;h;$!d'"
-		self._reverse_cmd_cache[cache_key] = cmd
-		return cmd
 
 	def search_multi_host(self, log_config: Dict[str, Any], search_params: SearchParams) -> MultiHostSearchResult:
 		search_params.validate()
@@ -190,15 +167,9 @@ class LogSearchService:
 			if isinstance(search_params, _SP) and search_params.max_lines:
 				limit = search_params.max_lines
 				if limit and len(results) > limit:
-					# 需求：始终保留“最新”的日志行
-					# 非 reverse_order：结果按时间正序 -> 取末尾 limit 条
-					# reverse_order：结果已被反转（最新在前） -> 取前 limit 条
-					if getattr(search_params, 'reverse_order', False):
-						results = results[:limit]
-						matches = matches[:limit]
-					else:
-						results = results[-limit:]
-						matches = matches[-limit:]
+					# 始终保留最新的日志行（结果按时间正序，取末尾 limit 条）
+					results = results[-limit:]
+					matches = matches[-limit:]
 					truncated = True
 			elapsed = time.time() - start
 			return SearchResult(
@@ -225,12 +196,11 @@ class LogSearchService:
 			return SearchResult(host=host, ssh_index=ssh_index, results=[], total_results=0, search_time=elapsed, search_result={'content': '', 'file_path': '', 'keyword': search_params.keyword, 'total_lines': 0, 'search_time': elapsed, 'matches': []}, success=False, error=str(e))
 
 	def _build_search_command(self, log_path: str, search_params: SearchParams, ssh_config: Dict[str, Any]):
-		reverse_cmd = self._get_reverse_command(ssh_config)
 		file_path = self._resolve_effective_file_path(log_path, search_params, ssh_config)
 		file_path = self._expand_placeholders(file_path, ssh_config)
 		quoted_file, is_gz, decompress = self._prepare_file_usage(file_path)
 		# Build command
-		cmd = self._compose_command(search_params, quoted_file, is_gz, decompress, reverse_cmd)
+		cmd = self._compose_command(search_params, quoted_file, is_gz, decompress)
 		return cmd, file_path
 
 	def _resolve_effective_file_path(self, log_path: str, search_params: SearchParams, ssh_config: Dict[str, Any]) -> str:
@@ -273,19 +243,15 @@ class LogSearchService:
 			return f"{decompress} | tail -n {n}"
 		return f"tail -n {n} {quoted_file}"
 
-	def _compose_command(self, search_params: SearchParams, quoted_file: str, is_gz: bool, decompress: Optional[str], reverse_cmd: str) -> str:
+	def _compose_command(self, search_params: SearchParams, quoted_file: str, is_gz: bool, decompress: Optional[str]) -> str:
 		# tail mode
 		if search_params.search_mode == 'tail':
 			lines = max(SINGLE_HOST_TAIL_RECENT, search_params.context_span)
 			cmd = self._tail_builder(is_gz, decompress, quoted_file, lines)
-			if search_params.reverse_order:
-				cmd += f" | {reverse_cmd}"
 			return cmd
 		# non-tail
 		if not search_params.keyword:
 			cmd = self._tail_builder(is_gz, decompress, quoted_file, SINGLE_HOST_TAIL_RECENT)
-			if search_params.reverse_order:
-				cmd += f" | {reverse_cmd}"
 			return cmd
 		grep_cmd = 'grep -nE' if search_params.use_regex else 'grep -nF'
 		if search_params.search_mode == 'context' and search_params.context_span > 0:
@@ -295,10 +261,8 @@ class LogSearchService:
 			cmd = f"{decompress} | {grep_cmd} {escaped_keyword}"
 		else:
 			cmd = f"{grep_cmd} {escaped_keyword} {quoted_file}"
-		if search_params.reverse_order:
-			cmd += f" | tail -n {MAX_GREP_LINES_LIMIT} | {reverse_cmd}"
-		else:
-			cmd += f" | head -n {MAX_GREP_LINES_LIMIT}"
+		# 使用 tail 获取最新的匹配结果
+		cmd += f" | tail -n {settings.MAX_SEARCH_RESULTS}"
 		return cmd
 
 	def get_log_files(self, ssh_config: Dict[str, Any], log_path: str) -> List[Dict[str, Any]]:

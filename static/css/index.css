@@ -62,7 +62,7 @@ html, body { height:100%; font-family:'Microsoft YaHei','微软雅黑','Segoe UI
 /* === Right Panel & Sections === */
 .right-panel { flex:1; display:flex; flex-direction:column; gap:12px; min-width:0; min-height:0; overflow:hidden; height:calc(100vh - 12px); }
 .search-section, .results-section { background:#fff; border-radius:12px; padding:12px; }
-.results-section { flex:1; display:flex; flex-direction:column; min-height:0; width:100%; max-width:100%; margin:0; min-width:0; overflow:hidden; }
+.results-section { flex:1; display:flex; flex-direction:column; min-height:0; width:100%; max-width:100%; margin:0; min-width:0; overflow:hidden; justify-content:center; }
 .results-section .log-results-root, .results-section .log-results-scroller { flex:1; min-height:0; overflow:auto; }
 
 /* === Search Form === */

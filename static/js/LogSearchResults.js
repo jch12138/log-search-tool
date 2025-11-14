@@ -86,16 +86,10 @@ const LogSearchResults = {
                 ? this.createHostGroups() 
                 : this.createSingleGroup();
             
-            // 为每个 group 添加 visibleLines
+            // 直接显示全部数据，不分页
             return groups.map(group => {
-                const state = this.paginationState[group.key];
-                if (state && group.results.length > 0) {
-                    group.visibleLines = group.results.slice(state.loadedStart, state.loadedEnd + 1);
-                    group.browseMode = state.mode;
-                } else {
-                    group.visibleLines = group.results;
-                    group.browseMode = 'forward';
-                }
+                group.visibleLines = group.results;
+                group.browseMode = this.reverseOrder ? 'reverse' : 'forward';
                 return group;
             });
         }
@@ -135,8 +129,8 @@ const LogSearchResults = {
                 PRISM_LOAD_DELAY: 100,
                 OVERFLOW_TOLERANCE: 1,
                 MAX_RESULTS_DEFAULT: 1000,
-                PAGE_SIZE: 100,  // 每次加载的行数
-                SCROLL_THRESHOLD: 60  // 触发加载的滚动阈值（px）
+                PAGE_SIZE: 500,  // 每次加载的行数
+                SCROLL_THRESHOLD: 100  // 触发加载的滚动阈值（px）
             },
             
             // 状态管理
@@ -305,17 +299,14 @@ const LogSearchResults = {
         loadMoreForward(groupKey) {
             const state = this.paginationState[groupKey];
             if (!state || state.loading) return;
-            if (state.loadedEnd >= state.total - 1) return;  // 已经加载完
+            if (state.loadedEnd >= state.total - 1) return;
             
             state.loading = true;
             
-            // 计算下一批数据
-            const nextStart = state.loadedEnd + 1;
             const nextEnd = Math.min(state.loadedEnd + state.pageSize, state.total - 1);
             
-            // 模拟异步加载
-            setTimeout(() => {
-                // 创建新状态对象以触发响应式更新
+            // 使用 requestAnimationFrame 优化性能
+            requestAnimationFrame(() => {
                 this.paginationState = {
                     ...this.paginationState,
                     [groupKey]: {
@@ -324,29 +315,24 @@ const LogSearchResults = {
                         loading: false
                     }
                 };
-            }, 50);
+            });
         },
         
         loadMoreReverse(groupKey) {
             const state = this.paginationState[groupKey];
             if (!state || state.loading) return;
-            if (state.loadedStart <= 0) return;  // 已经加载完
+            if (state.loadedStart <= 0) return;
             
             state.loading = true;
             
-            // 找到对应的容器，记录旧的高度和滚动位置
             const root = this.getComponentRoot();
             const container = root.querySelector(`.host-result-box[data-group-key="${groupKey}"] .host-results`);
             const oldScrollHeight = container ? container.scrollHeight : 0;
             const oldScrollTop = container ? container.scrollTop : 0;
             
-            // 计算上一批数据
-            const prevEnd = state.loadedStart - 1;
             const prevStart = Math.max(0, state.loadedStart - state.pageSize);
             
-            // 模拟异步加载
-            setTimeout(() => {
-                // 创建新状态对象以触发响应式更新
+            requestAnimationFrame(() => {
                 this.paginationState = {
                     ...this.paginationState,
                     [groupKey]: {
@@ -363,18 +349,22 @@ const LogSearchResults = {
                         container.scrollTop = newScrollHeight - oldScrollHeight + oldScrollTop;
                     }
                 });
-            }, 50);
+            });
         },
         
         addScrollListeners() {
-            const root = this.getComponentRoot();
-            const containers = root.querySelectorAll('.host-results');
-            
-            containers.forEach(container => {
-                // 移除旧的监听器
-                container.removeEventListener('scroll', this.handleGroupScroll);
-                // 添加新的监听器
-                container.addEventListener('scroll', this.handleGroupScroll, { passive: true });
+            this.$nextTick(() => {
+                const root = this.getComponentRoot();
+                const containers = root.querySelectorAll('.host-results');
+                
+                containers.forEach(container => {
+                    // 移除旧的监听器（使用 bind 保证 this 指向正确）
+                    container.removeEventListener('scroll', this._boundHandleScroll);
+                    
+                    // 绑定新的监听器
+                    this._boundHandleScroll = this.handleGroupScroll.bind(this);
+                    container.addEventListener('scroll', this._boundHandleScroll, { passive: true });
+                });
             });
         },
         
@@ -387,19 +377,19 @@ const LogSearchResults = {
             if (!groupKey) return;
             
             const state = this.paginationState[groupKey];
-            if (!state) return;
+            if (!state || state.loading) return;
             
             const threshold = this.CONSTANTS.SCROLL_THRESHOLD;
             
             if (state.mode === 'forward') {
                 // 正序：触底加载
                 const distanceToBottom = container.scrollHeight - (container.scrollTop + container.clientHeight);
-                if (distanceToBottom < threshold) {
+                if (distanceToBottom < threshold && state.loadedEnd < state.total - 1) {
                     this.loadMoreForward(groupKey);
                 }
             } else {
                 // 倒序：触顶加载
-                if (container.scrollTop < threshold) {
+                if (container.scrollTop < threshold && state.loadedStart > 0) {
                     this.loadMoreReverse(groupKey);
                 }
             }

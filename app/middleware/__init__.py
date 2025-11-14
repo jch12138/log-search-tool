@@ -13,7 +13,7 @@ def setup_middleware(app: Flask):
     @app.before_request
     def before_request():
         g.start_time = time.time()
-        logger.info(f"Request: {request.method} {request.path}")
+        # logger.info(f"Request: {request.method} {request.path}")
         g.request_id = f"{int(time.time())}-{id(request)}"
 
     @app.after_request

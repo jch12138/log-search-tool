@@ -170,6 +170,9 @@ def _configure_logging(settings: Settings):
     formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s', '%Y-%m-%d %H:%M:%S')
     console.setFormatter(formatter)
     root_logger.addHandler(console)
+    
+    # 关闭 werkzeug 的 HTTP 请求日志
+    logging.getLogger('werkzeug').setLevel(logging.WARNING)
 
     try:
         # Determine log file path: prefer explicit LOG_PATH; else compose from DIR + FILE

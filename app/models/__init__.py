@@ -70,7 +70,7 @@ class SearchResult:
     results: List[str]
     total_results: int
     search_time: float
-    search_result: Dict[str, Any]
+    file_path: str
     success: bool
     error: Optional[str] = None
 
@@ -81,7 +81,7 @@ class SearchResult:
             'results': self.results,
             'total_results': self.total_results,
             'search_time': self.search_time,
-            'search_result': self.search_result,
+            'file_path': self.file_path,
             'success': self.success,
             'error': self.error
         }

@@ -735,12 +735,12 @@ const LogSearchResults = {
         
         // ---------- 文件操作方法 ----------
         async downloadLogFile(hostResult) {
-            if (!hostResult?.search_result) {
+            if (!hostResult?.file_path) {
                 this.$message.error('无法获取日志文件信息');
                 return;
             }
             
-            const { file_path: filePath } = hostResult.search_result;
+            const { file_path: filePath } = hostResult;
             const { host } = hostResult;
             
             if (!filePath) {
@@ -871,9 +871,9 @@ const LogSearchResults = {
                                 </span>
                                 <span class="el-tag el-tag--primary el-tag--light el-tag--small" :title="'主机: '+group.host">[[ group.host ]]</span>
                                 <span class="el-tag el-tag--info el-tag--light el-tag--small" :title="'匹配条数'">[[ group.results.length ]] 条</span>
-                                <span class="el-tag el-tag--warning el-tag--light el-tag--small host-path-tag" v-if="group.hostResult && group.hostResult.search_result && group.hostResult.search_result.file_path"
-                                    :title="group.hostResult.search_result.file_path">
-                                    [[ formatHostPath(group.hostResult.search_result.file_path) ]]
+                                <span class="el-tag el-tag--warning el-tag--light el-tag--small host-path-tag" v-if="group.hostResult && group.hostResult.file_path"
+                                    :title="group.hostResult.file_path">
+                                    [[ formatHostPath(group.hostResult.file_path) ]]
                                 </span>
                             </div>
                             <div class="host-actions">
@@ -1042,9 +1042,9 @@ const LogSearchResults = {
                                 </span>
                                 <span class="el-tag el-tag--primary el-tag--light el-tag--small" :title="'主机: '+group.host">[[ group.host ]]</span>
                                 <span class="el-tag el-tag--info el-tag--light el-tag--small" :title="'匹配条数'">[[ group.results.length ]] 条</span>
-                                <span class="el-tag el-tag--warning el-tag--light el-tag--small host-path-tag" v-if="group.hostResult && group.hostResult.search_result && group.hostResult.search_result.file_path"
-                                    :title="group.hostResult.search_result.file_path">
-                                    [[ formatHostPath(group.hostResult.search_result.file_path) ]]
+                                <span class="el-tag el-tag--warning el-tag--light el-tag--small host-path-tag" v-if="group.hostResult && group.hostResult.file_path"
+                                    :title="group.hostResult.file_path">
+                                    [[ formatHostPath(group.hostResult.file_path) ]]
                                 </span>
                             </div>
                             <div class="host-actions">

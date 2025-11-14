@@ -84,34 +84,12 @@ class LogSearchService:
 					results.append(fut.result(timeout=SEARCH_EXEC_TIMEOUT))
 				except Exception as e:
 					logger.error(f"搜索失败 {cfg.get('host')}: {e}")
-					results.append(SearchResult(host=cfg.get('host', 'unknown'), ssh_index=i, results=[], total_results=0, search_time=0.0, search_result={'content': '', 'file_path': '', 'keyword': search_params.keyword, 'total_lines': 0, 'search_time': 0.0, 'matches': []}, success=False, error=str(e)))
+					results.append(SearchResult(host=cfg.get('host', 'unknown'), ssh_index=i, results=[], total_results=0, search_time=0.0, file_path='', success=False, error=str(e)))
 			parallel = True
 		results.sort(key=lambda r: r.ssh_index)
 		total = sum(r.total_results for r in results if r.success)
 		elapsed = time.time() - start
-		# Aggregated truncation metadata (non-breaking additional field) – only hosts with success considered
-		truncated_hosts = []
-		original_total_all = 0
-		for r in results:
-			if r.success:
-				info = r.search_result or {}
-				orig = info.get('original_total_lines') or info.get('total_lines') or 0
-				original_total_all += orig
-				if info.get('truncated'):
-					truncated_hosts.append({'host': r.host, 'ssh_index': r.ssh_index, 'original_total_lines': orig, 'after_truncation': r.total_results})
-		any_truncated = len(truncated_hosts) > 0
-		lines_after = total
-		lines_reduced = 0
-		if any_truncated:
-			lines_reduced = sum(h['original_total_lines'] - h['after_truncation'] for h in truncated_hosts if h['original_total_lines'] is not None)
-		aggregated_truncation = {
-			'any_truncated': any_truncated,
-			'truncated_hosts': truncated_hosts,
-			'total_original_lines': original_total_all,
-			'total_after_truncation': lines_after,
-			'lines_reduced': lines_reduced
-		}
-		return MultiHostSearchResult(log_name=log_name, keyword=search_params.keyword, search_params={'keyword': search_params.keyword, 'search_mode': search_params.search_mode, 'context_span': search_params.context_span, 'use_regex': search_params.use_regex}, total_hosts=len(sshs), hosts=results, total_results=total, total_search_time=elapsed, parallel_execution=parallel, aggregated_truncation=aggregated_truncation)
+		return MultiHostSearchResult(log_name=log_name, keyword=search_params.keyword, search_params={'keyword': search_params.keyword, 'search_mode': search_params.search_mode, 'context_span': search_params.context_span, 'use_regex': search_params.use_regex}, total_hosts=len(sshs), hosts=results, total_results=total, total_search_time=elapsed, parallel_execution=parallel, aggregated_truncation={})
 
 	def _search_single_host(self, ssh_config: Dict[str, Any], log_path: str, search_params: SearchParams, ssh_index: int) -> SearchResult:
 		start = time.time()
@@ -161,8 +139,6 @@ class LogSearchService:
 			has_line_numbers = ('grep -n' in command)
 			results, matches = self._parse_grep_output(lines, resolved_file_path, has_line_numbers=has_line_numbers)
 			# 后端行数限制（保护前端渲染性能）
-			truncated = False
-			original_total = len(results)
 			from app.models import SearchParams as _SP  # 局部导入避免循环
 			if isinstance(search_params, _SP) and search_params.max_lines:
 				limit = search_params.max_lines
@@ -170,7 +146,6 @@ class LogSearchService:
 					# 始终保留最新的日志行（结果按时间正序，取末尾 limit 条）
 					results = results[-limit:]
 					matches = matches[-limit:]
-					truncated = True
 			elapsed = time.time() - start
 			return SearchResult(
 				host=host,
@@ -178,22 +153,12 @@ class LogSearchService:
 				results=results,
 				total_results=len(results),
 				search_time=elapsed,
-				search_result={
-					'content': decoded_output.strip(),
-					'file_path': resolved_file_path,
-					'keyword': search_params.keyword,
-					'total_lines': len(results),
-					'original_total_lines': original_total,
-					'truncated': truncated,
-					'search_time': elapsed,
-					'matches': matches,
-					'encoding_used': used_encoding or preferred_encoding
-				},
+				file_path=resolved_file_path,
 				success=True
 			)
 		except Exception as e:
 			elapsed = time.time() - start
-			return SearchResult(host=host, ssh_index=ssh_index, results=[], total_results=0, search_time=elapsed, search_result={'content': '', 'file_path': '', 'keyword': search_params.keyword, 'total_lines': 0, 'search_time': elapsed, 'matches': []}, success=False, error=str(e))
+			return SearchResult(host=host, ssh_index=ssh_index, results=[], total_results=0, search_time=elapsed, file_path='', success=False, error=str(e))
 
 	def _build_search_command(self, log_path: str, search_params: SearchParams, ssh_config: Dict[str, Any]):
 		file_path = self._resolve_effective_file_path(log_path, search_params, ssh_config)

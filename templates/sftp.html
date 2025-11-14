@@ -6,50 +6,54 @@
   <title>SFTP 文件管理</title>
   <link rel="icon" type="image/svg+xml" href="/static/icons/favicon-sftp.svg" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/sftp.css') }}" />
-  <style>
-    /* 轻量覆盖：沿用全局消息定位为居中（与 main.css 的 Element Plus 一致）*/
-    .message { left: 50%; transform: translateX(-50%); right: auto; }
-  </style>
 </head>
 <body>
   <div class="container">
+    <!-- 顶部导航 -->
     <div class="header">
-  <h1 id="page-title">SFTP 文件浏览器</h1>
+      <h1 id="page-title">SFTP 文件管理器</h1>
       <div class="actions">
-        <a href="/" class="btn btn-secondary">返回主页</a>
-        <button class="btn btn-primary" id="new-conn-btn">新建连接</button>
+        <a href="/" class="btn btn-secondary">← 返回主页</a>
+        <button class="btn btn-primary" id="new-conn-btn">+ 新建连接</button>
       </div>
     </div>
 
+    <!-- 主布局 -->
     <div class="main-layout">
+      <!-- 左侧边栏 -->
       <aside class="sidebar">
-        <div class="sidebar-section">
-          <div style="font-weight:600;color:#556">活跃连接</div>
+        <div class="sidebar-section">活跃连接</div>
+        <div id="connections-list">
+          <div class="loading">正在加载...</div>
         </div>
-        <div id="connections-list"><div class="item" style="text-align:center;cursor:default;">正在加载连接...</div></div>
 
-        <div class="sidebar-section" style="border-top:1px solid var(--color-border)">
-          <div style="font-weight:600;color:#556">可用服务器</div>
+        <div class="sidebar-section">可用服务器</div>
+        <div id="log-based-servers">
+          <div class="loading">正在加载...</div>
         </div>
-        <div id="log-based-servers" style="padding:10px;flex:1;overflow:auto;min-height:0"></div>
       </aside>
 
+      <!-- 主内容区 -->
       <main class="main-pane">
+        <!-- 工具栏 -->
         <div class="topbar">
           <div class="topbar-row">
-            <div class="path-input-container" style="display:flex;gap:8px;align-items:center;flex:1">
+            <div class="path-input-container">
               <input id="path-input" class="input" type="text" placeholder="请选择连接" readonly />
-              <button id="path-nav-btn" class="btn" disabled>跳转</button>
+              <button id="path-nav-btn" class="btn btn-sm" disabled title="跳转到指定路径">跳转</button>
             </div>
-            <div class="spacer"></div>
-            <div class="topbar-actions" style="display:flex;gap:8px">
-              <button id="upload-btn" class="btn" disabled>上传</button>
-              <button id="mkdir-btn" class="btn" disabled>新建目录</button>
-              <button id="refresh-btn" class="btn" disabled>刷新</button>
+            <div class="topbar-actions">
+              <button id="upload-btn" class="btn btn-sm" disabled title="上传文件">📤 上传</button>
+              <button id="mkdir-btn" class="btn btn-sm" disabled title="新建目录">📁 新建目录</button>
+              <button id="rename-btn" class="btn btn-sm" disabled title="重命名选中项（单选）">✏️ 重命名</button>
+              <button id="batch-download-btn" class="btn btn-sm" disabled title="批量下载选中文件">⬇ 批量下载</button>
+              <button id="batch-delete-btn" class="btn btn-sm btn-danger" disabled title="批量删除选中项">🗑 批量删除</button>
+              <button id="refresh-btn" class="btn btn-sm" disabled title="刷新当前目录">🔄 刷新</button>
             </div>
           </div>
         </div>
 
+        <!-- 文件列表 -->
         <div class="file-table-wrapper" id="file-table-wrapper">
           <div class="loading">请先连接到 SFTP 服务器</div>
         </div>
@@ -105,6 +109,27 @@
     </div>
   </div>
 
+  <!-- 重命名模态框 -->
+  <div class="modal" id="rename-modal">
+    <div class="modal-content">
+      <div class="modal-header"><h3 class="modal-title">重命名</h3></div>
+      <form id="rename-form">
+        <div class="form-group">
+          <label>当前名称</label>
+          <input type="text" id="old-name" readonly style="background:#f5f7fa;cursor:not-allowed;" />
+        </div>
+        <div class="form-group">
+          <label>新名称</label>
+          <input type="text" id="new-name" required placeholder="输入新名称" />
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;">
+          <button type="button" class="btn btn-secondary" id="cancel-rename">取消</button>
+          <button type="submit" class="btn btn-primary">重命名</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script>
     // State
     let currentConnectionId = null;
@@ -112,6 +137,7 @@
     let currentItems = [];
     let fileSelection = new Set();
     const sortState = { key: 'name', dir: 'asc' };
+    let renameTargetPath = null; // 存储要重命名的项目路径
 
   // 每个连接的独立状态（路径、所选文件）
   const connectionStates = {};
@@ -132,12 +158,19 @@
     };
 
     function enableToolbar() {
-      ['upload-btn','mkdir-btn','refresh-btn','path-nav-btn'].forEach(id => $(id).disabled = false);
+      ['upload-btn','mkdir-btn','refresh-btn','path-nav-btn','batch-download-btn','batch-delete-btn','rename-btn'].forEach(id => {
+        const el = $(id);
+        if (el && !id.includes('batch') && id !== 'rename-btn') el.disabled = false;
+      });
       const input = $('path-input');
       input.readOnly = false; input.placeholder = '点击输入路径或直接编辑当前路径';
+      updateBatchButtons();
     }
     function disableToolbar() {
-      ['upload-btn','mkdir-btn','refresh-btn','path-nav-btn'].forEach(id => $(id).disabled = true);
+      ['upload-btn','mkdir-btn','refresh-btn','path-nav-btn','batch-download-btn','batch-delete-btn','rename-btn'].forEach(id => {
+        const el = $(id);
+        if (el) el.disabled = true;
+      });
       const input = $('path-input');
       input.readOnly = true; input.placeholder = '请选择连接'; input.value = '';
     }
@@ -331,6 +364,29 @@
     function closeUploadModal(){ $('upload-modal').classList.remove('active'); $('file-input').value=''; }
     function openMkdirModal(){ if(!currentConnectionId){ return showMessage('请先连接到服务器','error'); } $('mkdir-modal').classList.add('active'); }
     function closeMkdirModal(){ $('mkdir-modal').classList.remove('active'); $('mkdir-form').reset(); }
+    
+    function openRenameModal(){ 
+      if(!currentConnectionId){ return showMessage('请先连接到服务器','error'); }
+      if(fileSelection.size !== 1){ return showMessage('请选择一个文件或目录进行重命名','error'); }
+      const path = Array.from(fileSelection)[0];
+      const item = currentItems.find(i => joinPath(currentPath, i.original_name || i.name) === path);
+      if(!item){ return showMessage('未找到选中项','error'); }
+      renameTargetPath = path;
+      $('old-name').value = item.name;
+      $('new-name').value = item.name;
+      $('rename-modal').classList.add('active');
+      setTimeout(() => {
+        const input = $('new-name');
+        input.focus();
+        input.select();
+      }, 100);
+    }
+    
+    function closeRenameModal(){ 
+      $('rename-modal').classList.remove('active'); 
+      $('rename-form').reset(); 
+      renameTargetPath = null;
+    }
 
     function updatePageTitle(info){
       if(!info) return;
@@ -411,8 +467,8 @@
         const displayName = f.name;
         const checked = fileSelection.has(joinPath(currentPath, originalName)) ? 'checked' : '';
         const fullPath = joinPath(currentPath, originalName);
-        const actions = f.is_directory ? '' : `<button class='btn btn-secondary' onclick="event.stopPropagation();downloadFile('${fullPath}')">下载</button>`;
-        const delBtn = `<button class='btn btn-danger' onclick="event.stopPropagation();deleteItem('${fullPath}', ${f.is_directory})">删除</button>`;
+        const actions = f.is_directory ? '' : `<button class='btn btn-sm btn-secondary' onclick="event.stopPropagation();downloadFile('${fullPath}')">下载</button>`;
+        const delBtn = `<button class='btn btn-sm btn-danger' onclick="event.stopPropagation();deleteItem('${fullPath}', ${f.is_directory})">删除</button>`;
         rows.push(`<tr ${f.is_directory?`onclick=\"loadDirectory('${fullPath}')\"`:''} class='${fileSelection.has(fullPath)?'row-selected':''}'>
           <td class='checkbox-cell'><input type='checkbox' ${checked} onclick="toggleSelect(event,'${fullPath}')"></td>
           <td class='name' title='${displayName}'>${f.is_directory?'<span class=\"tag-dir\">DIR</span> ':''}${displayName}</td>
@@ -444,16 +500,88 @@
     function toggleSelect(e, p){ e.stopPropagation(); if(fileSelection.has(p)) fileSelection.delete(p); else fileSelection.add(p); if (connectionStates[currentConnectionId]) connectionStates[currentConnectionId].selection = new Set(fileSelection); renderTable(); }
     function allVisibleSelected(){ const all = currentItems.map(i => joinPath(currentPath, i.original_name || i.name)); return all.length>0 && all.every(p => fileSelection.has(p)); }
     function toggleSelectVisible(e){ e.stopPropagation(); const all = currentItems.map(i => joinPath(currentPath, i.original_name || i.name)); if (all.every(p => fileSelection.has(p))) all.forEach(p => fileSelection.delete(p)); else all.forEach(p => fileSelection.add(p)); if (connectionStates[currentConnectionId]) connectionStates[currentConnectionId].selection = new Set(fileSelection); renderTable(); }
-    function updateBatchButtons(){ const hasSel = fileSelection.size>0; ['batch-delete-btn','batch-download-btn','batch-zip-btn'].forEach(id => { const el=document.getElementById(id); if(el) el.disabled = !currentConnectionId || !hasSel; }); }
+    function updateBatchButtons(){ 
+      const hasSel = fileSelection.size>0; 
+      const hasOneSel = fileSelection.size===1;
+      ['batch-delete-btn','batch-download-btn','batch-zip-btn'].forEach(id => { 
+        const el=document.getElementById(id); 
+        if(el) el.disabled = !currentConnectionId || !hasSel; 
+      }); 
+      const renameBtn = document.getElementById('rename-btn');
+      if(renameBtn) renameBtn.disabled = !currentConnectionId || !hasOneSel;
+    }
 
-    async function deleteItem(path, isDir){ if(!confirm(`确定要删除这个${isDir?'目录':'文件'}吗?`)) return; try{ await fetchJSON(`${API}/sftp/delete`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ connection_id: currentConnectionId, remote_path: path, is_directory: !!isDir }) }); showMessage('删除成功'); loadDirectory(currentPath); } catch(err){ showMessage(err.message, 'error'); } }
+    async function deleteItem(path, isDir){ if(!confirm(`确定要删除这个${isDir?'目录':'文件'}吗?`)) return; try{ await fetchJSON(`${API}/sftp/delete`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ connection_id: currentConnectionId, remote_path: path, is_directory: !!isDir }) }); showMessage('删除成功'); fileSelection.delete(path); loadDirectory(currentPath); } catch(err){ showMessage(err.message, 'error'); } }
+    
     function downloadFile(path){ if(!currentConnectionId) return; const url = `${API}/sftp/download?connection_id=${encodeURIComponent(currentConnectionId)}&remote_path=${encodeURIComponent(path)}`; const w = window.open(url, '_blank'); if(!w) showMessage('浏览器阻止了下载窗口', 'error'); }
 
+    // 批量删除
+    async function batchDelete(){ 
+      if(!fileSelection.size) return; 
+      if(!confirm(`确定要删除选中的 ${fileSelection.size} 个项目吗？`)) return; 
+      const items = Array.from(fileSelection);
+      let successCount = 0;
+      for(const path of items){
+        const item = currentItems.find(i => joinPath(currentPath, i.original_name || i.name) === path);
+        const isDir = item ? item.is_directory : false;
+        try{ 
+          await fetchJSON(`${API}/sftp/delete`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ connection_id: currentConnectionId, remote_path: path, is_directory: isDir }) }); 
+          fileSelection.delete(path);
+          successCount++;
+        }catch(err){ 
+          showMessage(`删除 ${path} 失败: ${err.message}`, 'error'); 
+        }
+      }
+      if(successCount > 0) showMessage(`成功删除 ${successCount} 个项目`);
+      loadDirectory(currentPath); 
+    }
+
+    // 批量下载
+    function batchDownload(){ 
+      if(!fileSelection.size) return showMessage('请先选择要下载的文件','error'); 
+      const files = Array.from(fileSelection).filter(path => {
+        const item = currentItems.find(i => joinPath(currentPath, i.original_name || i.name) === path);
+        return item && !item.is_directory;
+      });
+      if(!files.length) return showMessage('所选项目中没有文件','error');
+      files.forEach(path => downloadFile(path));
+      showMessage(`已开始下载 ${files.length} 个文件`);
+    }
+
     // 上传/打包下载（按钮在工具栏之外，按需拓展）
-    async function uploadFiles(files){ if(!currentConnectionId) return showMessage('请先连接到服务器','error'); for(const file of files){ const fd = new FormData(); fd.append('file', file); fd.append('connection_id', currentConnectionId); fd.append('remote_path', currentPath); try{ const r = await fetch(`${API}/sftp/upload`, { method:'POST', body: fd }); const j = await r.json(); if(!j.success) throw new Error(j.error?.message||'上传失败'); showMessage('上传成功'); }catch(e){ showMessage(e.message, 'error'); } } closeUploadModal(); loadDirectory(currentPath); }
+    async function uploadFiles(files){ if(!currentConnectionId) return showMessage('请先连接到服务器','error'); let successCount = 0; for(const file of files){ const fd = new FormData(); fd.append('file', file); fd.append('connection_id', currentConnectionId); fd.append('remote_path', currentPath); try{ const r = await fetch(`${API}/sftp/upload`, { method:'POST', body: fd }); const j = await r.json(); if(!j.success) throw new Error(j.error?.message||'上传失败'); successCount++; }catch(e){ showMessage(`${file.name} 上传失败: ${e.message}`, 'error'); } } if(successCount > 0) showMessage(`成功上传 ${successCount} 个文件`); closeUploadModal(); loadDirectory(currentPath); }
 
     // 目录创建
     async function createDirectory(e){ e.preventDefault(); const name = $('dir-name').value.trim(); if(!name) return; try{ await fetchJSON(`${API}/sftp/mkdir`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ connection_id: currentConnectionId, remote_path: currentPath, dir_name: name }) }); closeMkdirModal(); showMessage('目录创建成功'); loadDirectory(currentPath); }catch(err){ showMessage(err.message, 'error'); } }
+
+    // 重命名
+    async function renameItem(e){ 
+      e.preventDefault(); 
+      const newName = $('new-name').value.trim(); 
+      if(!newName || !renameTargetPath) return; 
+      const oldName = $('old-name').value;
+      if(newName === oldName){ 
+        closeRenameModal(); 
+        return showMessage('名称未改变','error'); 
+      }
+      try{ 
+        await fetchJSON(`${API}/sftp/rename`, { 
+          method:'POST', 
+          headers:{'Content-Type':'application/json'}, 
+          body: JSON.stringify({ 
+            connection_id: currentConnectionId, 
+            old_path: renameTargetPath, 
+            new_name: newName 
+          }) 
+        }); 
+        closeRenameModal(); 
+        showMessage('重命名成功'); 
+        fileSelection.delete(renameTargetPath);
+        loadDirectory(currentPath); 
+      }catch(err){ 
+        showMessage(err.message, 'error'); 
+      } 
+    }
 
     // 路径输入相关
     function navigateToPath(){ if(!currentConnectionId) return; const input = $('path-input'); let target = (input.value||'').trim(); if(!target) return; if(!target.startsWith('/')) target = '/' + target; if(target === currentPath) return; loadDirectory(target); input.readOnly = true; }
@@ -474,7 +602,13 @@
       $('cancel-mkdir').addEventListener('click', closeMkdirModal);
       $('mkdir-form').addEventListener('submit', createDirectory);
 
+      $('rename-btn').addEventListener('click', openRenameModal);
+      $('cancel-rename').addEventListener('click', closeRenameModal);
+      $('rename-form').addEventListener('submit', renameItem);
+
       $('refresh-btn').addEventListener('click', () => currentConnectionId && loadDirectory(currentPath));
+      $('batch-download-btn').addEventListener('click', batchDownload);
+      $('batch-delete-btn').addEventListener('click', batchDelete);
       $('path-nav-btn').addEventListener('click', navigateToPath);
       $('path-input').addEventListener('keydown', (e) => { if(e.key==='Enter') navigateToPath(); });
       $('path-input').addEventListener('click', (e) => { if(currentConnectionId) e.target.readOnly = false; });

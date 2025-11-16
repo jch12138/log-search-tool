@@ -177,6 +177,12 @@ def _configure_logging(settings: Settings):
     
     # 关闭 werkzeug 的 HTTP 请求日志
     logging.getLogger('werkzeug').setLevel(logging.WARNING)
+    
+    # 将 paramiko 的日志级别设置为 WARNING，避免 INFO 级别的连接日志
+    logging.getLogger('paramiko').setLevel(logging.WARNING)
+    
+    # 将 terminal service 的日志级别设置为 WARNING
+    logging.getLogger('app.services.terminal.service').setLevel(logging.WARNING)
 
     try:
         # Determine log file path: prefer explicit LOG_PATH; else compose from DIR + FILE

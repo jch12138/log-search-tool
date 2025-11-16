@@ -1,19 +1,80 @@
 """通用编码检测和解码工具
 
 提供智能编码检测和多编码回退机制，适用于 SSH、SFTP、Terminal 等场景。
+支持混合编码场景：系统 UTF-8 但文件可能是 GBK。
 """
 
 import logging
 import re
-from typing import Tuple, Optional, Dict
+from typing import Tuple, Optional, Dict, List
 
 logger = logging.getLogger(__name__)
 
-# 常见编码优先级列表
-_ENCODING_CANDIDATES = ['utf-8', 'gb18030', 'gbk', 'big5', 'shift_jis', 'latin-1']
+# 中文环境常见编码优先级列表（按使用频率排序）
+_ENCODING_CANDIDATES = ['utf-8', 'gb18030', 'gbk', 'gb2312', 'big5', 'shift_jis', 'latin-1']
 
 # 编码缓存：避免重复检测
 _encoding_cache: Dict[str, str] = {}
+
+
+def _detect_encoding_by_bom(data: bytes) -> Optional[str]:
+    """通过 BOM (Byte Order Mark) 检测编码"""
+    if data.startswith(b'\xef\xbb\xbf'):
+        return 'utf-8-sig'
+    elif data.startswith(b'\xff\xfe'):
+        return 'utf-16-le'
+    elif data.startswith(b'\xfe\xff'):
+        return 'utf-16-be'
+    return None
+
+
+def _has_chinese_chars(text: str) -> bool:
+    """检查文本中是否包含中文字符"""
+    return bool(re.search(r'[\u4e00-\u9fff]', text))
+
+
+def _calculate_confidence(text: str, encoding: str) -> float:
+    """计算编码的置信度（基于替换字符数量和中文特征）
+    
+    Returns:
+        0.0-1.0 之间的置信度分数
+    """
+    if not text:
+        return 0.0
+    
+    text_len = len(text)
+    if text_len == 0:
+        return 0.0
+    
+    # 计算替换字符比例（越少越好）
+    replacement_ratio = text.count('\ufffd') / text_len
+    if replacement_ratio > 0.1:  # 超过 10% 是替换字符，基本认为失败
+        return 0.0
+    
+    confidence = 1.0 - replacement_ratio
+    
+    # 如果包含中文字符，检查中文标点的完整性
+    if _has_chinese_chars(text):
+        chinese_punctuations = ['，', '。', '；', '：', '！', '？', '、', '《', '》', '"', '"']
+        has_chinese_punct = any(p in text for p in chinese_punctuations)
+        if has_chinese_punct:
+            confidence += 0.1
+        
+        # GBK/GB18030 在中文环境中常见，加分
+        if encoding.lower() in ['gbk', 'gb18030', 'gb2312']:
+            confidence += 0.05
+    
+    return min(confidence, 1.0)
+
+
+def _try_decode_with_confidence(data: bytes, encoding: str) -> Tuple[Optional[str], float]:
+    """尝试使用指定编码解码，并返回置信度"""
+    try:
+        text = data.decode(encoding)
+        confidence = _calculate_confidence(text, encoding)
+        return text, confidence
+    except (UnicodeDecodeError, LookupError):
+        return None, 0.0
 
 
 class EncodingDetector:
@@ -81,38 +142,83 @@ class EncodingDetector:
 def smart_decode(
     data: bytes,
     preferred_encoding: Optional[str] = None,
-    fallback_encodings: Optional[list] = None
+    fallback_encodings: Optional[List[str]] = None,
+    enable_auto_detect: bool = True
 ) -> Tuple[str, str]:
-    """智能解码字节数据
+    """智能解码字节数据（增强版）
     
     优先使用 preferred_encoding，失败后尝试 fallback_encodings，
-    最终使用 utf-8 + errors='replace'
+    并根据置信度选择最佳编码。支持混合编码环境。
     
     Args:
         data: 要解码的字节数据
-        preferred_encoding: 首选编码（例如从 locale 检测到的编码）
-        fallback_encodings: 备选编码列表，默认使用常见编码
+        preferred_encoding: 首选编码（例如从 locale 检测到的系统编码）
+        fallback_encodings: 备选编码列表，默认使用常见中文编码
+        enable_auto_detect: 是否启用自动编码检测（基于置信度）
         
     Returns:
         (解码后的文本, 实际使用的编码)
         
     Examples:
+        >>> # UTF-8 文件
         >>> text, enc = smart_decode(b'\\xe4\\xb8\\xad\\xe6\\x96\\x87')
         >>> print(text, enc)
         中文 utf-8
         
-        >>> text, enc = smart_decode(b'\\xd6\\xd0\\xce\\xc4', preferred_encoding='gbk')
+        >>> # GBK 文件（即使系统是 UTF-8）
+        >>> text, enc = smart_decode(b'\\xd6\\xd0\\xce\\xc4', preferred_encoding='utf-8')
         >>> print(text, enc)
         中文 gbk
     """
     if not data:
         return '', preferred_encoding or 'utf-8'
     
+    # 1. 检查 BOM
+    bom_encoding = _detect_encoding_by_bom(data)
+    if bom_encoding:
+        try:
+            text = data.decode(bom_encoding)
+            logger.debug(f"通过 BOM 检测到编码: {bom_encoding}")
+            return text, bom_encoding.replace('-sig', '')
+        except (UnicodeDecodeError, LookupError):
+            pass
+    
     # 使用默认备选编码
     if fallback_encodings is None:
-        fallback_encodings = _ENCODING_CANDIDATES
+        fallback_encodings = _ENCODING_CANDIDATES.copy()
     
-    # 1. 首先尝试首选编码
+    # 2. 如果启用自动检测，尝试所有编码并选择置信度最高的
+    if enable_auto_detect:
+        best_text = None
+        best_encoding = None
+        best_confidence = 0.0
+        
+        # 构建尝试列表（首选编码优先）
+        encodings_to_try = []
+        if preferred_encoding:
+            encodings_to_try.append(preferred_encoding)
+        encodings_to_try.extend([e for e in fallback_encodings if e != preferred_encoding])
+        
+        for encoding in encodings_to_try:
+            text, confidence = _try_decode_with_confidence(data, encoding)
+            if text is not None and confidence > best_confidence:
+                best_text = text
+                best_encoding = encoding
+                best_confidence = confidence
+                
+                # 如果置信度很高（>0.9），提前返回
+                if confidence > 0.9:
+                    logger.debug(f"高置信度编码: {encoding} ({confidence:.2f})")
+                    return best_text, best_encoding
+        
+        # 返回最佳结果
+        if best_text is not None and best_confidence > 0.5:
+            if best_encoding != preferred_encoding:
+                logger.info(f"自动检测文件编码: {best_encoding} (系统: {preferred_encoding}, 置信度: {best_confidence:.2f})")
+            return best_text, best_encoding
+    
+    # 3. 回退到原有逻辑：按顺序尝试编码
+    # 首先尝试首选编码
     if preferred_encoding:
         try:
             text = data.decode(preferred_encoding)
@@ -122,7 +228,7 @@ def smart_decode(
         except (UnicodeDecodeError, LookupError) as e:
             logger.debug(f"首选编码 {preferred_encoding} 解码失败: {e}")
     
-    # 2. 尝试备选编码列表
+    # 尝试备选编码列表
     for encoding in fallback_encodings:
         if encoding == preferred_encoding:
             continue  # 已经尝试过了
@@ -135,28 +241,9 @@ def smart_decode(
         except (UnicodeDecodeError, LookupError):
             continue
     
-    # 3. 最终回退：UTF-8 + replace
+    # 4. 最终回退：UTF-8 + replace
     logger.warning("所有编码尝试失败，使用 UTF-8 + errors='replace'")
     return data.decode('utf-8', errors='replace'), 'utf-8'
-
-
-def decode_with_fallback(
-    data: bytes,
-    encoding: Optional[str] = None
-) -> str:
-    """使用指定编码解码，失败时自动回退
-    
-    这是 smart_decode 的简化版本，只返回文本不返回编码
-    
-    Args:
-        data: 要解码的字节数据
-        encoding: 指定的编码，默认 'utf-8'
-        
-    Returns:
-        解码后的文本
-    """
-    text, _ = smart_decode(data, preferred_encoding=encoding)
-    return text
 
 
 def safe_decode(
@@ -182,38 +269,8 @@ def safe_decode(
         return data.decode('utf-8', errors='replace')
 
 
-# 向后兼容的别名
-def decode_bytes(data: bytes) -> str:
-    """简单解码函数（向后兼容）
-    
-    Args:
-        data: 要解码的字节数据
-        
-    Returns:
-        解码后的文本
-    """
-    return decode_with_fallback(data)
-
-
-def ensure_utf8(text: str) -> str:
-    """确保文本是有效的 UTF-8（向后兼容，已废弃）
-    
-    Args:
-        text: 输入文本
-        
-    Returns:
-        UTF-8 文本
-    """
-    # 这个函数的逻辑有问题，保留只是为了向后兼容
-    # 新代码应该使用 smart_decode
-    return text
-
-
 __all__ = [
     'EncodingDetector',
     'smart_decode',
-    'decode_with_fallback',
     'safe_decode',
-    'decode_bytes',  # 向后兼容
-    'ensure_utf8',   # 向后兼容
 ]

@@ -6,77 +6,52 @@
     <title>账户查询 - Account API</title>
     <link rel="stylesheet" href="/static/css/element-plus.css">
     <style>
-        body {
+        * {
             margin: 0;
-            padding: 20px;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #f5f6fa;
             min-height: 100vh;
+            padding: 12px;
         }
         
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
         }
         
-        .header {
-            text-align: center;
-            color: white;
-            margin-bottom: 30px;
-        }
-        
-        .header h1 {
-            font-size: 32px;
-            margin: 0 0 10px 0;
-        }
-        
-        .header p {
-            font-size: 16px;
-            opacity: 0.9;
-            margin: 0;
-        }
-        
         .card {
-            background: white;
-            border-radius: 12px;
-            padding: 24px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            background: #fff;
+            border-radius: 6px;
+            padding: 20px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
         }
         
         .card-title {
-            font-size: 20px;
+            font-size: 16px;
             font-weight: 600;
             color: #303133;
-            margin: 0 0 20px 0;
+            margin: 0 0 16px 0;
             padding-bottom: 12px;
-            border-bottom: 2px solid #409eff;
+            border-bottom: 1px solid #ebeef5;
         }
         
-        .form-row {
-            display: flex;
-            gap: 16px;
-            margin-bottom: 16px;
-            flex-wrap: wrap;
-        }
-        
-        .form-item {
-            flex: 1;
-            min-width: 200px;
-        }
-        
-        .form-actions {
-            display: flex;
-            gap: 12px;
-            justify-content: flex-end;
-            margin-top: 20px;
+        .el-form--inline .el-form-item {
+            margin-right: 16px;
+            margin-bottom: 0;
         }
         
         .result-card {
             background: #f5f7fa;
-            border-radius: 8px;
+            border-radius: 6px;
             padding: 16px;
             margin-top: 16px;
+            border: 1px solid #ebeef5;
         }
         
         .result-title {
@@ -104,108 +79,428 @@
             padding: 40px;
             color: #909399;
         }
+        
+        .account-info {
+            background: #fff;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-bottom: 16px;
+            border: 1px solid #ebeef5;
+        }
+        
+        .account-header {
+            background: #409eff;
+            color: white;
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .account-number {
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+        
+        .account-status {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            background: rgba(255, 255, 255, 0.25);
+        }
+        
+        .balance-section {
+            background: #ecf5ff;
+            padding: 20px;
+            border-bottom: 1px solid #ebeef5;
+        }
+        
+        .balance-label {
+            font-size: 13px;
+            color: #606266;
+            margin-bottom: 8px;
+        }
+        
+        .balance-amount {
+            font-size: 32px;
+            font-weight: 700;
+            color: #409eff;
+            letter-spacing: 1px;
+        }
+        
+        .balance-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin-top: 12px;
+        }
+        
+        .balance-item {
+            background: #fff;
+            padding: 12px;
+            border-radius: 4px;
+            border: 1px solid #d9ecff;
+        }
+        
+        .balance-item-label {
+            font-size: 12px;
+            color: #909399;
+            margin-bottom: 4px;
+        }
+        
+        .balance-item-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: #303133;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1px;
+            background: #e4e7ed;
+        }
+        
+        .info-item {
+            background: white;
+            padding: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .info-label {
+            font-size: 13px;
+            color: #909399;
+            font-weight: 500;
+        }
+        
+        .info-value {
+            font-size: 14px;
+            color: #303133;
+            font-weight: 600;
+            text-align: right;
+            max-width: 60%;
+            word-break: break-all;
+        }
+        
+        .info-value.highlight {
+            color: #409eff;
+        }
+        
+        .info-value.success {
+            color: #67c23a;
+        }
+        
+        .info-value.warning {
+            color: #e6a23c;
+        }
+        
+        .toggle-raw {
+            margin-top: 12px;
+            text-align: center;
+        }
+        
+        .transaction-table {
+            margin-top: 16px;
+        }
+        
+        .transaction-summary {
+            background: #ecf5ff;
+            padding: 16px 20px;
+            border-radius: 6px 6px 0 0;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            border: 1px solid #d9ecff;
+            border-bottom: none;
+        }
+        
+        .summary-item {
+            text-align: center;
+        }
+        
+        .summary-label {
+            font-size: 12px;
+            color: #909399;
+            margin-bottom: 4px;
+        }
+        
+        .summary-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: #303133;
+        }
+        
+        .el-table {
+            border-radius: 0 0 8px 8px;
+        }
+        
+        .amount-debit {
+            color: #f56c6c;
+            font-weight: 600;
+        }
+        
+        .amount-credit {
+            color: #67c23a;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
     <div id="app" class="container">
-        <div class="header">
-            <h1>🏦 账户查询系统</h1>
-            <p>Account Query System - ESB Integration</p>
-        </div>
-        
-        <!-- 余额查询 -->
+        <!-- 账户信息查询 -->
         <div class="card">
-            <h2 class="card-title">💰 余额查询</h2>
-            <div class="form-row">
-                <div class="form-item">
+            <h2 class="card-title">ℹ️ 账户信息查询</h2>
+            <el-form :model="balanceForm" inline>
+                <el-form-item label="账号">
                     <el-input 
                         v-model="balanceForm.account" 
                         placeholder="请输入账号"
-                        clearable>
-                        <template #prepend>账号</template>
+                        clearable
+                        style="width: 240px">
                     </el-input>
-                </div>
-                <div class="form-item" style="flex: 0 0 200px;">
-                    <el-select v-model="balanceForm.env" placeholder="选择环境">
+                </el-form-item>
+                <el-form-item label="环境">
+                    <el-select v-model="balanceForm.env" placeholder="选择环境" style="width: 120px">
                         <el-option label="SIT-A" value="sita"></el-option>
                         <el-option label="SIT-B" value="sitb"></el-option>
                         <el-option label="UAT" value="uat"></el-option>
-                        <el-option label="默认" value=""></el-option>
                     </el-select>
-                </div>
-            </div>
-            <div class="form-actions">
-                <el-button @click="clearBalanceResult">清除结果</el-button>
-                <el-button type="primary" @click="queryBalance" :loading="balanceLoading">
-                    查询余额
-                </el-button>
-            </div>
+                </el-form-item>
+                <el-form-item>
+                    <el-button @click="clearBalanceResult">清除</el-button>
+                    <el-button type="primary" @click="queryBalance" :loading="balanceLoading">
+                        查询
+                    </el-button>
+                </el-form-item>
+            </el-form>
             <div v-if="balanceResult" class="result-card">
                 <div class="result-title">查询结果</div>
-                <pre class="json-viewer" v-text="formatJson(balanceResult)"></pre>
+                
+                <!-- 账户信息展示 -->
+                <div v-if="getAccountInfo(balanceResult)" class="account-info">
+                    <div class="account-header">
+                        <div class="account-number" v-text="getAccountInfo(balanceResult).CstAcctNo"></div>
+                        <div class="account-status">
+                            <span class="status-badge" v-text="getAccountStatusText(getAccountInfo(balanceResult).AcctActvFlg)"></span>
+                            <span class="status-badge" v-text="getAccountInfo(balanceResult).AcctNm"></span>
+                        </div>
+                    </div>
+                    
+                    <div class="balance-section">
+                        <div class="balance-label">账户余额 (CNY)</div>
+                        <div class="balance-amount" v-text="formatCurrency(getAccountInfo(balanceResult).CrnAcctBal)"></div>
+                        <div class="balance-grid">
+                            <div class="balance-item">
+                                <div class="balance-item-label">可用余额</div>
+                                <div class="balance-item-value" v-text="formatCurrency(getAccountInfo(balanceResult).UseBal)"></div>
+                            </div>
+                            <div class="balance-item">
+                                <div class="balance-item-label">昨日余额</div>
+                                <div class="balance-item-value" v-text="formatCurrency(getAccountInfo(balanceResult).LastDayAcctBal)"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="info-label">账户类型</span>
+                            <span class="info-value" v-text="getAccountCharText(getAccountInfo(balanceResult).AcctChar)"></span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">账户性质</span>
+                            <span class="info-value" v-text="getAccountKindText(getAccountInfo(balanceResult).AcctKnd)"></span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">客户种类</span>
+                            <span class="info-value" v-text="getCustomerKindText(getAccountInfo(balanceResult).CoreCstKnd)"></span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">币种</span>
+                            <span class="info-value" v-text="getAccountInfo(balanceResult).CcyNo"></span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">开户日期</span>
+                            <span class="info-value highlight" v-text="getAccountInfo(balanceResult).OpnAcctDt"></span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">开户机构</span>
+                            <span class="info-value" v-text="getAccountInfo(balanceResult).OpnAcctInst"></span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">利率 (%)</span>
+                            <span class="info-value success" v-text="getAccountInfo(balanceResult).IntRate"></span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">起息日期</span>
+                            <span class="info-value" v-text="getAccountInfo(balanceResult).IntBegDt"></span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">最后交易日</span>
+                            <span class="info-value" v-text="getAccountInfo(balanceResult).LastBsnDt"></span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">存款类型</span>
+                            <span class="info-value" v-text="getDepositTypeText(getAccountInfo(balanceResult).DepPrdTp)"></span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">支取方式</span>
+                            <span class="info-value" v-text="getDrawModeText(getAccountInfo(balanceResult).DrawMode)"></span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">账户状态</span>
+                            <span class="info-value" v-text="getCoreAcctStatusText(getAccountInfo(balanceResult).CoreAcctSt)"></span>
+                        </div>
+                    </div>
+                    
+                    <div class="toggle-raw">
+                        <el-button text @click="showRawBalance = !showRawBalance">
+                            <span v-text="showRawBalance ? '隐藏' : '查看'"></span>原始数据
+                        </el-button>
+                    </div>
+                </div>
+                
+                <pre v-if="showRawBalance || !getAccountInfo(balanceResult)" class="json-viewer" v-text="formatJson(balanceResult)"></pre>
             </div>
         </div>
         
         <!-- 交易明细查询 -->
         <div class="card">
             <h2 class="card-title">📋 交易明细查询</h2>
-            <div class="form-row">
-                <div class="form-item">
+            <el-form :model="detailForm" inline>
+                <el-form-item label="账号">
                     <el-input 
                         v-model="detailForm.account" 
                         placeholder="请输入账号"
-                        clearable>
-                        <template #prepend>账号</template>
+                        clearable
+                        style="width: 240px">
                     </el-input>
-                </div>
-                <div class="form-item" style="flex: 0 0 200px;">
-                    <el-select v-model="detailForm.env" placeholder="选择环境">
+                </el-form-item>
+                <el-form-item label="环境">
+                    <el-select v-model="detailForm.env" placeholder="选择环境" style="width: 120px">
                         <el-option label="SIT-A" value="sita"></el-option>
                         <el-option label="SIT-B" value="sitb"></el-option>
                         <el-option label="UAT" value="uat"></el-option>
-                        <el-option label="默认" value=""></el-option>
                     </el-select>
-                </div>
-            </div>
-            <div class="form-row">
-                <div class="form-item">
+                </el-form-item>
+                <el-form-item label="日期范围">
                     <el-date-picker
-                        v-model="detailForm.dateRange"
-                        type="daterange"
-                        range-separator="至"
-                        start-placeholder="开始日期"
-                        end-placeholder="结束日期"
+                        v-model="detailForm.beginDate"
+                        type="date"
+                        placeholder="开始日期"
                         value-format="YYYY-MM-DD"
-                        style="width: 100%">
+                        style="width: 140px">
                     </el-date-picker>
-                </div>
-                <div class="form-item" style="flex: 0 0 150px;">
+                </el-form-item>
+                <el-form-item label="至">
+                    <el-date-picker
+                        v-model="detailForm.endDate"
+                        type="date"
+                        placeholder="结束日期"
+                        value-format="YYYY-MM-DD"
+                        style="width: 140px">
+                    </el-date-picker>
+                </el-form-item>
+                <el-form-item label="起始">
                     <el-input-number 
                         v-model="detailForm.begTms" 
                         :min="0" 
-                        placeholder="起始条数"
-                        style="width: 100%">
+                        controls-position="right"
+                        style="width: 100px">
                     </el-input-number>
-                </div>
-                <div class="form-item" style="flex: 0 0 150px;">
+                </el-form-item>
+                <el-form-item label="条数">
                     <el-input-number 
                         v-model="detailForm.quryTms" 
                         :min="1" 
                         :max="100"
-                        placeholder="查询条数"
-                        style="width: 100%">
+                        controls-position="right"
+                        style="width: 100px">
                     </el-input-number>
-                </div>
-            </div>
-            <div class="form-actions">
-                <el-button @click="clearDetailResult">清除结果</el-button>
-                <el-button type="primary" @click="queryDetail" :loading="detailLoading">
-                    查询明细
-                </el-button>
-            </div>
+                </el-form-item>
+                <el-form-item>
+                    <el-button @click="clearDetailResult">清除</el-button>
+                    <el-button type="primary" @click="queryDetail" :loading="detailLoading">
+                        查询
+                    </el-button>
+                </el-form-item>
+            </el-form>
             <div v-if="detailResult" class="result-card">
                 <div class="result-title">查询结果</div>
-                <pre class="json-viewer" v-text="formatJson(detailResult)"></pre>
+                
+                <!-- 交易明细展示 -->
+                <div v-if="getTransactionList(detailResult)" class="transaction-table">
+                    <div class="transaction-summary">
+                        <div class="summary-item">
+                            <div class="summary-label">账号</div>
+                            <div class="summary-value" v-text="detailResult.service.BODY.CstAcctNo || '未知'"></div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-label">账户名称</div>
+                            <div class="summary-value" v-text="detailResult.service.BODY.AcctNm || '未知'"></div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-label">币种</div>
+                            <div class="summary-value" v-text="detailResult.service.BODY.CcyNo || 'CNY'"></div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-label">交易笔数</div>
+                            <div class="summary-value" v-text="getTransactionList(detailResult).length"></div>
+                        </div>
+                    </div>
+                    
+                    <el-table 
+                        :data="getTransactionList(detailResult)" 
+                        stripe 
+                        style="width: 100%"
+                        :default-sort="{prop: 'StdTxnDt', order: 'descending'}">
+                        <el-table-column prop="StdTxnDt" label="交易日期" width="110" sortable></el-table-column>
+                        <el-table-column prop="BckInf1" label="交易时间" width="120">
+                            <template #default="scope">
+                                <span v-text="formatTime(scope.row.BckInf1)"></span>
+                            </template>
+                        </el-table-column>
+                        <el-table-column prop="SmyDsc" label="摘要" width="120"></el-table-column>
+                        <el-table-column prop="DbCrFlg" label="收支" width="60" align="center">
+                            <template #default="scope">
+                                <el-tag :type="scope.row.DbCrFlg === 'C' ? 'success' : 'danger'" size="small">
+                                    <span v-text="scope.row.DbCrFlg === 'C' ? '收入' : '支出'"></span>
+                                </el-tag>
+                            </template>
+                        </el-table-column>
+                        <el-table-column prop="TxnAmt" label="交易金额" width="140" align="right">
+                            <template #default="scope">
+                                <span :class="scope.row.DbCrFlg === 'C' ? 'amount-credit' : 'amount-debit'">
+                                    <span v-text="(scope.row.DbCrFlg === 'C' ? '+' : '-') + formatCurrency(scope.row.TxnAmt)"></span>
+                                </span>
+                            </template>
+                        </el-table-column>
+                        <el-table-column prop="AcctBal" label="余额" width="140" align="right">
+                            <template #default="scope">
+                                <span v-text="formatCurrency(scope.row.AcctBal)"></span>
+                            </template>
+                        </el-table-column>
+                        <el-table-column prop="OppAcctNm" label="对方户名" min-width="200"></el-table-column>
+                        <el-table-column prop="OppAcctNo" label="对方账号" width="180"></el-table-column>
+                        <el-table-column prop="Remark" label="备注" width="150" show-overflow-tooltip></el-table-column>
+                    </el-table>
+                    
+                    <div class="toggle-raw">
+                        <el-button text @click="showRawDetail = !showRawDetail">
+                            <span v-text="showRawDetail ? '隐藏' : '查看'"></span>原始数据
+                        </el-button>
+                    </div>
+                </div>
+                
+                <pre v-if="showRawDetail || !getTransactionList(detailResult)" class="json-viewer" v-text="formatJson(detailResult)"></pre>
             </div>
         </div>
     </div>
@@ -219,26 +514,29 @@
 
         createApp({
             setup() {
-                // 余额查询表单
+                // 账户信息查询表单
                 const balanceForm = ref({
                     account: '',
-                    env: 'sita'
+                    env: 'sitb'
                 });
                 const balanceResult = ref(null);
                 const balanceLoading = ref(false);
+                const showRawBalance = ref(false);
 
                 // 交易明细查询表单
                 const detailForm = ref({
                     account: '',
-                    env: 'sita',
-                    dateRange: [],
+                    env: 'sitb',
+                    beginDate: '',
+                    endDate: '',
                     begTms: 0,
                     quryTms: 20
                 });
                 const detailResult = ref(null);
                 const detailLoading = ref(false);
+                const showRawDetail = ref(false);
 
-                // 查询余额
+                // 查询账户信息
                 const queryBalance = async () => {
                     if (!balanceForm.value.account) {
                         ElementPlus.ElMessage.warning('请输入账号');
@@ -282,10 +580,12 @@
                             quryTms: detailForm.value.quryTms
                         };
 
-                        // 添加日期范围
-                        if (detailForm.value.dateRange && detailForm.value.dateRange.length === 2) {
-                            payload.beginDate = detailForm.value.dateRange[0];
-                            payload.endDate = detailForm.value.dateRange[1];
+                        // 添加日期
+                        if (detailForm.value.beginDate) {
+                            payload.beginDate = detailForm.value.beginDate;
+                        }
+                        if (detailForm.value.endDate) {
+                            payload.endDate = detailForm.value.endDate;
                         }
 
                         const response = await axios.post(`${API}/query-detail`, payload);
@@ -313,19 +613,131 @@
                 const formatJson = (obj) => {
                     return JSON.stringify(obj, null, 2);
                 };
+                
+                // 获取账户信息
+                const getAccountInfo = (result) => {
+                    return result?.service?.BODY?.array?.BtchAcctInfQuryArray;
+                };
+                
+                // 格式化货币
+                const formatCurrency = (amount) => {
+                    if (!amount) return '0.00';
+                    return parseFloat(amount).toLocaleString('zh-CN', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                    });
+                };
+                
+                // 账户状态文本
+                const getAccountStatusText = (flag) => {
+                    return flag === 'Y' ? '正常' : '非正常';
+                };
+                
+                // 账户类型文本
+                const getAccountCharText = (char) => {
+                    const map = {
+                        '1': '活期账户',
+                        '2': '定期账户',
+                        '3': '活期账户',
+                        '4': '通知存款账户'
+                    };
+                    return map[char] || char;
+                };
+                
+                // 账户性质文本
+                const getAccountKindText = (kind) => {
+                    const map = {
+                        '1': '个人账户',
+                        '2': '对公账户',
+                        '3': '内部账户'
+                    };
+                    return map[kind] || kind;
+                };
+                
+                // 客户种类文本
+                const getCustomerKindText = (kind) => {
+                    const map = {
+                        '1': '个人客户',
+                        '2': '对公客户',
+                        '3': '内部客户'
+                    };
+                    return map[kind] || kind;
+                };
+                
+                // 存款类型文本
+                const getDepositTypeText = (type) => {
+                    const map = {
+                        'D': '活期存款',
+                        'T': '定期存款',
+                        'N': '通知存款'
+                    };
+                    return map[type] || type;
+                };
+                
+                // 支取方式文本
+                const getDrawModeText = (mode) => {
+                    const map = {
+                        '1': '一次性支取',
+                        '2': '分次支取',
+                        '3': '部分支取',
+                        '4': '随时支取'
+                    };
+                    return map[mode] || mode;
+                };
+                
+                // 账户状态文本
+                const getCoreAcctStatusText = (status) => {
+                    const map = {
+                        '0': '正常',
+                        '1': '冻结',
+                        '2': '挂失',
+                        '3': '销户'
+                    };
+                    return map[status] || status;
+                };
+                
+                // 获取交易明细列表
+                const getTransactionList = (result) => {
+                    const list = result?.service?.BODY?.array?.TxnDtlInfArray;
+                    return Array.isArray(list) ? list : null;
+                };
+                
+                // 格式化时间
+                const formatTime = (timeStr) => {
+                    if (!timeStr) return '';
+                    // 格式: "09:22:452025-11-11" -> "09:22:45 2025-11-11"
+                    const match = timeStr.match(/^(\d{2}:\d{2}:\d{2})(\d{4}-\d{2}-\d{2})$/);
+                    if (match) {
+                        return `${match[1]} ${match[2]}`;
+                    }
+                    return timeStr;
+                };
 
                 return {
                     balanceForm,
                     balanceResult,
                     balanceLoading,
+                    showRawBalance,
                     detailForm,
                     detailResult,
                     detailLoading,
+                    showRawDetail,
                     queryBalance,
                     queryDetail,
                     clearBalanceResult,
                     clearDetailResult,
-                    formatJson
+                    formatJson,
+                    getAccountInfo,
+                    formatCurrency,
+                    getAccountStatusText,
+                    getAccountCharText,
+                    getAccountKindText,
+                    getCustomerKindText,
+                    getDepositTypeText,
+                    getDrawModeText,
+                    getCoreAcctStatusText,
+                    getTransactionList,
+                    formatTime
                 };
             }
         }).use(ElementPlus).mount('#app');

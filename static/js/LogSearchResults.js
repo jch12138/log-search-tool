@@ -229,10 +229,41 @@ const LogSearchResults = {
             const containers = root.querySelectorAll('.host-results');
             
             containers.forEach(container => {
+                // 如果有关键词高亮，滚动到最后一个高亮位置
+                if (this.searchKeyword?.trim()) {
+                    this.$nextTick(() => {
+                        this.scrollToLastHighlight(container);
+                    });
+                } else {
+                    // 否则滚动到底部
+                    setTimeout(() => {
+                        container.scrollTop = container.scrollHeight;
+                    }, 0);
+                }
+            });
+        },
+        
+        scrollToLastHighlight(container) {
+            // 查找容器内的所有高亮元素
+            const highlights = container.querySelectorAll('.search-highlight');
+            
+            if (highlights.length > 0) {
+                // 获取最后一个高亮元素
+                const lastHighlight = highlights[highlights.length - 1];
+                
+                // 直接跳转到最后一个高亮元素，使其在视口中央，无动画
+                setTimeout(() => {
+                    lastHighlight.scrollIntoView({
+                        behavior: 'auto',  // 直接跳转，无滚动动画
+                        block: 'center'
+                    });
+                }, 100);
+            } else {
+                // 如果没有找到高亮元素，滚动到底部
                 setTimeout(() => {
                     container.scrollTop = container.scrollHeight;
                 }, 0);
-            });
+            }
         },
         
         setBrowseMode(groupKey, mode) {
@@ -288,9 +319,16 @@ const LogSearchResults = {
                     if (mode === 'forward') {
                         container.scrollTop = 0;
                     } else {
-                        setTimeout(() => {
-                            container.scrollTop = container.scrollHeight;
-                        }, 0);
+                        // 倒序模式：如果有关键词，滚动到最后一个高亮位置
+                        if (this.searchKeyword?.trim()) {
+                            setTimeout(() => {
+                                this.scrollToLastHighlight(container);
+                            }, 100);
+                        } else {
+                            setTimeout(() => {
+                                container.scrollTop = container.scrollHeight;
+                            }, 0);
+                        }
                     }
                 }
             });

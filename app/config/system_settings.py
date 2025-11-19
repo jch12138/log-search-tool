@@ -181,6 +181,7 @@ class Settings:
     
     # ===== 业务日志配置文件 =====
     CONFIG_FILE_PATH: str = _get_str("CONFIG_FILE_PATH", "./config.yaml", "business", "config_file_path")
+    WORKSPACE_SITES_FILE: str = _get_str("WORKSPACE_SITES_FILE", "./workspace_sites.json", "business", "workspace_sites_file")
     
     # ===== SSH 配置 =====
     SSH_TIMEOUT: int = _get_int("SSH_TIMEOUT", 30, "ssh", "ssh_timeout")

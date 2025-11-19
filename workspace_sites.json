@@ -1,56 +1,117 @@
 [
   {
-    "id": "1",
-    "name": "日志搜索",
-    "url": "/",
-    "description": "日志聚合搜索系统",
-    "group": "内部工具",
-    "icon": "🔍",
-    "order": 1
+    "color": "text-indigo-600",
+    "icon": "fa-solid fa-toolbox",
+    "id": "common-tools",
+    "items": [
+      {
+        "desc": "代码仓库与 CI/CD 123",
+        "icon": "fa-brands fa-gitlab",
+        "name": "GitLab",
+        "url": "https://gitlab.com"
+      },
+      {
+        "desc": "项目与任务管理",
+        "icon": "fa-brands fa-jira",
+        "name": "Jira",
+        "url": "#"
+      }
+    ],
+    "title": "常用工具",
+    "type": "links"
   },
   {
-    "id": "2",
-    "name": "SFTP管理",
-    "url": "/sftp",
-    "description": "远程文件管理",
-    "group": "内部工具",
-    "icon": "📁",
-    "order": 2
+    "badge": "SIT",
+    "badgeColor": "bg-blue-100 text-blue-700 border-blue-200",
+    "color": "text-blue-600",
+    "dbs": [
+      {
+        "host": "192.168.10.5",
+        "name": "用户中心主库",
+        "pass": "sit_pass_123",
+        "port": "3306",
+        "type": "mysql",
+        "user": "sit_user"
+      }
+    ],
+    "icon": "fa-solid fa-vial",
+    "id": "sit-env",
+    "links": [
+      {
+        "desc": "Grafana 监控",
+        "icon": "fa-solid fa-chart-line",
+        "name": "SIT 监控大盘",
+        "url": "#"
+      },
+      {
+        "name": "1",
+        "url": "1",
+        "icon": "fa-solid fa-link",
+        "desc": "1"
+      }
+    ],
+    "title": "SIT 环境 (测试)",
+    "type": "mixed",
+    "items": [
+      {
+        "desc": "Grafana 监控",
+        "icon": "fa-solid fa-chart-line",
+        "name": "SIT 监控大盘",
+        "url": "#"
+      },
+      {
+        "name": "1",
+        "url": "1",
+        "icon": "fa-solid fa-link",
+        "desc": "1"
+      }
+    ]
   },
   {
-    "id": "3",
-    "name": "终端管理",
-    "url": "/terminals",
-    "description": "在线终端",
-    "group": "内部工具",
-    "icon": "💻",
-    "order": 3
-  },
-  {
-    "id": "4",
-    "name": "账户查询",
-    "url": "/account",
-    "description": "ESB账户查询",
-    "group": "内部工具",
-    "icon": "🏦",
-    "order": 4
-  },
-  {
-    "id": "1763469716987",
-    "name": "1",
-    "url": "1",
-    "description": "1",
-    "group": "默认分组",
-    "icon": "🎨",
-    "order": 5
-  },
-  {
-    "id": "1763474781509",
-    "name": "1",
-    "url": "1",
-    "description": "1",
-    "group": "默认分组",
-    "icon": "🌐",
-    "order": 6
+    "badge": "UAT",
+    "badgeColor": "bg-blue-100 text-blue-700 border-blue-200",
+    "color": "text-blue-600",
+    "dbs": [
+      {
+        "host": "192.168.10.5",
+        "name": "用户中心主库",
+        "pass": "sit_pass_123",
+        "port": "3306",
+        "type": "mysql",
+        "user": "sit_user"
+      }
+    ],
+    "icon": "fa-solid fa-vial",
+    "id": "sit-env",
+    "links": [
+      {
+        "desc": "Grafana 监控",
+        "icon": "fa-solid fa-chart-line",
+        "name": "SIT 监控大盘",
+        "url": "#"
+      },
+      {
+        "name": "1",
+        "url": "1",
+        "icon": "fa-solid fa-link",
+        "desc": "1"
+      }
+    ],
+    "title": "SIT 环境 (测试)",
+    "type": "mixed",
+    "items": [
+      {
+        "desc": "Grafana 监控",
+        "icon": "fa-solid fa-chart-line",
+        "name": "SIT 监控大盘",
+        "url": "#"
+      },
+      {
+        "name": "1",
+        "url": "1",
+        "icon": "fa-solid fa-link",
+        "desc": "1"
+      }
+    ]
   }
 ]

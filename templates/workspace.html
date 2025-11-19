@@ -6,332 +6,427 @@
     <title>团队内部导航 | Dev Portal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/css/element-plus.css">
     
     <style>
-        /* 自定义简单的 Toast 提示动画 */
-        @keyframes fadeInOut {
-            0% { opacity: 0; transform: translateY(20px); }
-            10% { opacity: 1; transform: translateY(0); }
-            90% { opacity: 1; transform: translateY(0); }
-            100% { opacity: 0; transform: translateY(-20px); }
-        }
-        .toast {
-            animation: fadeInOut 2s ease-in-out forwards;
-        }
-        
-        /* 鼠标悬停显示复制提示 */
-        .copy-hover:hover {
-            background-color: #f1f5f9; /* slate-100 */
-            cursor: pointer;
-            border-radius: 4px;
-            position: relative;
-        }
-        .copy-hover:active {
-            background-color: #e2e8f0; /* slate-200 */
-        }
+        [v-cloak] { display: none; }
+        .copy-hover:hover { background-color: #f1f5f9; cursor: pointer; border-radius: 4px; }
+        .copy-hover:active { background-color: #e2e8f0; }
+        .group-action-btn { opacity: 0; transition: opacity 0.2s; }
+        .group:hover .group-action-btn { opacity: 1; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans antialiased selection:bg-blue-100">
 
-    <header class="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex justify-between items-center">
-            <div class="flex items-center gap-3">
-                <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">
-                    D
+    <div id="app" v-cloak>
+        <!-- Header -->
+        <header class="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">D</div>
+                    <h1 class="text-xl font-bold text-slate-800 tracking-tight">Dev<span class="text-blue-600">Portal</span></h1>
+                    <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-xs font-medium border border-slate-200">Internal</span>
                 </div>
-                <h1 class="text-xl font-bold text-slate-800 tracking-tight">Dev<span class="text-blue-600">Portal</span></h1>
-                <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-xs font-medium border border-slate-200">Internal</span>
-            </div>
-            
-            <div class="flex items-center gap-4">
-                <div id="admin-bar" class="hidden items-center gap-3 animate-fade-in">
-                    <span class="text-xs text-green-600 font-medium bg-green-50 px-2 py-1 rounded border border-green-100">
-                        <i class="fa-solid fa-user-check mr-1"></i> <span id="admin-id"></span>
-                    </span>
-                    <button onclick="saveConfig()" class="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded shadow-sm transition">
-                        保存配置
+                
+                <div class="flex items-center gap-4">
+                    <div v-if="isEditMode" class="flex items-center gap-3 animate-fade-in">
+                        <span class="text-xs text-green-600 font-medium bg-green-50 px-2 py-1 rounded border border-green-100">
+                            <i class="fa-solid fa-user-check mr-1"></i> <span>[[ currentAdminId ]]</span>
+                        </span>
+                        <button @click="openAddGroupDialog" class="text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded shadow-sm transition">
+                            <i class="fa-solid fa-folder-plus mr-1"></i> 新建分组
+                        </button>
+                        <button @click="saveConfig" class="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded shadow-sm transition">
+                            <i class="fa-solid fa-save mr-1"></i> 保存配置
+                        </button>
+                        <button @click="exitEditMode" class="text-sm text-slate-500 hover:text-slate-700 px-2">退出</button>
+                    </div>
+                    <button v-else @click="requestAuth" class="text-slate-400 hover:text-blue-600 transition p-2" title="管理模式">
+                        <i class="fa-solid fa-lock"></i>
                     </button>
-                    <button onclick="exitEditMode()" class="text-sm text-slate-500 hover:text-slate-700 px-2">
-                        退出
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-10">
+            <div v-if="workspaceData.length === 0" class="text-center py-20 text-slate-400">
+                <i class="fa-solid fa-inbox text-4xl mb-4"></i>
+                <p>暂无资源配置，请点击右上角进入管理模式添加。</p>
+            </div>
+
+            <section v-for="(group, gIndex) in workspaceData" :key="group.id" class="mb-8 group">
+                <!-- Group Header -->
+                <div class="flex items-center justify-between mb-5 pb-2 border-b border-slate-200">
+                    <div class="flex items-center gap-3">
+                        <i :class="[group.icon, group.color, 'text-xl']"></i>
+                        <h2 class="text-xl font-bold text-slate-800">[[ group.title ]]</h2>
+                        <span v-if="group.badge" :class="['px-2 py-0.5 text-xs font-bold rounded border', group.badgeColor]">[[ group.badge ]]</span>
+                    </div>
+                    <div v-if="isEditMode" class="group-action-btn flex gap-2">
+                        <button @click="editGroup(gIndex)" class="text-xs text-blue-500 hover:bg-blue-50 px-2 py-1 rounded"><i class="fa-solid fa-pen"></i> 编辑</button>
+                        <button @click="moveGroup(gIndex, -1)" :disabled="gIndex === 0" class="text-xs text-slate-400 hover:text-slate-600 px-2 py-1 disabled:opacity-30"><i class="fa-solid fa-arrow-up"></i></button>
+                        <button @click="moveGroup(gIndex, 1)" :disabled="gIndex === workspaceData.length - 1" class="text-xs text-slate-400 hover:text-slate-600 px-2 py-1 disabled:opacity-30"><i class="fa-solid fa-arrow-down"></i></button>
+                        <button @click="deleteGroup(gIndex)" class="text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded"><i class="fa-solid fa-trash"></i> 删除</button>
+                    </div>
+                </div>
+
+                <!-- Links Grid -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
+                    <a v-for="(item, lIndex) in (group.items || group.links || [])" :key="lIndex" :href="item.url" target="_blank" class="relative block p-4 bg-white rounded-lg border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-300 transition group/card">
+                        <div v-if="isEditMode" class="absolute top-2 right-2 z-10 flex gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity bg-white/80 rounded backdrop-blur-sm">
+                            <button @click.prevent="editLink(gIndex, lIndex)" class="text-blue-400 hover:text-blue-600 p-1"><i class="fa-solid fa-pen"></i></button>
+                            <button @click.prevent="deleteLink(gIndex, lIndex)" class="text-slate-300 hover:text-red-500 p-1"><i class="fa-solid fa-trash-can"></i></button>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <div class="text-2xl text-slate-400 group-hover/card:text-blue-500 transition-colors mt-1">
+                                <i :class="item.icon"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-slate-800 text-sm group-hover/card:text-blue-600">[[ item.name ]]</h3>
+                                <p class="text-xs text-slate-500 mt-1 line-clamp-2">[[ item.desc ]]</p>
+                            </div>
+                        </div>
+                    </a>
+                    <!-- Add Link Button -->
+                    <button v-if="isEditMode" @click="openAddLinkDialog(gIndex)" class="flex flex-col items-center justify-center p-4 rounded-lg border-2 border-dashed border-slate-200 text-slate-400 hover:border-blue-400 hover:text-blue-500 transition h-full min-h-[80px]">
+                        <i class="fa-solid fa-plus text-lg mb-1"></i>
+                        <span class="text-xs font-medium">添加链接</span>
                     </button>
                 </div>
 
-                <button id="auth-btn" onclick="requestAuth()" class="text-slate-400 hover:text-blue-600 transition p-2" title="管理模式">
-                    <i class="fa-solid fa-lock"></i>
-                </button>
-            </div>
-        </div>
-    </header>
-
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-10" id="app">
+                <!-- Databases Table -->
+                <div v-if="(group.dbs && group.dbs.length > 0) || isEditMode" class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden mb-6">
+                    <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                        <h3 class="text-sm font-bold text-slate-700"><i class="fa-solid fa-database mr-2"></i>数据库资源</h3>
+                        <span class="text-xs text-slate-400">点击表格内容即可复制</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead>
+                                <tr class="bg-white text-slate-500 border-b border-slate-100">
+                                    <th class="px-4 py-2 font-medium w-1/4">名称</th>
+                                    <th class="px-4 py-2 font-medium w-1/4">Host:Port</th>
+                                    <th class="px-4 py-2 font-medium w-1/6">User</th>
+                                    <th class="px-4 py-2 font-medium w-1/4">Password</th>
+                                    <th v-if="isEditMode" class="px-4 py-2 font-medium text-right w-20">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-50">
+                                <tr v-for="(db, dIndex) in group.dbs" :key="dIndex" class="hover:bg-slate-50 transition-colors">
+                                    <td class="px-4 py-3">
+                                        <div class="flex items-center gap-2">
+                                            <i class="fa-solid fa-server text-slate-300"></i>
+                                            <span class="font-medium text-slate-700">[[ db.name ]]</span>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-3 font-mono text-xs text-slate-600 copy-hover" @click="copyToClipboard(`${db.host}:${db.port}`)" title="点击复制">[[ db.host ]]:[[ db.port ]]</td>
+                                    <td class="px-4 py-3 font-mono text-xs text-slate-600 copy-hover" @click="copyToClipboard(db.user)" title="点击复制">[[ db.user ]]</td>
+                                    <td class="px-4 py-3 font-mono text-xs text-pink-600 bg-pink-50/50 rounded copy-hover select-all" @click="copyToClipboard(db.pass)" title="点击复制">[[ db.pass ]]</td>
+                                    <td v-if="isEditMode" class="px-4 py-3 text-right">
+                                        <button @click="editDb(gIndex, dIndex)" class="text-blue-400 hover:text-blue-600 mr-2"><i class="fa-solid fa-pen"></i></button>
+                                        <button @click="deleteDb(gIndex, dIndex)" class="text-slate-300 hover:text-red-500"><i class="fa-solid fa-trash-can"></i></button>
+                                    </td>
+                                </tr>
+                                <tr v-if="isEditMode" class="bg-slate-50">
+                                    <td colspan="5" class="px-4 py-2 text-center border-t border-dashed border-slate-200">
+                                        <button @click="openAddDbDialog(gIndex)" class="text-xs text-blue-600 hover:text-blue-800 font-medium py-1">
+                                            <i class="fa-solid fa-plus mr-1"></i> 添加数据库
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
         </main>
 
-    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2"></div>
+        <!-- Dialogs -->
+        <!-- Group Dialog -->
+        <el-dialog v-model="dialogs.group.visible" :title="dialogs.group.isEdit ? '编辑分组' : '新建分组'" width="500px">
+            <el-form :model="forms.group" label-width="80px">
+                <el-form-item label="标题">
+                    <el-input v-model="forms.group.title" placeholder="例如：常用工具"></el-input>
+                </el-form-item>
+                <el-form-item label="图标">
+                    <el-input v-model="forms.group.icon" placeholder="例如：fa-solid fa-toolbox"></el-input>
+                    <div class="mt-1 text-xs text-gray-400">支持 FontAwesome 图标类名</div>
+                </el-form-item>
+                <el-form-item label="颜色">
+                    <el-input v-model="forms.group.color" placeholder="例如：text-indigo-600"></el-input>
+                </el-form-item>
+                <el-form-item label="徽章文本">
+                    <el-input v-model="forms.group.badge" placeholder="可选，例如：SIT"></el-input>
+                </el-form-item>
+                <el-form-item label="徽章样式">
+                    <el-input v-model="forms.group.badgeColor" placeholder="可选，Tailwind 类名"></el-input>
+                </el-form-item>
+            </el-form>
+            <template #footer>
+                <span class="dialog-footer">
+                    <el-button @click="dialogs.group.visible = false">取消</el-button>
+                    <el-button type="primary" @click="saveGroup">确定</el-button>
+                </span>
+            </template>
+        </el-dialog>
 
+        <!-- Link Dialog -->
+        <el-dialog v-model="dialogs.link.visible" :title="dialogs.link.isEdit ? '编辑链接' : '添加链接'" width="500px">
+            <el-form :model="forms.link" label-width="80px">
+                <el-form-item label="名称">
+                    <el-input v-model="forms.link.name" placeholder="例如：GitLab"></el-input>
+                </el-form-item>
+                <el-form-item label="URL">
+                    <el-input v-model="forms.link.url" placeholder="https://..."></el-input>
+                </el-form-item>
+                <el-form-item label="图标">
+                    <el-input v-model="forms.link.icon" placeholder="例如：fa-brands fa-gitlab"></el-input>
+                </el-form-item>
+                <el-form-item label="描述">
+                    <el-input v-model="forms.link.desc" type="textarea" placeholder="简短描述"></el-input>
+                </el-form-item>
+            </el-form>
+            <template #footer>
+                <span class="dialog-footer">
+                    <el-button @click="dialogs.link.visible = false">取消</el-button>
+                    <el-button type="primary" @click="saveLink">确定</el-button>
+                </span>
+            </template>
+        </el-dialog>
+
+        <!-- DB Dialog -->
+        <el-dialog v-model="dialogs.db.visible" :title="dialogs.db.isEdit ? '编辑数据库' : '添加数据库'" width="500px">
+            <el-form :model="forms.db" label-width="80px">
+                <el-form-item label="名称">
+                    <el-input v-model="forms.db.name" placeholder="例如：用户中心主库"></el-input>
+                </el-form-item>
+                <el-form-item label="Host">
+                    <el-input v-model="forms.db.host" placeholder="192.168.x.x"></el-input>
+                </el-form-item>
+                <el-form-item label="Port">
+                    <el-input v-model="forms.db.port" placeholder="3306"></el-input>
+                </el-form-item>
+                <el-form-item label="User">
+                    <el-input v-model="forms.db.user" placeholder="root"></el-input>
+                </el-form-item>
+                <el-form-item label="Password">
+                    <el-input v-model="forms.db.pass" placeholder="password"></el-input>
+                </el-form-item>
+            </el-form>
+            <template #footer>
+                <span class="dialog-footer">
+                    <el-button @click="dialogs.db.visible = false">取消</el-button>
+                    <el-button type="primary" @click="saveDb">确定</el-button>
+                </span>
+            </template>
+        </el-dialog>
+    </div>
+
+    <script src="/static/js/vendor/vue.global.js"></script>
+    <script src="/static/js/vendor/element-plus.js"></script>
+    <script src="/static/js/vendor/axios.min.js"></script>
     <script>
-        // ================= 数据定义 =================
-        // 实际场景中，这些数据应该从后端 API 获取
-        const mockData = [
-            {
-                id: "common-tools",
-                title: "常用工具",
-                icon: "fa-solid fa-toolbox",
-                color: "text-indigo-600",
-                type: "links", // 纯链接组
-                items: [
-                    { name: "GitLab", url: "https://gitlab.com", icon: "fa-brands fa-gitlab", desc: "代码仓库与 CI/CD" },
-                    { name: "Jira", url: "#", icon: "fa-brands fa-jira", desc: "项目与任务管理" },
-                    { name: "Confluence", url: "#", icon: "fa-solid fa-book", desc: "知识库 / Wiki" },
-                    { name: "Jenkins", url: "#", icon: "fa-brands fa-jenkins", desc: "构建发布平台" },
-                ]
-            },
-            {
-                id: "sit-env",
-                title: "SIT 环境 (测试)",
-                icon: "fa-solid fa-vial",
-                color: "text-blue-600",
-                badge: "SIT",
-                badgeColor: "bg-blue-100 text-blue-700 border-blue-200",
-                type: "mixed", // 混合组：包含链接和数据库
-                links: [
-                    { name: "SIT 监控大盘", url: "#", icon: "fa-solid fa-chart-line", desc: "Grafana 监控" },
-                    { name: "SIT 日志中心", url: "#", icon: "fa-solid fa-file-lines", desc: "ELK 日志查询" }
-                ],
-                dbs: [
-                    { name: "用户中心主库", host: "192.168.10.5", port: "3306", user: "sit_user", pass: "sit_pass_123", type: "mysql" },
-                    { name: "订单库", host: "192.168.10.6", port: "3306", user: "sit_order", pass: "order_pass!", type: "mysql" },
-                    { name: "全局缓存 Redis", host: "192.168.10.20", port: "6379", user: "-", pass: "redis_sit_2024", type: "redis" }
-                ]
-            },
-            {
-                id: "uat-env",
-                title: "UAT 环境 (验收)",
-                icon: "fa-solid fa-check-double",
-                color: "text-orange-600",
-                badge: "UAT",
-                badgeColor: "bg-orange-100 text-orange-700 border-orange-200",
-                type: "mixed",
-                links: [
-                    { name: "UAT 演示环境", url: "#", icon: "fa-solid fa-desktop", desc: "客户演示入口" }
-                ],
-                dbs: [
-                    { name: "UAT 核心库", host: "10.20.0.5", port: "3306", user: "uat_app", pass: "StrongP@ssw0rd", type: "oracle" }
-                ]
-            }
-        ];
+        const { createApp, ref, reactive, onMounted } = Vue;
+        const API_URL = '/api/v1/workspace/sites';
 
-        // 允许编辑的工号白名单
-        const ALLOWED_IDS = ["1001", "1002", "admin"];
+        const app = createApp({
+            setup() {
+                const workspaceData = ref([]);
+                const isEditMode = ref(false);
+                const currentAdminId = ref(null);
+                const ALLOWED_IDS = ["1001", "1002", "admin"];
 
-        // 当前状态
-        let isEditMode = false;
-        let currentAdminId = null;
+                // Dialog States
+                const dialogs = reactive({
+                    group: { visible: false, isEdit: false, index: -1 },
+                    link: { visible: false, isEdit: false, groupIndex: -1, itemIndex: -1 },
+                    db: { visible: false, isEdit: false, groupIndex: -1, itemIndex: -1 }
+                });
 
-        // ================= 渲染逻辑 =================
+                // Forms Data
+                const forms = reactive({
+                    group: { title: '', icon: '', color: '', badge: '', badgeColor: '' },
+                    link: { name: '', url: '', icon: '', desc: '' },
+                    db: { name: '', host: '', port: '', user: '', pass: '' }
+                });
 
-        function render() {
-            const container = document.getElementById('app');
-            container.innerHTML = '';
-
-            mockData.forEach(group => {
-                const section = document.createElement('section');
-                
-                // 1. 分组标题
-                let headerHtml = `
-                    <div class="flex items-center justify-between mb-5 pb-2 border-b border-slate-200 group">
-                        <div class="flex items-center gap-3">
-                            <i class="${group.icon} ${group.color} text-xl"></i>
-                            <h2 class="text-xl font-bold text-slate-800">${group.title}</h2>
-                            ${group.badge ? `<span class="px-2 py-0.5 text-xs font-bold rounded border ${group.badgeColor}">${group.badge}</span>` : ''}
-                        </div>
-                        ${isEditMode ? `
-                            <div class="opacity-100 transition-opacity flex gap-2">
-                                <button class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded">
-                                    <i class="fa-solid fa-plus mr-1"></i>添加资源
-                                </button>
-                                <button class="text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded">删除分组</button>
-                            </div>` 
-                        : ''}
-                    </div>
-                `;
-
-                // 2. 渲染站点链接 (Grid)
-                let linksHtml = '';
-                const links = group.type === 'links' ? group.items : (group.links || []);
-                
-                if (links.length > 0) {
-                    linksHtml = `<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">`;
-                    links.forEach(item => {
-                        linksHtml += `
-                            <a href="${item.url}" target="_blank" class="relative block p-4 bg-white rounded-lg border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-300 transition group/card">
-                                ${isEditMode ? `<button onclick="event.preventDefault(); alert('删除链接')" class="absolute top-2 right-2 text-slate-300 hover:text-red-500 z-10"><i class="fa-solid fa-trash-can"></i></button>` : ''}
-                                <div class="flex items-start gap-3">
-                                    <div class="text-2xl text-slate-400 group-hover/card:text-blue-500 transition-colors mt-1">
-                                        <i class="${item.icon}"></i>
-                                    </div>
-                                    <div>
-                                        <h3 class="font-semibold text-slate-800 text-sm group-hover/card:text-blue-600">${item.name}</h3>
-                                        <p class="text-xs text-slate-500 mt-1 line-clamp-2">${item.desc}</p>
-                                    </div>
-                                </div>
-                            </a>
-                        `;
-                    });
-                    // 编辑模式下的“添加链接”占位符
-                    if (isEditMode) {
-                        linksHtml += `
-                            <button onclick="alert('添加链接')" class="flex flex-col items-center justify-center p-4 rounded-lg border-2 border-dashed border-slate-200 text-slate-400 hover:border-blue-400 hover:text-blue-500 transition h-full min-h-[80px]">
-                                <i class="fa-solid fa-plus text-lg mb-1"></i>
-                                <span class="text-xs font-medium">添加链接</span>
-                            </button>
-                        `;
+                // --- Auth & Config ---
+                const requestAuth = () => {
+                    const input = prompt("请输入工号 (Employee ID) 以进入编辑模式：\\n(测试可用: 1001, admin)");
+                    if (input === null) return;
+                    if (ALLOWED_IDS.includes(input.trim())) {
+                        isEditMode.value = true;
+                        currentAdminId.value = input.trim();
+                        ElementPlus.ElMessage.success(`欢迎, ${currentAdminId.value}。已进入编辑模式。`);
+                    } else {
+                        alert("❌ 验证失败：工号无编辑权限。");
                     }
-                    linksHtml += `</div>`;
-                }
+                };
 
-                // 3. 渲染数据库列表 (Table Style)
-                let dbsHtml = '';
-                if (group.dbs && group.dbs.length > 0) {
-                    dbsHtml = `
-                        <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden mb-6">
-                            <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-                                <h3 class="text-sm font-bold text-slate-700"><i class="fa-solid fa-database mr-2"></i>数据库资源</h3>
-                                <span class="text-xs text-slate-400">点击表格内容即可复制</span>
-                            </div>
-                            <div class="overflow-x-auto">
-                                <table class="w-full text-left text-sm">
-                                    <thead>
-                                        <tr class="bg-white text-slate-500 border-b border-slate-100">
-                                            <th class="px-4 py-2 font-medium w-1/4">名称</th>
-                                            <th class="px-4 py-2 font-medium w-1/4">Host:Port</th>
-                                            <th class="px-4 py-2 font-medium w-1/6">User</th>
-                                            <th class="px-4 py-2 font-medium w-1/4">Password</th>
-                                            ${isEditMode ? '<th class="px-4 py-2 font-medium text-right w-12">操作</th>' : ''}
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-slate-50">
-                                        ${group.dbs.map(db => `
-                                            <tr class="hover:bg-slate-50 transition-colors">
-                                                <td class="px-4 py-3">
-                                                    <div class="flex items-center gap-2">
-                                                        <i class="fa-solid fa-server text-slate-300"></i>
-                                                        <span class="font-medium text-slate-700">${db.name}</span>
-                                                    </div>
-                                                </td>
-                                                <td class="px-4 py-3 font-mono text-xs text-slate-600 copy-hover" onclick="copyToClipboard('${db.host}:${db.port}')" title="点击复制">
-                                                    ${db.host}:${db.port}
-                                                </td>
-                                                <td class="px-4 py-3 font-mono text-xs text-slate-600 copy-hover" onclick="copyToClipboard('${db.user}')" title="点击复制">
-                                                    ${db.user}
-                                                </td>
-                                                <td class="px-4 py-3 font-mono text-xs text-pink-600 bg-pink-50/50 rounded copy-hover select-all" onclick="copyToClipboard('${db.pass}')" title="点击复制">
-                                                    ${db.pass}
-                                                </td>
-                                                ${isEditMode ? `
-                                                    <td class="px-4 py-3 text-right">
-                                                        <button class="text-slate-400 hover:text-red-500 transition"><i class="fa-solid fa-trash-can"></i></button>
-                                                    </td>
-                                                ` : ''}
-                                            </tr>
-                                        `).join('')}
-                                        ${isEditMode ? `
-                                            <tr class="bg-slate-50">
-                                                <td colspan="5" class="px-4 py-2 text-center border-t border-dashed border-slate-200">
-                                                    <button class="text-xs text-blue-600 hover:text-blue-800 font-medium py-1">
-                                                        <i class="fa-solid fa-plus mr-1"></i>添加数据库
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ` : ''}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    `;
-                }
+                const exitEditMode = () => {
+                    isEditMode.value = false;
+                    currentAdminId.value = null;
+                };
 
-                section.innerHTML = headerHtml + linksHtml + dbsHtml;
-                container.appendChild(section);
-            });
-        }
+                const fetchConfig = async () => {
+                    try {
+                        const res = await axios.get(API_URL);
+                        workspaceData.value = res.data;
+                    } catch (err) {
+                        ElementPlus.ElMessage.error('加载配置失败');
+                        console.error(err);
+                    }
+                };
 
-        // ================= 交互逻辑 =================
+                const saveConfig = async () => {
+                    try {
+                        await axios.post(API_URL, workspaceData.value);
+                        ElementPlus.ElMessage.success('配置已保存');
+                    } catch (err) {
+                        ElementPlus.ElMessage.error('保存配置失败');
+                        console.error(err);
+                    }
+                };
 
-        // 1. 请求管理权限
-        function requestAuth() {
-            const input = prompt("请输入工号 (Employee ID) 以进入编辑模式：\n(测试可用: 1001, admin)");
-            if (input === null) return;
+                // --- Group Operations ---
+                const openAddGroupDialog = () => {
+                    forms.group = { title: '', icon: 'fa-solid fa-folder', color: 'text-slate-600', badge: '', badgeColor: '' };
+                    dialogs.group.isEdit = false;
+                    dialogs.group.visible = true;
+                };
 
-            if (ALLOWED_IDS.includes(input.trim())) {
-                isEditMode = true;
-                currentAdminId = input.trim();
-                updateUIState();
-                showToast(`✅ 欢迎, ${currentAdminId}。已进入编辑模式。`);
-            } else {
-                alert("❌ 验证失败：工号无编辑权限。");
+                const editGroup = (index) => {
+                    forms.group = { ...workspaceData.value[index] };
+                    dialogs.group.isEdit = true;
+                    dialogs.group.index = index;
+                    dialogs.group.visible = true;
+                };
+
+                const saveGroup = () => {
+                    if (dialogs.group.isEdit) {
+                        Object.assign(workspaceData.value[dialogs.group.index], forms.group);
+                    } else {
+                        workspaceData.value.push({
+                            id: Date.now().toString(),
+                            ...forms.group,
+                            items: [],
+                            dbs: []
+                        });
+                    }
+                    dialogs.group.visible = false;
+                };
+
+                const deleteGroup = (index) => {
+                    if (confirm('确定要删除这个分组吗？')) {
+                        workspaceData.value.splice(index, 1);
+                    }
+                };
+
+                const moveGroup = (index, direction) => {
+                    const newIndex = index + direction;
+                    if (newIndex >= 0 && newIndex < workspaceData.value.length) {
+                        const temp = workspaceData.value[index];
+                        workspaceData.value[index] = workspaceData.value[newIndex];
+                        workspaceData.value[newIndex] = temp;
+                    }
+                };
+
+                // --- Link Operations ---
+                const openAddLinkDialog = (groupIndex) => {
+                    forms.link = { name: '', url: '', icon: 'fa-solid fa-link', desc: '' };
+                    dialogs.link.isEdit = false;
+                    dialogs.link.groupIndex = groupIndex;
+                    dialogs.link.visible = true;
+                };
+
+                const editLink = (groupIndex, itemIndex) => {
+                    const group = workspaceData.value[groupIndex];
+                    const items = group.items || group.links || [];
+                    forms.link = { ...items[itemIndex] };
+                    dialogs.link.isEdit = true;
+                    dialogs.link.groupIndex = groupIndex;
+                    dialogs.link.itemIndex = itemIndex;
+                    dialogs.link.visible = true;
+                };
+
+                const saveLink = () => {
+                    const group = workspaceData.value[dialogs.link.groupIndex];
+                    // Ensure items array exists
+                    if (!group.items && group.links) group.items = group.links;
+                    if (!group.items) group.items = [];
+
+                    if (dialogs.link.isEdit) {
+                        group.items[dialogs.link.itemIndex] = { ...forms.link };
+                    } else {
+                        group.items.push({ ...forms.link });
+                    }
+                    dialogs.link.visible = false;
+                };
+
+                const deleteLink = (groupIndex, itemIndex) => {
+                    if (confirm('确定删除此链接？')) {
+                        const group = workspaceData.value[groupIndex];
+                        const items = group.items || group.links;
+                        items.splice(itemIndex, 1);
+                    }
+                };
+
+                // --- DB Operations ---
+                const openAddDbDialog = (groupIndex) => {
+                    forms.db = { name: '', host: '', port: '3306', user: '', pass: '' };
+                    dialogs.db.isEdit = false;
+                    dialogs.db.groupIndex = groupIndex;
+                    dialogs.db.visible = true;
+                };
+
+                const editDb = (groupIndex, itemIndex) => {
+                    forms.db = { ...workspaceData.value[groupIndex].dbs[itemIndex] };
+                    dialogs.db.isEdit = true;
+                    dialogs.db.groupIndex = groupIndex;
+                    dialogs.db.itemIndex = itemIndex;
+                    dialogs.db.visible = true;
+                };
+
+                const saveDb = () => {
+                    const group = workspaceData.value[dialogs.db.groupIndex];
+                    if (!group.dbs) group.dbs = [];
+
+                    if (dialogs.db.isEdit) {
+                        group.dbs[dialogs.db.itemIndex] = { ...forms.db };
+                    } else {
+                        group.dbs.push({ ...forms.db });
+                    }
+                    dialogs.db.visible = false;
+                };
+
+                const deleteDb = (groupIndex, itemIndex) => {
+                    if (confirm('确定删除此数据库配置？')) {
+                        workspaceData.value[groupIndex].dbs.splice(itemIndex, 1);
+                    }
+                };
+
+                const copyToClipboard = (text) => {
+                    navigator.clipboard.writeText(text).then(() => {
+                        ElementPlus.ElMessage.success(`已复制: ${text}`);
+                    }).catch(err => console.error(err));
+                };
+
+                onMounted(() => {
+                    fetchConfig();
+                });
+
+                return {
+                    workspaceData, isEditMode, currentAdminId, dialogs, forms,
+                    requestAuth, exitEditMode, saveConfig, copyToClipboard,
+                    openAddGroupDialog, editGroup, saveGroup, deleteGroup, moveGroup,
+                    openAddLinkDialog, editLink, saveLink, deleteLink,
+                    openAddDbDialog, editDb, saveDb, deleteDb
+                };
             }
-        }
-
-        // 2. 退出编辑
-        function exitEditMode() {
-            isEditMode = false;
-            currentAdminId = null;
-            updateUIState();
-        }
-
-        // 3. 更新 UI 状态
-        function updateUIState() {
-            const adminBar = document.getElementById('admin-bar');
-            const authBtn = document.getElementById('auth-btn');
-            const adminIdSpan = document.getElementById('admin-id');
-
-            if (isEditMode) {
-                adminBar.classList.remove('hidden');
-                adminBar.classList.add('flex');
-                authBtn.classList.add('hidden');
-                adminIdSpan.innerText = currentAdminId;
-            } else {
-                adminBar.classList.add('hidden');
-                adminBar.classList.remove('flex');
-                authBtn.classList.remove('hidden');
-            }
-            
-            // 重新渲染内容以显示/隐藏编辑按钮
-            render();
-        }
-
-        // 4. 保存配置 (模拟)
-        function saveConfig() {
-            // 实际开发中：这里 fetch POST 发送 JSON
-            showToast("💾 配置已保存 (模拟后端写入)");
-            exitEditMode();
-        }
-
-        // 5. 复制功能
-        function copyToClipboard(text) {
-            navigator.clipboard.writeText(text).then(() => {
-                showToast(`已复制: ${text}`);
-            }).catch(err => {
-                console.error('复制失败', err);
-            });
-        }
-
-        // 6. Toast 提示组件
-        function showToast(message) {
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
-            toast.className = 'toast bg-slate-800 text-white text-sm px-4 py-2 rounded shadow-lg flex items-center gap-2';
-            toast.innerHTML = `<i class="fa-solid fa-circle-check text-green-400"></i> <span>${message}</span>`;
-            container.appendChild(toast);
-            
-            // 动画结束后移除 DOM
-            setTimeout(() => {
-                toast.remove();
-            }, 2000);
-        }
-
-        // 初始化
-        render();
+        });
+        app.config.compilerOptions.delimiters = ['[[', ']]'];
+        app.use(ElementPlus).mount('#app');
     </script>
 </body>
 </html>

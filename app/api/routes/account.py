@@ -6,6 +6,7 @@ from flask import Blueprint, request, jsonify, current_app
 from datetime import datetime
 import uuid
 import logging
+from xml.parsers.expat import ExpatError
 
 log = logging.getLogger(__name__)
 
@@ -72,8 +73,20 @@ class EsbService:
         # 接收后打印报文
         log.info(f"[ESB RECV] ({self.host}:{self.port}) {service_code}\n{resp_xml}\n")
 
+        # 检查响应是否为空或无效
+        if not resp_xml or len(resp_xml) <= 8:
+            log.error(f"Empty or invalid ESB response. Raw Response: {resp_xml}")
+            return False, {"error": "ESB响应为空或无效", "raw_response": resp_xml}
+
         # 转 dict (跳过前8个字符的magic_num)
-        resp_dict = xmltodict.parse(resp_xml[8:])
+        try:
+            resp_dict = xmltodict.parse(resp_xml[8:])
+        except ExpatError as e:
+            log.error(f"Failed to parse ESB response XML. Error: {e}, Raw Response: {resp_xml}")
+            return False, {"error": "ESB响应解析失败", "details": f"无法解析返回的XML内容: {e}", "raw_response": resp_xml}
+        except Exception as e:
+            log.error(f"Unknown error during ESB response parsing. Error: {e}, Raw Response: {resp_xml}")
+            return False, {"error": "处理ESB响应时发生未知错误", "details": str(e), "raw_response": resp_xml}
 
         return True, resp_dict
 

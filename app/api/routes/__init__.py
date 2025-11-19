@@ -7,6 +7,7 @@ from .connections import connections_bp  # noqa
 from .config import config_bp  # noqa
 from .servers import servers_bp  # noqa
 from .account import account_bp  # noqa
+from .workspace import workspace_bp  # noqa
 
 def register_routes(app):
     """Register all API blueprints under /api/v1 prefix."""
@@ -15,6 +16,9 @@ def register_routes(app):
     
     # account_bp 需要单独注册，因为它有子路径
     app.register_blueprint(account_bp, url_prefix='/api/v1/account')
+    
+    # workspace_bp 站点管理
+    app.register_blueprint(workspace_bp, url_prefix='/api/v1/workspace')
 
 __all__ = ['register_routes']
 

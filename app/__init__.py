@@ -46,6 +46,10 @@ def create_app() -> Flask:
     def account_page():  # pragma: no cover
         return render_template('account.html', page='account')
 
+    @app.route('/workspace')
+    def workspace_page():  # pragma: no cover
+        return render_template('workspace.html', page='workspace')
+
     global socketio
     socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 

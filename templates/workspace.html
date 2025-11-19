@@ -6,24 +6,8 @@
     <title>团队内部导航 | Dev Portal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="/static/css/element-plus.css">
     
     <style>
-        [v-cloak] { display: none; }
-        
-        /* Account Page Styles */
-        .info-value.warning { color: #e6a23c; }
-        .el-descriptions__label { color: #909399; font-weight: normal !important; }
-        .el-descriptions__content { font-weight: normal; }
-        .el-descriptions-item__container { padding: 10px 0; border-bottom: 1px solid #f0f2f5; }
-        .el-descriptions-item__container:last-child { border-bottom: none; }
-        .balance-amount { font-size: 14px; font-weight: normal; color: #409eff; }
-        .toggle-raw { margin-top: 12px; text-align: center; }
-        .transaction-table { margin-top: 16px; }
-        .amount-debit { color: #f56c6c; font-weight: 600; }
-        .amount-credit { color: #67c23a; font-weight: 600; }
-        .json-viewer { background: #282c34; color: #abb2bf; padding: 16px; border-radius: 6px; font-family: monospace; font-size: 13px; max-height: 500px; overflow: auto; }
-
         /* 自定义简单的 Toast 提示动画 */
         @keyframes fadeInOut {
             0% { opacity: 0; transform: translateY(20px); }
@@ -49,516 +33,305 @@
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans antialiased selection:bg-blue-100">
 
-    <div id="app" v-cloak>
-        <header class="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex justify-between items-center">
-                <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">
-                        D
-                    </div>
-                    <h1 class="text-xl font-bold text-slate-800 tracking-tight">Dev<span class="text-blue-600">Portal</span></h1>
-                    <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-xs font-medium border border-slate-200">Internal</span>
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">
+                    D
                 </div>
-                
-                <div class="flex items-center gap-4">
-                    <div v-if="isEditMode" class="flex items-center gap-3 animate-fade-in">
-                        <span class="text-xs text-green-600 font-medium bg-green-50 px-2 py-1 rounded border border-green-100">
-                            <i class="fa-solid fa-user-check mr-1"></i> <span>[[ currentAdminId ]]</span>
-                        </span>
-                        <button @click="saveConfig" class="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded shadow-sm transition">
-                            保存配置
-                        </button>
-                        <button @click="exitEditMode" class="text-sm text-slate-500 hover:text-slate-700 px-2">
-                            退出
-                        </button>
-                    </div>
-
-                    <button v-else @click="requestAuth" class="text-slate-400 hover:text-blue-600 transition p-2" title="管理模式">
-                        <i class="fa-solid fa-lock"></i>
+                <h1 class="text-xl font-bold text-slate-800 tracking-tight">Dev<span class="text-blue-600">Portal</span></h1>
+                <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-xs font-medium border border-slate-200">Internal</span>
+            </div>
+            
+            <div class="flex items-center gap-4">
+                <div id="admin-bar" class="hidden items-center gap-3 animate-fade-in">
+                    <span class="text-xs text-green-600 font-medium bg-green-50 px-2 py-1 rounded border border-green-100">
+                        <i class="fa-solid fa-user-check mr-1"></i> <span id="admin-id"></span>
+                    </span>
+                    <button onclick="saveConfig()" class="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded shadow-sm transition">
+                        保存配置
+                    </button>
+                    <button onclick="exitEditMode()" class="text-sm text-slate-500 hover:text-slate-700 px-2">
+                        退出
                     </button>
                 </div>
+
+                <button id="auth-btn" onclick="requestAuth()" class="text-slate-400 hover:text-blue-600 transition p-2" title="管理模式">
+                    <i class="fa-solid fa-lock"></i>
+                </button>
             </div>
-        </header>
+        </div>
+    </header>
 
-        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-10">
-            <el-tabs v-model="mainTab" type="border-card" class="bg-white shadow-sm rounded-lg min-h-[600px]">
-                <!-- Tab 1: Workspace Resources -->
-                <el-tab-pane label="工作台资源" name="workspace">
-                    <div class="p-4">
-                        <section v-for="group in workspaceData" :key="group.id" class="mb-8">
-                            <!-- 1. 分组标题 -->
-                            <div class="flex items-center justify-between mb-5 pb-2 border-b border-slate-200 group">
-                                <div class="flex items-center gap-3">
-                                    <i :class="[group.icon, group.color, 'text-xl']"></i>
-                                    <h2 class="text-xl font-bold text-slate-800">[[ group.title ]]</h2>
-                                    <span v-if="group.badge" :class="['px-2 py-0.5 text-xs font-bold rounded border', group.badgeColor]">[[ group.badge ]]</span>
-                                </div>
-                                <div v-if="isEditMode" class="opacity-100 transition-opacity flex gap-2">
-                                    <button class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded">
-                                        <i class="fa-solid fa-plus mr-1"></i>添加资源
-                                    </button>
-                                    <button class="text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded">删除分组</button>
-                                </div>
-                            </div>
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-10" id="app">
+        </main>
 
-                            <!-- 2. 渲染站点链接 (Grid) -->
-                            <div v-if="(group.type === 'links' ? group.items : (group.links || [])).length > 0 || isEditMode" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
-                                <a v-for="item in (group.type === 'links' ? group.items : (group.links || []))" :href="item.url" target="_blank" class="relative block p-4 bg-white rounded-lg border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-300 transition group/card">
-                                    <button v-if="isEditMode" @click.prevent="alert('删除链接')" class="absolute top-2 right-2 text-slate-300 hover:text-red-500 z-10"><i class="fa-solid fa-trash-can"></i></button>
-                                    <div class="flex items-start gap-3">
-                                        <div class="text-2xl text-slate-400 group-hover/card:text-blue-500 transition-colors mt-1">
-                                            <i :class="item.icon"></i>
-                                        </div>
-                                        <div>
-                                            <h3 class="font-semibold text-slate-800 text-sm group-hover/card:text-blue-600">[[ item.name ]]</h3>
-                                            <p class="text-xs text-slate-500 mt-1 line-clamp-2">[[ item.desc ]]</p>
-                                        </div>
-                                    </div>
-                                </a>
-                                <!-- 编辑模式下的“添加链接”占位符 -->
-                                <button v-if="isEditMode" @click="alert('添加链接')" class="flex flex-col items-center justify-center p-4 rounded-lg border-2 border-dashed border-slate-200 text-slate-400 hover:border-blue-400 hover:text-blue-500 transition h-full min-h-[80px]">
-                                    <i class="fa-solid fa-plus text-lg mb-1"></i>
-                                    <span class="text-xs font-medium">添加链接</span>
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2"></div>
+
+    <script>
+        // ================= 数据定义 =================
+        // 实际场景中，这些数据应该从后端 API 获取
+        const mockData = [
+            {
+                id: "common-tools",
+                title: "常用工具",
+                icon: "fa-solid fa-toolbox",
+                color: "text-indigo-600",
+                type: "links", // 纯链接组
+                items: [
+                    { name: "GitLab", url: "https://gitlab.com", icon: "fa-brands fa-gitlab", desc: "代码仓库与 CI/CD" },
+                    { name: "Jira", url: "#", icon: "fa-brands fa-jira", desc: "项目与任务管理" },
+                    { name: "Confluence", url: "#", icon: "fa-solid fa-book", desc: "知识库 / Wiki" },
+                    { name: "Jenkins", url: "#", icon: "fa-brands fa-jenkins", desc: "构建发布平台" },
+                ]
+            },
+            {
+                id: "sit-env",
+                title: "SIT 环境 (测试)",
+                icon: "fa-solid fa-vial",
+                color: "text-blue-600",
+                badge: "SIT",
+                badgeColor: "bg-blue-100 text-blue-700 border-blue-200",
+                type: "mixed", // 混合组：包含链接和数据库
+                links: [
+                    { name: "SIT 监控大盘", url: "#", icon: "fa-solid fa-chart-line", desc: "Grafana 监控" },
+                    { name: "SIT 日志中心", url: "#", icon: "fa-solid fa-file-lines", desc: "ELK 日志查询" }
+                ],
+                dbs: [
+                    { name: "用户中心主库", host: "192.168.10.5", port: "3306", user: "sit_user", pass: "sit_pass_123", type: "mysql" },
+                    { name: "订单库", host: "192.168.10.6", port: "3306", user: "sit_order", pass: "order_pass!", type: "mysql" },
+                    { name: "全局缓存 Redis", host: "192.168.10.20", port: "6379", user: "-", pass: "redis_sit_2024", type: "redis" }
+                ]
+            },
+            {
+                id: "uat-env",
+                title: "UAT 环境 (验收)",
+                icon: "fa-solid fa-check-double",
+                color: "text-orange-600",
+                badge: "UAT",
+                badgeColor: "bg-orange-100 text-orange-700 border-orange-200",
+                type: "mixed",
+                links: [
+                    { name: "UAT 演示环境", url: "#", icon: "fa-solid fa-desktop", desc: "客户演示入口" }
+                ],
+                dbs: [
+                    { name: "UAT 核心库", host: "10.20.0.5", port: "3306", user: "uat_app", pass: "StrongP@ssw0rd", type: "oracle" }
+                ]
+            }
+        ];
+
+        // 允许编辑的工号白名单
+        const ALLOWED_IDS = ["1001", "1002", "admin"];
+
+        // 当前状态
+        let isEditMode = false;
+        let currentAdminId = null;
+
+        // ================= 渲染逻辑 =================
+
+        function render() {
+            const container = document.getElementById('app');
+            container.innerHTML = '';
+
+            mockData.forEach(group => {
+                const section = document.createElement('section');
+                
+                // 1. 分组标题
+                let headerHtml = `
+                    <div class="flex items-center justify-between mb-5 pb-2 border-b border-slate-200 group">
+                        <div class="flex items-center gap-3">
+                            <i class="${group.icon} ${group.color} text-xl"></i>
+                            <h2 class="text-xl font-bold text-slate-800">${group.title}</h2>
+                            ${group.badge ? `<span class="px-2 py-0.5 text-xs font-bold rounded border ${group.badgeColor}">${group.badge}</span>` : ''}
+                        </div>
+                        ${isEditMode ? `
+                            <div class="opacity-100 transition-opacity flex gap-2">
+                                <button class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded">
+                                    <i class="fa-solid fa-plus mr-1"></i>添加资源
                                 </button>
-                            </div>
+                                <button class="text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded">删除分组</button>
+                            </div>` 
+                        : ''}
+                    </div>
+                `;
 
-                            <!-- 3. 渲染数据库列表 (Table Style) -->
-                            <div v-if="group.dbs && group.dbs.length > 0" class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden mb-6">
-                                <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-                                    <h3 class="text-sm font-bold text-slate-700"><i class="fa-solid fa-database mr-2"></i>数据库资源</h3>
-                                    <span class="text-xs text-slate-400">点击表格内容即可复制</span>
+                // 2. 渲染站点链接 (Grid)
+                let linksHtml = '';
+                const links = group.type === 'links' ? group.items : (group.links || []);
+                
+                if (links.length > 0) {
+                    linksHtml = `<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">`;
+                    links.forEach(item => {
+                        linksHtml += `
+                            <a href="${item.url}" target="_blank" class="relative block p-4 bg-white rounded-lg border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-300 transition group/card">
+                                ${isEditMode ? `<button onclick="event.preventDefault(); alert('删除链接')" class="absolute top-2 right-2 text-slate-300 hover:text-red-500 z-10"><i class="fa-solid fa-trash-can"></i></button>` : ''}
+                                <div class="flex items-start gap-3">
+                                    <div class="text-2xl text-slate-400 group-hover/card:text-blue-500 transition-colors mt-1">
+                                        <i class="${item.icon}"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="font-semibold text-slate-800 text-sm group-hover/card:text-blue-600">${item.name}</h3>
+                                        <p class="text-xs text-slate-500 mt-1 line-clamp-2">${item.desc}</p>
+                                    </div>
                                 </div>
-                                <div class="overflow-x-auto">
-                                    <table class="w-full text-left text-sm">
-                                        <thead>
-                                            <tr class="bg-white text-slate-500 border-b border-slate-100">
-                                                <th class="px-4 py-2 font-medium w-1/4">名称</th>
-                                                <th class="px-4 py-2 font-medium w-1/4">Host:Port</th>
-                                                <th class="px-4 py-2 font-medium w-1/6">User</th>
-                                                <th class="px-4 py-2 font-medium w-1/4">Password</th>
-                                                <th v-if="isEditMode" class="px-4 py-2 font-medium text-right w-12">操作</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody class="divide-y divide-slate-50">
-                                            <tr v-for="db in group.dbs" class="hover:bg-slate-50 transition-colors">
+                            </a>
+                        `;
+                    });
+                    // 编辑模式下的“添加链接”占位符
+                    if (isEditMode) {
+                        linksHtml += `
+                            <button onclick="alert('添加链接')" class="flex flex-col items-center justify-center p-4 rounded-lg border-2 border-dashed border-slate-200 text-slate-400 hover:border-blue-400 hover:text-blue-500 transition h-full min-h-[80px]">
+                                <i class="fa-solid fa-plus text-lg mb-1"></i>
+                                <span class="text-xs font-medium">添加链接</span>
+                            </button>
+                        `;
+                    }
+                    linksHtml += `</div>`;
+                }
+
+                // 3. 渲染数据库列表 (Table Style)
+                let dbsHtml = '';
+                if (group.dbs && group.dbs.length > 0) {
+                    dbsHtml = `
+                        <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden mb-6">
+                            <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                                <h3 class="text-sm font-bold text-slate-700"><i class="fa-solid fa-database mr-2"></i>数据库资源</h3>
+                                <span class="text-xs text-slate-400">点击表格内容即可复制</span>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left text-sm">
+                                    <thead>
+                                        <tr class="bg-white text-slate-500 border-b border-slate-100">
+                                            <th class="px-4 py-2 font-medium w-1/4">名称</th>
+                                            <th class="px-4 py-2 font-medium w-1/4">Host:Port</th>
+                                            <th class="px-4 py-2 font-medium w-1/6">User</th>
+                                            <th class="px-4 py-2 font-medium w-1/4">Password</th>
+                                            ${isEditMode ? '<th class="px-4 py-2 font-medium text-right w-12">操作</th>' : ''}
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-50">
+                                        ${group.dbs.map(db => `
+                                            <tr class="hover:bg-slate-50 transition-colors">
                                                 <td class="px-4 py-3">
                                                     <div class="flex items-center gap-2">
                                                         <i class="fa-solid fa-server text-slate-300"></i>
-                                                        <span class="font-medium text-slate-700">[[ db.name ]]</span>
+                                                        <span class="font-medium text-slate-700">${db.name}</span>
                                                     </div>
                                                 </td>
-                                                <td class="px-4 py-3 font-mono text-xs text-slate-600 copy-hover" @click="copyToClipboard(`${db.host}:${db.port}`)" title="点击复制">
-                                                    [[ db.host ]]:[[ db.port ]]
+                                                <td class="px-4 py-3 font-mono text-xs text-slate-600 copy-hover" onclick="copyToClipboard('${db.host}:${db.port}')" title="点击复制">
+                                                    ${db.host}:${db.port}
                                                 </td>
-                                                <td class="px-4 py-3 font-mono text-xs text-slate-600 copy-hover" @click="copyToClipboard(db.user)" title="点击复制">
-                                                    [[ db.user ]]
+                                                <td class="px-4 py-3 font-mono text-xs text-slate-600 copy-hover" onclick="copyToClipboard('${db.user}')" title="点击复制">
+                                                    ${db.user}
                                                 </td>
-                                                <td class="px-4 py-3 font-mono text-xs text-pink-600 bg-pink-50/50 rounded copy-hover select-all" @click="copyToClipboard(db.pass)" title="点击复制">
-                                                    [[ db.pass ]]
+                                                <td class="px-4 py-3 font-mono text-xs text-pink-600 bg-pink-50/50 rounded copy-hover select-all" onclick="copyToClipboard('${db.pass}')" title="点击复制">
+                                                    ${db.pass}
                                                 </td>
-                                                <td v-if="isEditMode" class="px-4 py-3 text-right">
-                                                    <button class="text-slate-400 hover:text-red-500 transition"><i class="fa-solid fa-trash-can"></i></button>
-                                                </td>
+                                                ${isEditMode ? `
+                                                    <td class="px-4 py-3 text-right">
+                                                        <button class="text-slate-400 hover:text-red-500 transition"><i class="fa-solid fa-trash-can"></i></button>
+                                                    </td>
+                                                ` : ''}
                                             </tr>
-                                            <tr v-if="isEditMode" class="bg-slate-50">
+                                        `).join('')}
+                                        ${isEditMode ? `
+                                            <tr class="bg-slate-50">
                                                 <td colspan="5" class="px-4 py-2 text-center border-t border-dashed border-slate-200">
                                                     <button class="text-xs text-blue-600 hover:text-blue-800 font-medium py-1">
                                                         <i class="fa-solid fa-plus mr-1"></i>添加数据库
                                                     </button>
                                                 </td>
                                             </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
+                                        ` : ''}
+                                    </tbody>
+                                </table>
                             </div>
-                        </section>
-                    </div>
-                </el-tab-pane>
+                        </div>
+                    `;
+                }
 
-                <!-- Tab 2: Account Query -->
-                <el-tab-pane label="核心账户查询" name="account">
-                    <div class="p-4">
-                        <el-tabs v-model="activeTab" type="card">
-                            <!-- 账户信息查询标签页 -->
-                            <el-tab-pane label="账户信息" name="balance">
-                                <el-form :model="balanceForm" inline>
-                                    <el-form-item label="账号">
-                                        <el-input 
-                                            v-model="balanceForm.account" 
-                                            placeholder="请输入账号"
-                                            clearable
-                                            style="width: 240px">
-                                        </el-input>
-                                    </el-form-item>
-                                    <el-form-item label="环境">
-                                        <el-select v-model="balanceForm.env" placeholder="选择环境" style="width: 120px">
-                                            <el-option label="SIT-A" value="sita"></el-option>
-                                            <el-option label="SIT-B" value="sitb"></el-option>
-                                            <el-option label="UAT" value="uat"></el-option>
-                                        </el-select>
-                                    </el-form-item>
-                                    <el-form-item>
-                                        <el-button @click="clearBalanceResult">清除</el-button>
-                                        <el-button type="primary" @click="queryBalance" :loading="balanceLoading">
-                                            查询
-                                        </el-button>
-                                    </el-form-item>
-                                </el-form>
-                                
-                                <div v-if="balanceResult" class="result-card" style="padding-top: 0;">
-                                    <!-- 账户信息展示 -->
-                                    <div v-if="getAccountInfo(balanceResult)">
-                                        <el-table :data="getAccountInfoRows()" stripe style="width: 100%" :show-header="false">
-                                            <el-table-column prop="label" label="字段" width="420">
-                                                <template #default="scope">
-                                                    <span v-html="scope.row.label"></span>
-                                                </template>
-                                            </el-table-column>
-                                            <el-table-column prop="value" label="值">
-                                                <template #default="scope">
-                                                    <span v-if="scope.row.isHtml" v-html="scope.row.value"></span>
-                                                    <span v-else>[[ scope.row.value ]]</span>
-                                                </template>
-                                            </el-table-column>
-                                        </el-table>
+                section.innerHTML = headerHtml + linksHtml + dbsHtml;
+                container.appendChild(section);
+            });
+        }
 
-                                        <div class="toggle-raw">
-                                            <el-button text @click="showRawBalance = !showRawBalance">
-                                                <span v-text="showRawBalance ? '隐藏' : '查看'"></span>原始数据
-                                            </el-button>
-                                        </div>
-                                    </div>
-                                    
-                                    <pre v-if="showRawBalance" class="json-viewer" v-text="formatJson(balanceResult)"></pre>
-                                    <pre v-if="!getAccountInfo(balanceResult) && balanceResult" class="json-viewer" v-text="formatJson(balanceResult)"></pre>
-                                </div>
-                            </el-tab-pane>
-                            
-                            <!-- 交易明细查询标签页 -->
-                            <el-tab-pane label="交易明细" name="detail">
-                                <el-form :model="detailForm" inline>
-                                    <el-form-item label="账号">
-                                        <el-input 
-                                            v-model="detailForm.account" 
-                                            placeholder="请输入账号"
-                                            clearable
-                                            style="width: 240px">
-                                        </el-input>
-                                    </el-form-item>
-                                    <el-form-item label="环境">
-                                        <el-select v-model="detailForm.env" placeholder="选择环境" style="width: 120px">
-                                            <el-option label="SIT-A" value="sita"></el-option>
-                                            <el-option label="SIT-B" value="sitb"></el-option>
-                                            <el-option label="UAT" value="uat"></el-option>
-                                        </el-select>
-                                    </el-form-item>
-                                    <el-form-item label="核心日期">
-                                        <el-date-picker
-                                            v-model="detailForm.beginDate"
-                                            type="date"
-                                            placeholder="开始日期"
-                                            value-format="YYYY-MM-DD"
-                                            style="width: 140px">
-                                        </el-date-picker>
-                                    </el-form-item>
-                                    <el-form-item label="至">
-                                        <el-date-picker
-                                            v-model="detailForm.endDate"
-                                            type="date"
-                                            placeholder="结束日期"
-                                            value-format="YYYY-MM-DD"
-                                            style="width: 140px">
-                                        </el-date-picker>
-                                    </el-form-item>
-                                    <el-form-item>
-                                        <el-button @click="clearDetailResult">清除</el-button>
-                                        <el-button type="primary" @click="queryDetail" :loading="detailLoading">
-                                            查询
-                                        </el-button>
-                                    </el-form-item>
-                                </el-form>
-                                
-                                <div v-if="detailResult" class="result-card">
-                                    <!-- 交易明细展示 -->
-                                    <div v-if="getTransactionList(detailResult) && getTransactionList(detailResult).length > 0" class="transaction-table">
-                                        
-                                        <el-table 
-                                            :data="paginatedData" 
-                                            stripe 
-                                            style="width: 100%"
-                                            :default-sort="{prop: 'StdTxnDt', order: 'descending'}">
-                                            <el-table-column prop="StdTxnDt" label="核心日期" sortable></el-table-column>
-                                            <el-table-column prop="BckInf1" label="自然日期">
-                                                <template #default="scope">
-                                                    <span v-text="formatDate(scope.row.BckInf1)"></span>
-                                                </template>
-                                            </el-table-column>
-                                            <el-table-column prop="BckInf1" label="交易时间">
-                                                <template #default="scope">
-                                                    <span v-text="formatTime(scope.row.BckInf1)"></span>
-                                                </template>
-                                            </el-table-column>
-                                            
-                                            <el-table-column prop="TxnAmt" label="交易金额" align="right">
-                                                <template #default="scope">
-                                                    <span :class="scope.row.DbCrFlg === 'C' ? 'amount-credit' : 'amount-debit'">
-                                                        <span v-text="(scope.row.DbCrFlg === 'C' ? '+' : '-') + formatCurrency(scope.row.TxnAmt)"></span>
-                                                    </span>
-                                                </template>
-                                            </el-table-column>
-                                            <el-table-column prop="AcctBal" label="余额" align="right">
-                                                <template #default="scope">
-                                                    <span v-text="formatCurrency(scope.row.AcctBal)"></span>
-                                                </template>
-                                            </el-table-column>
-                                            <el-table-column prop="OppAcctNm" label="对方户名" min-width="200"></el-table-column>
-                                            <el-table-column prop="OppAcctNo" label="对方账号"></el-table-column>
-                                            <el-table-column prop="InstChinNm" label="对方行名"></el-table-column>
-                                            <el-table-column prop="Remark" label="备注" show-overflow-tooltip></el-table-column>
-                                            <el-table-column prop="SmyDsc" label="摘要"></el-table-column>
-                                        </el-table>
+        // ================= 交互逻辑 =================
 
-                                        <div style="margin-top: 16px; display: flex; justify-content: flex-end;">
-                                            <el-pagination
-                                                v-if="getTransactionList(detailResult).length > 0"
-                                                @size-change="handleSizeChange"
-                                                @current-change="handleCurrentChange"
-                                                :current-page="currentPage"
-                                                :page-sizes="[10, 20, 50, 100]"
-                                                :page-size="pageSize"
-                                                layout="total, sizes, prev, pager, next, jumper"
-                                                :total="getTransactionList(detailResult).length">
-                                            </el-pagination>
-                                        </div>
-                                        
-                                        <div class="toggle-raw">
-                                            <el-button text @click="showRawDetail = !showRawDetail">
-                                                <span v-text="showRawDetail ? '隐藏' : '查看'"></span>原始数据
-                                            </el-button>
-                                        </div>
-                                    </div>
-                                    
-                                    <div v-else-if="getTransactionList(detailResult) === null && !detailLoading">
-                                         <pre class="json-viewer" v-text="formatJson(detailResult)"></pre>
-                                    </div>
+        // 1. 请求管理权限
+        function requestAuth() {
+            const input = prompt("请输入工号 (Employee ID) 以进入编辑模式：\n(测试可用: 1001, admin)");
+            if (input === null) return;
 
-                                    <div v-else class="loading">
-                                        <p v-if="detailLoading">正在加载...</p>
-                                        <p v-else>没有找到交易记录。</p>
-                                    </div>
-                                </div>
-                            </el-tab-pane>
-                        </el-tabs>
-                    </div>
-                </el-tab-pane>
-            </el-tabs>
-        </main>
-    </div>
-
-    <script src="/static/js/vendor/vue.global.js"></script>
-    <script src="/static/js/vendor/element-plus.js"></script>
-    <script src="/static/js/vendor/axios.min.js"></script>
-    <script>
-        const { createApp, ref, computed, onMounted } = Vue;
-        const ACCOUNT_API = '/api/v1/account';
-
-        const app = createApp({
-            setup() {
-                // ================= Workspace Logic =================
-                const mainTab = ref('workspace');
-                const workspaceData = ref([]);
-                const isEditMode = ref(false);
-                const currentAdminId = ref(null);
-                const ALLOWED_IDS = ["1001", "1002", "admin"];
-
-                const requestAuth = () => {
-                    const input = prompt("请输入工号 (Employee ID) 以进入编辑模式：\n(测试可用: 1001, admin)");
-                    if (input === null) return;
-                    if (ALLOWED_IDS.includes(input.trim())) {
-                        isEditMode.value = true;
-                        currentAdminId.value = input.trim();
-                        ElementPlus.ElMessage.success(`欢迎, ${currentAdminId.value}。已进入编辑模式。`);
-                    } else {
-                        alert("❌ 验证失败：工号无编辑权限。");
-                    }
-                };
-
-                const exitEditMode = () => {
-                    isEditMode.value = false;
-                    currentAdminId.value = null;
-                };
-
-                const saveConfig = () => {
-                    ElementPlus.ElMessage.success("💾 配置已保存 (模拟后端写入)");
-                    exitEditMode();
-                };
-
-                const copyToClipboard = (text) => {
-                    navigator.clipboard.writeText(text).then(() => {
-                        ElementPlus.ElMessage.success(`已复制: ${text}`);
-                    }).catch(err => {
-                        console.error('复制失败', err);
-                    });
-                };
-
-                // ================= Account Logic =================
-                const activeTab = ref('balance');
-                const balanceForm = ref({ account: '', env: 'sitb' });
-                const balanceResult = ref(null);
-                const balanceLoading = ref(false);
-                const showRawBalance = ref(false);
-
-                const detailForm = ref({ account: '', env: 'sitb', beginDate: '', endDate: '' });
-                const detailResult = ref(null);
-                const detailLoading = ref(false);
-                const showRawDetail = ref(false);
-
-                const currentPage = ref(1);
-                const pageSize = ref(10);
-
-                const queryBalance = async () => {
-                    if (!balanceForm.value.account) {
-                        ElementPlus.ElMessage.warning('请输入账号');
-                        return;
-                    }
-                    balanceLoading.value = true;
-                    balanceResult.value = null;
-                    try {
-                        const response = await axios.post(`${ACCOUNT_API}/balance-query`, {
-                            account: balanceForm.value.account,
-                            env: balanceForm.value.env
-                        });
-                        balanceResult.value = response.data;
-                        ElementPlus.ElMessage.success('查询成功');
-                    } catch (error) {
-                        console.error('Balance query error:', error);
-                        ElementPlus.ElMessage.error(error.response?.data?.error || '查询失败');
-                        balanceResult.value = { error: error.response?.data || error.message };
-                    } finally {
-                        balanceLoading.value = false;
-                    }
-                };
-
-                const queryDetail = async () => {
-                    if (!detailForm.value.account) {
-                        ElementPlus.ElMessage.warning('请输入账号');
-                        return;
-                    }
-                    detailLoading.value = true;
-                    detailResult.value = null;
-                    currentPage.value = 1;
-                    try {
-                        const payload = {
-                            account: detailForm.value.account,
-                            env: detailForm.value.env,
-                            begTms: 0,
-                            quryTms: 9999 
-                        };
-                        if (detailForm.value.beginDate) payload.beginDate = detailForm.value.beginDate.replace(/-/g, '');
-                        if (detailForm.value.endDate) payload.endDate = detailForm.value.endDate.replace(/-/g, '');
-
-                        const response = await axios.post(`${ACCOUNT_API}/query-detail`, payload);
-                        detailResult.value = response.data;
-                        ElementPlus.ElMessage.success('查询成功');
-                    } catch (error) {
-                        console.error('Detail query error:', error);
-                        ElementPlus.ElMessage.error(error.response?.data?.error || '查询失败');
-                        detailResult.value = { error: error.response?.data || error.message };
-                    } finally {
-                        detailLoading.value = false;
-                    }
-                };
-
-                const clearBalanceResult = () => balanceResult.value = null;
-                const clearDetailResult = () => detailResult.value = null;
-                const formatJson = (obj) => JSON.stringify(obj, null, 2);
-                const getAccountInfo = (result) => result?.data?.service?.BODY?.array?.BtchAcctInfQuryArray;
-                
-                const getAccountInfoRows = () => {
-                    const info = getAccountInfo(balanceResult.value);
-                    if (!info) return [];
-                    return [
-                        { label: '账户', value: info.CstAcctNo, isHtml: false },
-                        { label: '户名', value: info.AcctNm, isHtml: false },
-                        { label: '账户余额', value: `<span style="color: #409eff;">${formatCurrency(info.CrnAcctBal)}</span>`, isHtml: true },
-                        { label: '可用余额', value: `<span style="color: #67c23a;">${formatCurrency(info.UseBal)}</span>`, isHtml: true },
-                        { label: '账户类型 <span style="color: #909399; font-size: 12px; margin-left: 8px;">(1=活期 2=定期 4=通知存款)</span>', value: getAccountCharText(info.AcctChar), isHtml: false },
-                        { label: '账户性质 <span style="color: #909399; font-size: 12px; margin-left: 8px;">(1=个人 2=对公 3=内部)</span>', value: getAccountKindText(info.AcctKnd), isHtml: false },
-                        { label: '客户种类 <span style="color: #909399; font-size: 12px; margin-left: 8px;">(1=个人 2=对公 3=内部)</span>', value: getCustomerKindText(info.CoreCstKnd), isHtml: false },
-                        { label: '币种', value: info.CcyNo, isHtml: false },
-                        { label: '开户日期', value: info.OpnAcctDt, isHtml: false },
-                        { label: '开户机构', value: info.OpnAcctInst, isHtml: false },
-                        { label: '利率 (%)', value: info.IntRate, isHtml: false },
-                        { label: '起息日期', value: info.IntBegDt, isHtml: false },
-                        { label: '最后交易日', value: info.LastBsnDt, isHtml: false },
-                        { label: '存款类型 <span style="color: #909399; font-size: 12px; margin-left: 8px;">(D=活期 T=定期 N=通知)</span>', value: getDepositTypeText(info.DepPrdTp), isHtml: false },
-                        { label: '支取方式 <span style="color: #909399; font-size: 12px; margin-left: 8px;">(1=一次性 2=分次 3=部分 4=随时)</span>', value: getDrawModeText(info.DrawMode), isHtml: false },
-                        { label: '核心账户状态 <span style="color: #909399; font-size: 12px; margin-left: 8px;">(0=正常 1=冻结 2=挂失 3=销户)</span>', value: `<span class="el-tag el-tag--${info.CoreAcctSt === '0' ? 'success' : 'warning'} el-tag--small">${getCoreAcctStatusText(info.CoreAcctSt)}</span>`, isHtml: true },
-                        { label: '账户状态 <span style="color: #909399; font-size: 12px; margin-left: 8px;">(Y=正常 N=非正常)</span>', value: `<span class="el-tag el-tag--${info.AcctActvFlg === 'Y' ? 'success' : 'danger'} el-tag--small">${getAccountStatusText(info.AcctActvFlg)}</span>`, isHtml: true }
-                    ];
-                };
-
-                const formatCurrency = (amount) => !amount ? '0.00' : parseFloat(amount).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                const getAccountStatusText = (flag) => flag === 'Y' ? '正常' : '非正常';
-                const getAccountCharText = (char) => ({'1': '活期账户', '2': '定期账户', '3': '活期账户', '4': '通知存款账户'})[char] || char;
-                const getAccountKindText = (kind) => ({'1': '个人账户', '2': '对公账户', '3': '内部账户'})[kind] || kind;
-                const getCustomerKindText = (kind) => ({'1': '个人客户', '2': '对公客户', '3': '内部客户'})[kind] || kind;
-                const getDepositTypeText = (type) => ({'D': '活期存款', 'T': '定期存款', 'N': '通知存款'})[type] || type;
-                const getDrawModeText = (mode) => ({'1': '一次性支取', '2': '分次支取', '3': '部分支取', '4': '随时支取'})[mode] || mode;
-                const getCoreAcctStatusText = (status) => ({'0': '正常', '1': '冻结', '2': '挂失', '3': '销户'})[status] || status;
-                const getTransactionList = (result) => {
-                    const list = result?.data?.service?.BODY?.array?.TxnDtlInfArray;
-                    return Array.isArray(list) ? list : null;
-                };
-
-                const paginatedData = computed(() => {
-                    const list = getTransactionList(detailResult.value);
-                    if (!list) return [];
-                    const start = (currentPage.value - 1) * pageSize.value;
-                    const end = start + pageSize.value;
-                    return list.slice(start, end);
-                });
-
-                const handleSizeChange = (val) => { pageSize.value = val; currentPage.value = 1; };
-                const handleCurrentChange = (val) => currentPage.value = val;
-                const formatDate = (timeStr) => {
-                    if (!timeStr) return '';
-                    const match = timeStr.match(/^(\d{2}:\d{2}:\d{2})(\d{4}-\d{2}-\d{2})$/);
-                    return match ? match[2] : timeStr;
-                };
-                const formatTime = (timeStr) => {
-                    if (!timeStr) return '';
-                    const match = timeStr.match(/^(\d{2}:\d{2}:\d{2})(\d{4}-\d{2}-\d{2})$/);
-                    return match ? match[1] : timeStr;
-                };
-
-                onMounted(() => {
-                    fetch('/api/v1/workspace/sites')
-                        .then(response => response.json())
-                        .then(data => {
-                            workspaceData.value = data;
-                        })
-                        .catch(error => {
-                            console.error('Error fetching workspace sites:', error);
-                            ElementPlus.ElMessage.error('加载工作台数据失败');
-                        });
-                });
-
-                return {
-                    mainTab, workspaceData, isEditMode, currentAdminId, requestAuth, exitEditMode, saveConfig, copyToClipboard,
-                    activeTab, balanceForm, balanceResult, balanceLoading, showRawBalance,
-                    detailForm, detailResult, detailLoading, showRawDetail,
-                    currentPage, pageSize, paginatedData,
-                    queryBalance, queryDetail, clearBalanceResult, clearDetailResult,
-                    formatJson, getAccountInfo, getAccountInfoRows, formatCurrency,
-                    getAccountStatusText, getAccountCharText, getAccountKindText, getCustomerKindText,
-                    getDepositTypeText, getDrawModeText, getCoreAcctStatusText, getTransactionList,
-                    handleSizeChange, handleCurrentChange, formatDate, formatTime
-                };
+            if (ALLOWED_IDS.includes(input.trim())) {
+                isEditMode = true;
+                currentAdminId = input.trim();
+                updateUIState();
+                showToast(`✅ 欢迎, ${currentAdminId}。已进入编辑模式。`);
+            } else {
+                alert("❌ 验证失败：工号无编辑权限。");
             }
-        });
-        app.config.compilerOptions.delimiters = ['[[', ']]'];
-        app.use(ElementPlus).mount('#app');
+        }
+
+        // 2. 退出编辑
+        function exitEditMode() {
+            isEditMode = false;
+            currentAdminId = null;
+            updateUIState();
+        }
+
+        // 3. 更新 UI 状态
+        function updateUIState() {
+            const adminBar = document.getElementById('admin-bar');
+            const authBtn = document.getElementById('auth-btn');
+            const adminIdSpan = document.getElementById('admin-id');
+
+            if (isEditMode) {
+                adminBar.classList.remove('hidden');
+                adminBar.classList.add('flex');
+                authBtn.classList.add('hidden');
+                adminIdSpan.innerText = currentAdminId;
+            } else {
+                adminBar.classList.add('hidden');
+                adminBar.classList.remove('flex');
+                authBtn.classList.remove('hidden');
+            }
+            
+            // 重新渲染内容以显示/隐藏编辑按钮
+            render();
+        }
+
+        // 4. 保存配置 (模拟)
+        function saveConfig() {
+            // 实际开发中：这里 fetch POST 发送 JSON
+            showToast("💾 配置已保存 (模拟后端写入)");
+            exitEditMode();
+        }
+
+        // 5. 复制功能
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast(`已复制: ${text}`);
+            }).catch(err => {
+                console.error('复制失败', err);
+            });
+        }
+
+        // 6. Toast 提示组件
+        function showToast(message) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast bg-slate-800 text-white text-sm px-4 py-2 rounded shadow-lg flex items-center gap-2';
+            toast.innerHTML = `<i class="fa-solid fa-circle-check text-green-400"></i> <span>${message}</span>`;
+            container.appendChild(toast);
+            
+            // 动画结束后移除 DOM
+            setTimeout(() => {
+                toast.remove();
+            }, 2000);
+        }
+
+        // 初始化
+        render();
     </script>
 </body>
 </html>

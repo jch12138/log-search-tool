@@ -269,7 +269,7 @@
                                 :data="paginatedData" 
                                 stripe 
                                 style="width: 100%"
-                                :default-sort="{prop: 'StdTxnDt', order: 'descending'}">
+                                :default-sort="{prop: 'StdTxnDt', order: 'ascending'}">
                                 <el-table-column prop="StdTxnDt" label="核心日期" sortable></el-table-column>
                                 <el-table-column prop="BckInf1" label="自然日期">
                                     <template #default="scope">
@@ -637,9 +637,17 @@
                 const paginatedData = computed(() => {
                     const list = getTransactionList(detailResult.value);
                     if (!list) return [];
+
+                    // 确保数据按照核心日期升序排序
+                    const sortedList = [...list].sort((a, b) => {
+                        const dateA = new Date(a.StdTxnDt);
+                        const dateB = new Date(b.StdTxnDt);
+                        return dateA - dateB;
+                    });
+
                     const start = (currentPage.value - 1) * pageSize.value;
                     const end = start + pageSize.value;
-                    return list.slice(start, end);
+                    return sortedList.slice(start, end);
                 });
 
                 // 分页事件处理

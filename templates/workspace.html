@@ -10,37 +10,43 @@
     
     <style>
         [v-cloak] { display: none; }
-        .copy-hover:hover { background-color: #f1f5f9; cursor: pointer; border-radius: 4px; }
+        .copy-hover:hover { background-color: #f1f5f9; cursor: pointer; border-radius: 6px; }
         .copy-hover:active { background-color: #e2e8f0; }
         .group-action-btn { opacity: 0; transition: opacity 0.2s; }
         .group:hover .group-action-btn { opacity: 1; }
+        
+        /* Custom Scrollbar for a cleaner look */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-800 font-sans antialiased selection:bg-blue-100">
+<body class="bg-[#F5F5F7] text-slate-800 font-sans antialiased selection:bg-blue-500 selection:text-white">
 
     <div id="app" v-cloak>
         <!-- Header -->
-        <header class="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex justify-between items-center">
+        <header class="bg-white/70 backdrop-blur-xl border-b border-slate-200/50 sticky top-0 z-20 transition-all duration-300">
+            <div class="max-w-[1600px] mx-auto px-6 lg:px-8 h-16 flex justify-between items-center">
                 <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">TG</div>
+                    <div class="w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-blue-600/20">TG</div>
                     <h1 class="text-xl font-bold text-slate-800 tracking-tight">托管测试组</h1>
                 </div>
                 
                 <div class="flex items-center gap-4">
                     <div v-if="isEditMode" class="flex items-center gap-3 animate-fade-in">
-                        <span class="text-xs text-green-600 font-medium bg-green-50 px-2 py-1 rounded border border-green-100">
+                        <span class="text-sm text-green-600 font-medium bg-green-50 px-2.5 py-1 rounded-full border border-green-100">
                             <i class="fa-solid fa-user-check mr-1"></i> <span>[[ currentAdminId ]]</span>
                         </span>
-                        <button @click="openAddGroupDialog" class="text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded shadow-sm transition">
-                            <i class="fa-solid fa-folder-plus mr-1"></i> 新建分组
+                        <button @click="openAddGroupDialog" class="text-base bg-white hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm transition">
+                            <i class="fa-solid fa-folder-plus mr-1"></i> 新建
                         </button>
-                        <button @click="saveConfig" class="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded shadow-sm transition">
-                            <i class="fa-solid fa-save mr-1"></i> 保存配置
+                        <button @click="saveConfig" class="text-base bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg shadow-md shadow-blue-600/20 transition">
+                            <i class="fa-solid fa-save mr-1"></i> 保存
                         </button>
-                        <button @click="exitEditMode" class="text-sm text-slate-500 hover:text-slate-700 px-2">退出</button>
+                        <button @click="exitEditMode" class="text-base text-slate-500 hover:text-slate-700 px-2">退出</button>
                     </div>
-                    <button v-else @click="requestAuth" class="text-sm text-slate-500 hover:text-blue-600 transition px-3 py-1.5 border border-slate-200 rounded shadow-sm" title="管理模式">
+                    <button v-else @click="requestAuth" class="text-base text-slate-500 hover:text-blue-600 transition px-3 py-1.5 rounded-lg hover:bg-slate-100" title="管理模式">
                         编辑
                     </button>
                 </div>
@@ -48,99 +54,101 @@
         </header>
 
         <!-- Main Content -->
-        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-10">
+        <main class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-10">
             <div v-if="workspaceData.length === 0" class="text-center py-20 text-slate-400">
                 <i class="fa-solid fa-inbox text-4xl mb-4"></i>
                 <p>暂无资源配置，请点击右上角进入管理模式添加。</p>
             </div>
 
-            <section v-for="(group, gIndex) in workspaceData" :key="group.id" class="mb-8 group">
+            <section v-for="(group, gIndex) in workspaceData" :key="group.id" class="mb-10 group">
                 <!-- Group Header -->
-                <div class="flex items-center justify-between mb-5 pb-2 border-b border-slate-200">
-                    <div class="flex items-center gap-3">
-                        <h2 class="text-xl font-bold text-slate-800">[[ group.title ]]</h2>
-                        <div v-if="shouldShowEnvToggle(group)" class="flex items-center gap-1 ml-4">
+                <div class="flex items-center justify-between mb-6">
+                    <div class="flex items-center gap-4">
+                        <h2 class="text-2xl font-bold text-slate-800 tracking-tight">[[ group.title ]]</h2>
+                        <div v-if="shouldShowEnvToggle(group)" class="bg-slate-200/60 p-1 rounded-lg flex gap-1">
                             <button
                                 v-for="env in envOptions"
                                 :key="env.value"
                                 type="button"
                                 @click="setGroupEnv(group, env.value)"
-                                :title="env.label + ' 环境' + (getActiveEnv(group) === env.value ? ' (当前)' : '')"
+                                :title="env.label + ' 环境'"
                                 :class="[
-                                    'text-xs font-semibold px-2 py-1 rounded border transition flex items-center gap-1',
+                                    'text-sm font-semibold px-3 py-1 rounded-md transition-all duration-200 flex items-center gap-1.5',
                                     getActiveEnv(group) === env.value
-                                        ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                                        : 'bg-white text-slate-500 border-slate-200 hover:bg-blue-50 hover:text-blue-600'
+                                        ? 'bg-white text-slate-900 shadow-sm scale-100'
+                                        : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
                                 ]"
                             >
-                                <i v-if="env.icon" :class="[env.icon, 'text-[10px]']"></i>
+                                <i v-if="env.icon" :class="[env.icon, 'text-xs opacity-70']"></i>
                                 <span>[[ env.label ]]</span>
                             </button>
                         </div>
                     </div>
-                    <div v-if="isEditMode" class="group-action-btn flex gap-2">
-                        <button @click="editGroup(gIndex)" class="text-xs text-blue-500 hover:bg-blue-50 px-2 py-1 rounded"><i class="fa-solid fa-pen"></i> 编辑</button>
+                    <div v-if="isEditMode" class="group-action-btn flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        <button @click="editGroup(gIndex)" class="text-xs text-blue-500 hover:bg-blue-50 px-2 py-1 rounded"><i class="fa-solid fa-pen"></i></button>
                         <button @click="moveGroup(gIndex, -1)" :disabled="gIndex === 0" class="text-xs text-slate-400 hover:text-slate-600 px-2 py-1 disabled:opacity-30"><i class="fa-solid fa-arrow-up"></i></button>
                         <button @click="moveGroup(gIndex, 1)" :disabled="gIndex === workspaceData.length - 1" class="text-xs text-slate-400 hover:text-slate-600 px-2 py-1 disabled:opacity-30"><i class="fa-solid fa-arrow-down"></i></button>
-                        <button @click="deleteGroup(gIndex)" class="text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded"><i class="fa-solid fa-trash"></i> 删除</button>
+                        <button @click="deleteGroup(gIndex)" class="text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded"><i class="fa-solid fa-trash"></i></button>
                     </div>
                 </div>
 
                 <!-- Links Grid -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
-                    <a v-for="(item, lIndex) in getEnvItems(group)" :key="lIndex" :href="item.url" target="_blank" class="relative block p-4 bg-white rounded-lg border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-300 transition group/card">
-                        <div v-if="isEditMode" class="absolute top-2 right-2 z-10 flex gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity bg-white/80 rounded backdrop-blur-sm">
-                            <button @click.prevent="editLink(gIndex, lIndex)" class="text-blue-400 hover:text-blue-600 p-1"><i class="fa-solid fa-pen"></i></button>
-                            <button @click.prevent="deleteLink(gIndex, lIndex)" class="text-slate-300 hover:text-red-500 p-1"><i class="fa-solid fa-trash-can"></i></button>
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 mb-8">
+                    <a v-for="(item, lIndex) in getEnvItems(group)" :key="lIndex" :href="item.url" target="_blank" class="relative block p-4 bg-white rounded-2xl border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.08)] hover:-translate-y-1 transition-all duration-300 group/card">
+                        <div v-if="isEditMode" class="absolute top-3 right-3 z-10 flex gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity bg-white/90 rounded-lg backdrop-blur-sm shadow-sm p-1">
+                            <button @click.prevent="editLink(gIndex, lIndex)" class="text-blue-500 hover:text-blue-600 p-1.5 rounded hover:bg-blue-50"><i class="fa-solid fa-pen text-xs"></i></button>
+                            <button @click.prevent="deleteLink(gIndex, lIndex)" class="text-slate-400 hover:text-red-500 p-1.5 rounded hover:bg-red-50"><i class="fa-solid fa-trash-can text-xs"></i></button>
                         </div>
-                        <div class="flex flex-col gap-1">
-                            <h3 class="font-semibold text-slate-800 text-sm group-hover/card:text-blue-600">[[ item.name ]]</h3>
-                            <p class="text-xs text-slate-500 line-clamp-2">[[ item.desc ]]</p>
+                        <div class="flex flex-col gap-2">
+                            <h3 class="font-semibold text-slate-800 text-lg group-hover/card:text-blue-600 transition-colors">[[ item.name ]]</h3>
+                            <p class="text-sm text-slate-500 line-clamp-2 leading-relaxed">[[ item.desc ]]</p>
                         </div>
                     </a>
                     <!-- Add Link Button -->
-                    <button v-if="isEditMode" @click="openAddLinkDialog(gIndex)" class="flex flex-col items-center justify-center p-4 rounded-lg border-2 border-dashed border-slate-200 text-slate-400 hover:border-blue-400 hover:text-blue-500 transition h-full min-h-[80px]">
-                        <i class="fa-solid fa-plus text-lg mb-1"></i>
-                        <span class="text-xs font-medium">添加链接</span>
+                    <button v-if="isEditMode" @click="openAddLinkDialog(gIndex)" class="flex flex-col items-center justify-center p-4 rounded-2xl border-2 border-dashed border-slate-200 text-slate-400 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50/30 transition-all h-full min-h-[100px]">
+                        <i class="fa-solid fa-plus text-xl mb-2"></i>
+                        <span class="text-sm font-medium">添加链接</span>
                     </button>
                 </div>
 
                 <!-- Databases Table -->
-                <div v-if="(getEnvDbs(group).length > 0) || isEditMode" class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden mb-6">
-                    <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-                        <h3 class="text-sm font-bold text-slate-700"><i class="fa-solid fa-database mr-2"></i>数据库资源</h3>
-                        <span class="text-xs text-slate-400">点击表格内容即可复制</span>
+                <div v-if="(getEnvDbs(group).length > 0) || isEditMode" class="bg-white border border-slate-100 rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.04)] overflow-hidden mb-8">
+                    <div class="px-6 py-4 bg-slate-50/50 border-b border-slate-100 flex justify-between items-center">
+                        <h3 class="text-base font-bold text-slate-700 flex items-center gap-2"><i class="fa-solid fa-database text-slate-400"></i> 数据库资源</h3>
+                        <span class="text-sm text-slate-400">点击内容复制</span>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left text-sm">
                             <thead>
-                                <tr class="bg-white text-slate-500 border-b border-slate-100">
-                                    <th class="px-4 py-2 font-medium w-1/4">名称</th>
-                                    <th class="px-4 py-2 font-medium w-1/4">Host:Port</th>
-                                    <th class="px-4 py-2 font-medium w-1/6">User</th>
-                                    <th class="px-4 py-2 font-medium w-1/4">Password</th>
-                                    <th v-if="isEditMode" class="px-4 py-2 font-medium text-right w-20">操作</th>
+                                <tr class="bg-white text-slate-500 border-b border-slate-50">
+                                    <th class="px-6 py-3 font-medium w-1/4 text-sm uppercase tracking-wider">名称</th>
+                                    <th class="px-6 py-3 font-medium w-1/4 text-sm uppercase tracking-wider">地址:端口</th>
+                                    <th class="px-6 py-3 font-medium w-1/6 text-sm uppercase tracking-wider">用户名</th>
+                                    <th class="px-6 py-3 font-medium w-1/4 text-sm uppercase tracking-wider">密码</th>
+                                    <th v-if="isEditMode" class="px-6 py-3 font-medium text-right w-20">操作</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-50">
-                                <tr v-for="(db, dIndex) in getEnvDbs(group)" :key="dIndex" class="hover:bg-slate-50 transition-colors">
-                                    <td class="px-4 py-3">
-                                        <div class="flex items-center gap-2">
-                                            <i class="fa-solid fa-server text-slate-300"></i>
+                                <tr v-for="(db, dIndex) in getEnvDbs(group)" :key="dIndex" class="hover:bg-slate-50/80 transition-colors group/row">
+                                    <td class="px-6 py-4">
+                                        <div class="flex items-center gap-3">
+                                            <div class="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 group-hover/row:bg-blue-50 group-hover/row:text-blue-500 transition-colors">
+                                                <i class="fa-solid fa-server text-xs"></i>
+                                            </div>
                                             <span class="font-medium text-slate-700">[[ db.name ]]</span>
                                         </div>
                                     </td>
-                                    <td class="px-4 py-3 font-mono text-xs text-slate-600 copy-hover" @click="copyToClipboard(`${db.host}:${db.port}`)" title="点击复制">[[ db.host ]]:[[ db.port ]]</td>
-                                    <td class="px-4 py-3 font-mono text-xs text-slate-600 copy-hover" @click="copyToClipboard(db.user)" title="点击复制">[[ db.user ]]</td>
-                                    <td class="px-4 py-3 font-mono text-xs text-pink-600 bg-pink-50/50 rounded copy-hover select-all" @click="copyToClipboard(db.pass)" title="点击复制">[[ db.pass ]]</td>
-                                    <td v-if="isEditMode" class="px-4 py-3 text-right">
-                                        <button @click="editDb(gIndex, dIndex)" class="text-blue-400 hover:text-blue-600 mr-2"><i class="fa-solid fa-pen"></i></button>
+                                    <td class="px-6 py-4 font-mono text-sm text-slate-600 copy-hover" @click="copyToClipboard(`${db.host}:${db.port}`)" title="点击复制">[[ db.host ]]:[[ db.port ]]</td>
+                                    <td class="px-6 py-4 font-mono text-sm text-slate-600 copy-hover" @click="copyToClipboard(db.user)" title="点击复制">[[ db.user ]]</td>
+                                    <td class="px-6 py-4 font-mono text-sm text-slate-600 copy-hover" @click="copyToClipboard(db.pass)" title="点击复制">[[ db.pass ]]</td>
+                                    <td v-if="isEditMode" class="px-6 py-4 text-right">
+                                        <button @click="editDb(gIndex, dIndex)" class="text-blue-400 hover:text-blue-600 mr-3"><i class="fa-solid fa-pen"></i></button>
                                         <button @click="deleteDb(gIndex, dIndex)" class="text-slate-300 hover:text-red-500"><i class="fa-solid fa-trash-can"></i></button>
                                     </td>
                                 </tr>
-                                <tr v-if="isEditMode" class="bg-slate-50">
-                                    <td colspan="5" class="px-4 py-2 text-center border-t border-dashed border-slate-200">
-                                        <button @click="openAddDbDialog(gIndex)" class="text-xs text-blue-600 hover:text-blue-800 font-medium py-1">
+                                <tr v-if="isEditMode" class="bg-slate-50/30">
+                                    <td colspan="5" class="px-6 py-3 text-center border-t border-dashed border-slate-200">
+                                        <button @click="openAddDbDialog(gIndex)" class="text-sm text-blue-600 hover:text-blue-800 font-medium py-1 px-3 rounded hover:bg-blue-50 transition-colors">
                                             <i class="fa-solid fa-plus mr-1"></i> 添加数据库
                                         </button>
                                     </td>

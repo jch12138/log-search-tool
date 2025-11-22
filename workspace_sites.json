@@ -4,9 +4,8 @@
   ],
   "groups": [
     {
+      "defaultEnv": "sit",
       "id": "common-tools",
-      "title": "常用工具",
-      "useEnvironments": false,
       "shared": {
         "items": [
           {
@@ -23,30 +22,32 @@
             "name": "2312321",
             "url": "1232112",
             "desc": "dweqew "
+          },
+          {
+            "name": "1",
+            "url": "2",
+            "desc": "3"
+          },
+          {
+            "name": "1",
+            "url": "2",
+            "desc": "3"
+          },
+          {
+            "name": "1",
+            "url": "2",
+            "desc": "3"
           }
         ],
         "dbs": []
-      }
+      },
+      "title": "常用工具",
+      "useEnvironments": false
     },
     {
-      "id": "sit-env",
-      "title": "SIT 环境 (测试)",
       "defaultEnv": "uat",
-      "useEnvironments": true,
       "environments": {
         "sit": {
-          "items": [
-            {
-              "name": "SIT 监控大盘",
-              "url": "#",
-              "desc": "Grafana 监控"
-            },
-            {
-              "name": "1",
-              "url": "1",
-              "desc": "1"
-            }
-          ],
           "dbs": [
             {
               "host": "192.168.10.5",
@@ -63,37 +64,58 @@
               "port": "3306",
               "user": "1"
             }
+          ],
+          "items": [
+            {
+              "name": "SIT 监控大盘",
+              "url": "#",
+              "desc": "Grafana 监控"
+            },
+            {
+              "name": "1",
+              "url": "1",
+              "desc": "1"
+            }
           ]
         },
         "uat": {
-          "items": [],
           "dbs": [
             {
-              "host": "1",
-              "name": "1",
-              "pass": "1",
+              "host": "12.19.120.241",
+              "name": "指令平台",
+              "pass": "qry",
               "port": "3306",
-              "user": "1"
+              "user": "qry"
+            }
+          ],
+          "items": [
+            {
+              "name": "1",
+              "url": "1",
+              "desc": "阿桑蛋氨酸开焊卡塞\n用户名：241140\n密码：q11111"
             }
           ]
         }
-      }
+      },
+      "id": "sit-env",
+      "title": "SIT 环境",
+      "useEnvironments": true
     },
     {
-      "id": "grp_mia5hbx1_cpgk",
-      "title": "指令平台",
-      "useEnvironments": true,
       "defaultEnv": "sit",
       "environments": {
         "sit": {
-          "items": [],
-          "dbs": []
+          "dbs": [],
+          "items": []
         },
         "uat": {
-          "items": [],
-          "dbs": []
+          "dbs": [],
+          "items": []
         }
-      }
+      },
+      "id": "grp_mia5hbx1_cpgk",
+      "title": "指令平台",
+      "useEnvironments": true
     }
   ]
 }

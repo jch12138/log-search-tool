@@ -74,8 +74,14 @@ const LogSearchResults = {
                 emails: true,
                 uuids: true
             })
+        },
+        persistedFullscreenKey: {
+            type: String,
+            default: null
         }
     },
+
+    emits: ['fullscreen-change'],
     
     // ==================== 计算属性 ====================
     computed: {
@@ -101,6 +107,16 @@ const LogSearchResults = {
             handler(newVal) {
                 if (newVal) {
                     this.initializePagination();
+                    if (this.fullscreenKey) {
+                        const groups = this.showHostGrouping 
+                            ? this.createHostGroups() 
+                            : this.createSingleGroup();
+                        const stillExists = groups.some(group => group.key === this.fullscreenKey);
+                        if (!stillExists) {
+                            this.fullscreenKey = null;
+                            this.emitFullscreenChange();
+                        }
+                    }
                 }
                 this.$nextTick(() => {
                     this.recomputeCompaction();
@@ -108,6 +124,20 @@ const LogSearchResults = {
                 });
             },
             deep: true
+        },
+        persistedFullscreenKey: {
+            handler(newVal) {
+                if (newVal !== this.fullscreenKey) {
+                    this.fullscreenKey = newVal;
+                    this.$nextTick(() => {
+                        const root = this.getComponentRoot();
+                        const el = root.querySelector('.host-result-box.fullscreen-active .host-results');
+                        if (el) el.scrollTop = el.scrollTop;
+                        this.recomputeCompaction();
+                    });
+                }
+            },
+            immediate: true
         },
         showHostGrouping() {
             this.$nextTick(() => {
@@ -159,9 +189,7 @@ const LogSearchResults = {
         },
         
         clearFullscreenState() {
-            if (this.fullscreenKey) {
-                document.body.classList.remove('fullscreen-log-freeze');
-            }
+            // State is managed externally to preserve fullscreen between remounts.
         },
         
         // ---------- DOM 工具方法 ----------
@@ -536,7 +564,7 @@ const LogSearchResults = {
             const isExiting = this.fullscreenKey === key;
             
             this.fullscreenKey = isExiting ? null : key;
-            document.body.classList.toggle('fullscreen-log-freeze', !isExiting);
+            this.emitFullscreenChange();
             
             this.$nextTick(() => {
                 const root = this.getComponentRoot();
@@ -553,6 +581,10 @@ const LogSearchResults = {
             if (e.key === 'Escape' && this.fullscreenKey) {
                 this.toggleFullscreen(this.fullscreenKey);
             }
+        },
+
+        emitFullscreenChange() {
+            this.$emit('fullscreen-change', this.fullscreenKey);
         },
         
         // ---------- 依赖加载方法 ----------
@@ -893,7 +925,7 @@ const LogSearchResults = {
         <template v-else>
             <!-- 显示主机结果盒：有匹配结果 或 处于占位预搜索状态 -->
             <template v-if="searchResults && searchResults.hosts && searchResults.hosts.length && (searchResults.total_matches > 0 || searchResults.pre_search)">
-                <div class="results-hosts-row" :class="{ 'grid-2x2': showHostGrouping && groupedResults.length === 4 }">
+                <div class="results-hosts-row" :class="{ 'grid-2x2': showHostGrouping && groupedResults.length === 4, 'has-fullscreen': !!fullscreenKey }">
                 <div class="host-result-box" :class="{ 'fullscreen-active': fullscreenKey === group.key }" :data-group-key="group.key" v-for="group in groupedResults" :key="group.key">
                     <!-- 主机头部 -->
                     <div class="host-header" v-if="showHostGrouping">
@@ -1064,7 +1096,7 @@ const LogSearchResults = {
             
             <!-- 无数据状态或全局无结果：都显示主机盒子，在各主机盒子内显示具体提示 -->
             <template v-else-if="searchResults && searchResults.hosts && searchResults.hosts.length">
-                <div class="results-hosts-row" :class="{ 'grid-2x2': showHostGrouping && groupedResults.length === 4 }">
+                <div class="results-hosts-row" :class="{ 'grid-2x2': showHostGrouping && groupedResults.length === 4, 'has-fullscreen': !!fullscreenKey }">
                 <div class="host-result-box" :class="{ 'fullscreen-active': fullscreenKey === group.key }" :data-group-key="group.key" v-for="group in groupedResults" :key="group.key">
                     <!-- 主机头部 -->
                     <div class="host-header" v-if="showHostGrouping">

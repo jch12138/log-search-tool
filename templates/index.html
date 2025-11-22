@@ -240,6 +240,8 @@
                             :show-search-stats="false"
                             :show-host-grouping="true"
                             :enabled-highlighters="effectiveHighlighters"
+                            :persisted-fullscreen-key="activeTab ? activeTab.fullscreenKey : resultsFullscreenKey"
+                            @fullscreen-change="handleFullscreenChange"
                             empty-message="该主机已成功搜索，但没有找到包含关键词的日志"
                         />
                     </section>
@@ -308,6 +310,7 @@
                     
                     // 搜索结果
                     searchResults: null,
+                    resultsFullscreenKey: null,
                     
                     // 多标签管理
                     tabs: [],
@@ -701,10 +704,12 @@
                     const logRef = tab.selectedLog || this.selectedLog;
                     if (!logRef?.sshs?.length) {
                         tab.searchResults = null;
+                        tab.fullscreenKey = null;
                         tab.resultsVersion += 1;
                         if (tab.id === this.activeTabId) { 
                             this.searchResults = null; 
                             this.resultsVersion = tab.resultsVersion; 
+                            this.resultsFullscreenKey = null;
                         }
                         return;
                     }
@@ -965,7 +970,8 @@
                         highlightKeyword: '',
                         hasSearched: false,
                         searching: false,
-                        resultsVersion: 0
+                        resultsVersion: 0,
+                        fullscreenKey: null
                     };
                 },
                 
@@ -979,6 +985,16 @@
                     this.hasSearched = tab.hasSearched;
                     this.searching = tab.searching;
                     this.resultsVersion = tab.resultsVersion;
+                    this.resultsFullscreenKey = tab.fullscreenKey || null;
+                },
+
+                handleFullscreenChange(newKey) {
+                    const value = newKey || null;
+                    this.resultsFullscreenKey = value;
+                    const tab = this.activeTab;
+                    if (tab) {
+                        tab.fullscreenKey = value;
+                    }
                 },
                 
                 activateTab(id) {
@@ -1025,6 +1041,7 @@
                     this.hasSearched = false;
                     this.searching = false;
                     this.resultsVersion = 0;
+                    this.resultsFullscreenKey = null;
                 },
                 
                 // ============ 工具函数 ============

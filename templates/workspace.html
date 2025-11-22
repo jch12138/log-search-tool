@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>团队内部导航 | Dev Portal</title>
+    <title>托管测试组-导航站</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="/static/css/element-plus.css">
@@ -23,9 +23,8 @@
         <header class="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex justify-between items-center">
                 <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">D</div>
-                    <h1 class="text-xl font-bold text-slate-800 tracking-tight">Dev<span class="text-blue-600">Portal</span></h1>
-                    <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-xs font-medium border border-slate-200">Internal</span>
+                    <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">TG</div>
+                    <h1 class="text-xl font-bold text-slate-800 tracking-tight">托管测试组</h1>
                 </div>
                 
                 <div class="flex items-center gap-4">
@@ -41,8 +40,8 @@
                         </button>
                         <button @click="exitEditMode" class="text-sm text-slate-500 hover:text-slate-700 px-2">退出</button>
                     </div>
-                    <button v-else @click="requestAuth" class="text-slate-400 hover:text-blue-600 transition p-2" title="管理模式">
-                        <i class="fa-solid fa-lock"></i>
+                    <button v-else @click="requestAuth" class="text-sm text-slate-500 hover:text-blue-600 transition px-3 py-1.5 border border-slate-200 rounded shadow-sm" title="管理模式">
+                        编辑
                     </button>
                 </div>
             </div>
@@ -59,9 +58,25 @@
                 <!-- Group Header -->
                 <div class="flex items-center justify-between mb-5 pb-2 border-b border-slate-200">
                     <div class="flex items-center gap-3">
-                        <i :class="[group.icon, group.color, 'text-xl']"></i>
                         <h2 class="text-xl font-bold text-slate-800">[[ group.title ]]</h2>
-                        <span v-if="group.badge" :class="['px-2 py-0.5 text-xs font-bold rounded border', group.badgeColor]">[[ group.badge ]]</span>
+                        <div v-if="shouldShowEnvToggle(group)" class="flex items-center gap-1 ml-4">
+                            <button
+                                v-for="env in envOptions"
+                                :key="env.value"
+                                type="button"
+                                @click="setGroupEnv(group, env.value)"
+                                :title="env.label + ' 环境' + (getActiveEnv(group) === env.value ? ' (当前)' : '')"
+                                :class="[
+                                    'text-xs font-semibold px-2 py-1 rounded border transition flex items-center gap-1',
+                                    getActiveEnv(group) === env.value
+                                        ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                        : 'bg-white text-slate-500 border-slate-200 hover:bg-blue-50 hover:text-blue-600'
+                                ]"
+                            >
+                                <i v-if="env.icon" :class="[env.icon, 'text-[10px]']"></i>
+                                <span>[[ env.label ]]</span>
+                            </button>
+                        </div>
                     </div>
                     <div v-if="isEditMode" class="group-action-btn flex gap-2">
                         <button @click="editGroup(gIndex)" class="text-xs text-blue-500 hover:bg-blue-50 px-2 py-1 rounded"><i class="fa-solid fa-pen"></i> 编辑</button>
@@ -73,19 +88,14 @@
 
                 <!-- Links Grid -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
-                    <a v-for="(item, lIndex) in (group.items || group.links || [])" :key="lIndex" :href="item.url" target="_blank" class="relative block p-4 bg-white rounded-lg border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-300 transition group/card">
+                    <a v-for="(item, lIndex) in getEnvItems(group)" :key="lIndex" :href="item.url" target="_blank" class="relative block p-4 bg-white rounded-lg border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-300 transition group/card">
                         <div v-if="isEditMode" class="absolute top-2 right-2 z-10 flex gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity bg-white/80 rounded backdrop-blur-sm">
                             <button @click.prevent="editLink(gIndex, lIndex)" class="text-blue-400 hover:text-blue-600 p-1"><i class="fa-solid fa-pen"></i></button>
                             <button @click.prevent="deleteLink(gIndex, lIndex)" class="text-slate-300 hover:text-red-500 p-1"><i class="fa-solid fa-trash-can"></i></button>
                         </div>
-                        <div class="flex items-start gap-3">
-                            <div class="text-2xl text-slate-400 group-hover/card:text-blue-500 transition-colors mt-1">
-                                <i :class="item.icon"></i>
-                            </div>
-                            <div>
-                                <h3 class="font-semibold text-slate-800 text-sm group-hover/card:text-blue-600">[[ item.name ]]</h3>
-                                <p class="text-xs text-slate-500 mt-1 line-clamp-2">[[ item.desc ]]</p>
-                            </div>
+                        <div class="flex flex-col gap-1">
+                            <h3 class="font-semibold text-slate-800 text-sm group-hover/card:text-blue-600">[[ item.name ]]</h3>
+                            <p class="text-xs text-slate-500 line-clamp-2">[[ item.desc ]]</p>
                         </div>
                     </a>
                     <!-- Add Link Button -->
@@ -96,7 +106,7 @@
                 </div>
 
                 <!-- Databases Table -->
-                <div v-if="(group.dbs && group.dbs.length > 0) || isEditMode" class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden mb-6">
+                <div v-if="(getEnvDbs(group).length > 0) || isEditMode" class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden mb-6">
                     <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
                         <h3 class="text-sm font-bold text-slate-700"><i class="fa-solid fa-database mr-2"></i>数据库资源</h3>
                         <span class="text-xs text-slate-400">点击表格内容即可复制</span>
@@ -113,7 +123,7 @@
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-50">
-                                <tr v-for="(db, dIndex) in group.dbs" :key="dIndex" class="hover:bg-slate-50 transition-colors">
+                                <tr v-for="(db, dIndex) in getEnvDbs(group)" :key="dIndex" class="hover:bg-slate-50 transition-colors">
                                     <td class="px-4 py-3">
                                         <div class="flex items-center gap-2">
                                             <i class="fa-solid fa-server text-slate-300"></i>
@@ -149,18 +159,13 @@
                 <el-form-item label="标题">
                     <el-input v-model="forms.group.title" placeholder="例如：常用工具"></el-input>
                 </el-form-item>
-                <el-form-item label="图标">
-                    <el-input v-model="forms.group.icon" placeholder="例如：fa-solid fa-toolbox"></el-input>
-                    <div class="mt-1 text-xs text-gray-400">支持 FontAwesome 图标类名</div>
-                </el-form-item>
-                <el-form-item label="颜色">
-                    <el-input v-model="forms.group.color" placeholder="例如：text-indigo-600"></el-input>
-                </el-form-item>
-                <el-form-item label="徽章文本">
-                    <el-input v-model="forms.group.badge" placeholder="可选，例如：SIT"></el-input>
-                </el-form-item>
-                <el-form-item label="徽章样式">
-                    <el-input v-model="forms.group.badgeColor" placeholder="可选，Tailwind 类名"></el-input>
+                <el-form-item label="模式">
+                    <el-switch
+                        v-model="forms.group.useEnvironments"
+                        inline-prompt
+                        active-text="SIT/UAT"
+                        inactive-text="统一数据"
+                    ></el-switch>
                 </el-form-item>
             </el-form>
             <template #footer>
@@ -179,9 +184,6 @@
                 </el-form-item>
                 <el-form-item label="URL">
                     <el-input v-model="forms.link.url" placeholder="https://..."></el-input>
-                </el-form-item>
-                <el-form-item label="图标">
-                    <el-input v-model="forms.link.icon" placeholder="例如：fa-brands fa-gitlab"></el-input>
                 </el-form-item>
                 <el-form-item label="描述">
                     <el-input v-model="forms.link.desc" type="textarea" placeholder="简短描述"></el-input>
@@ -227,7 +229,7 @@
     <script src="/static/js/vendor/element-plus.js"></script>
     <script src="/static/js/vendor/axios.min.js"></script>
     <script>
-        const { createApp, ref, reactive, onMounted } = Vue;
+    const { createApp, ref, reactive, onMounted } = Vue;
         const API_URL = '/api/v1/workspace/sites';
 
         const app = createApp({
@@ -235,32 +237,228 @@
                 const workspaceData = ref([]);
                 const isEditMode = ref(false);
                 const currentAdminId = ref(null);
-                const ALLOWED_IDS = ["1001", "1002", "admin"];
+                const allowedIds = ref([]);
 
                 // Dialog States
                 const dialogs = reactive({
                     group: { visible: false, isEdit: false, index: -1 },
-                    link: { visible: false, isEdit: false, groupIndex: -1, itemIndex: -1 },
-                    db: { visible: false, isEdit: false, groupIndex: -1, itemIndex: -1 }
+                    link: { visible: false, isEdit: false, groupIndex: -1, itemIndex: -1, env: 'sit' },
+                    db: { visible: false, isEdit: false, groupIndex: -1, itemIndex: -1, env: 'sit' }
                 });
 
                 // Forms Data
                 const forms = reactive({
-                    group: { title: '', icon: '', color: '', badge: '', badgeColor: '' },
-                    link: { name: '', url: '', icon: '', desc: '' },
+                    group: { title: '', useEnvironments: true },
+                    link: { name: '', url: '', desc: '' },
                     db: { name: '', host: '', port: '', user: '', pass: '' }
                 });
 
+                const ENV_DEFAULT = 'sit';
+                const envOptions = [
+                    { value: 'sit', label: 'SIT', icon: 'fa-solid fa-flask' },
+                    { value: 'uat', label: 'UAT', icon: 'fa-solid fa-flag-checkered' }
+                ];
+                const activeEnvMap = reactive({});
+
+                const deepClone = (value) => JSON.parse(JSON.stringify(value ?? null));
+                const createEmptyEnv = () => ({ items: [], dbs: [] });
+                const sanitizeLinkItem = (item = {}) => ({
+                    name: item?.name || '',
+                    url: item?.url || '',
+                    desc: item?.desc || ''
+                });
+                const sanitizeLinkList = (items) => Array.isArray(items) ? items.map(sanitizeLinkItem) : [];
+
+                const ensureGroupEnvironments = (group) => {
+                    if (!group) return;
+                    if (!group.id) {
+                        group.id = `grp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+                    }
+
+                    const useEnvs = group.useEnvironments !== false;
+
+                    if (!useEnvs) {
+                        let sharedItems = Array.isArray(group.shared?.items) ? group.shared.items : null;
+                        let sharedDbs = Array.isArray(group.shared?.dbs) ? group.shared.dbs : null;
+
+                        if (!sharedItems || !sharedDbs) {
+                            let sourceItems = null;
+                            let sourceDbs = null;
+
+                            if (group.environments && typeof group.environments === 'object' && !Array.isArray(group.environments)) {
+                                const fallbackEnv = group.defaultEnv && group.environments[group.defaultEnv];
+                                const firstEnv = fallbackEnv || group.environments[ENV_DEFAULT] || Object.values(group.environments)[0];
+                                if (firstEnv) {
+                                    sourceItems = firstEnv.items;
+                                    sourceDbs = firstEnv.dbs;
+                                }
+                            } else if (group.items || group.links || group.dbs) {
+                                sourceItems = group.items || group.links;
+                                sourceDbs = group.dbs;
+                            }
+
+                            if (!sharedItems && Array.isArray(sourceItems)) {
+                                sharedItems = deepClone(sourceItems);
+                            }
+                            if (!sharedDbs && Array.isArray(sourceDbs)) {
+                                sharedDbs = deepClone(sourceDbs);
+                            }
+                        }
+
+                        group.shared = {
+                            items: sanitizeLinkList(sharedItems),
+                            dbs: Array.isArray(sharedDbs) ? sharedDbs : []
+                        };
+
+                        delete group.environments;
+                        delete group.items;
+                        delete group.links;
+                        delete group.dbs;
+                        group.defaultEnv = ENV_DEFAULT;
+                        return;
+                    }
+
+                    if (!group.environments || typeof group.environments !== 'object' || Array.isArray(group.environments)) {
+                        group.environments = {};
+                    }
+
+                    let seedItems = [];
+                    let seedDbs = [];
+
+                    if (group.shared && typeof group.shared === 'object') {
+                        if (Array.isArray(group.shared.items)) seedItems = sanitizeLinkList(group.shared.items);
+                        if (Array.isArray(group.shared.dbs)) seedDbs = deepClone(group.shared.dbs);
+                    } else {
+                        const sourceItems = group.items || group.links;
+                        if (Array.isArray(sourceItems)) seedItems = sanitizeLinkList(sourceItems);
+                        if (Array.isArray(group.dbs)) seedDbs = deepClone(group.dbs);
+                    }
+
+                    envOptions.forEach(({ value }) => {
+                        let envData = group.environments[value];
+                        if (!envData || typeof envData !== 'object' || Array.isArray(envData)) {
+                            envData = group.environments[value] = createEmptyEnv();
+                        }
+                        if (!Array.isArray(envData.items)) {
+                            envData.items = [];
+                        } else {
+                            envData.items = sanitizeLinkList(envData.items);
+                        }
+                        if (!Array.isArray(envData.dbs)) {
+                            envData.dbs = [];
+                        }
+
+                        if (!envData.items.length && seedItems.length) {
+                            envData.items = sanitizeLinkList(seedItems);
+                        }
+                        if (!envData.dbs.length && seedDbs.length) {
+                            envData.dbs = deepClone(seedDbs);
+                        }
+                    });
+
+                    delete group.shared;
+                    delete group.items;
+                    delete group.links;
+                    delete group.dbs;
+
+                    if (!group.defaultEnv || !envOptions.some(opt => opt.value === group.defaultEnv)) {
+                        group.defaultEnv = ENV_DEFAULT;
+                    }
+                };
+
+                const prepareGroup = (group) => {
+                    ensureGroupEnvironments(group);
+                    if (group.useEnvironments === false) {
+                        if (group.id) {
+                            delete activeEnvMap[group.id];
+                        }
+                    } else if (group.id && !activeEnvMap[group.id]) {
+                        activeEnvMap[group.id] = group.defaultEnv || ENV_DEFAULT;
+                    }
+                };
+
+                const getActiveEnv = (group) => {
+                    if (!group) return ENV_DEFAULT;
+                    if (group.useEnvironments === false) {
+                        return ENV_DEFAULT;
+                    }
+                    const fallback = envOptions.some(opt => opt.value === group?.defaultEnv)
+                        ? group.defaultEnv
+                        : ENV_DEFAULT;
+                    if (!group.id) {
+                        return fallback;
+                    }
+                    return activeEnvMap[group.id] || fallback;
+                };
+
+                const setGroupEnv = (group, env) => {
+                    if (!group || !envOptions.some(opt => opt.value === env)) return;
+                    if (group.useEnvironments === false) return;
+                    if (!group.id) {
+                        prepareGroup(group);
+                    }
+                    activeEnvMap[group.id] = env;
+                    group.defaultEnv = env;
+                };
+
+                const readEnvContainer = (group, env = getActiveEnv(group)) => {
+                    if (!group) return createEmptyEnv();
+                    if (group.useEnvironments === false) {
+                        return group.shared || createEmptyEnv();
+                    }
+                    if (!group.environments) return createEmptyEnv();
+                    return group.environments[env] || createEmptyEnv();
+                };
+
+                const ensureEnvContainer = (group, env) => {
+                    if (!group) return createEmptyEnv();
+                    if (group.useEnvironments === false) {
+                        if (!group.shared || typeof group.shared !== 'object') {
+                            group.shared = createEmptyEnv();
+                        }
+                        if (!Array.isArray(group.shared.items)) {
+                            group.shared.items = [];
+                        } else {
+                            group.shared.items = sanitizeLinkList(group.shared.items);
+                        }
+                        if (!Array.isArray(group.shared.dbs)) {
+                            group.shared.dbs = [];
+                        }
+                        return group.shared;
+                    }
+                    if (!group.environments || typeof group.environments !== 'object') {
+                        group.environments = {};
+                    }
+                    if (!group.environments[env]) {
+                        group.environments[env] = createEmptyEnv();
+                    }
+                    return group.environments[env];
+                };
+
+                const getEnvItems = (group, env) => {
+                    const container = readEnvContainer(group, env);
+                    return sanitizeLinkList(container.items);
+                };
+
+                const getEnvDbs = (group, env) => {
+                    const container = readEnvContainer(group, env);
+                    return Array.isArray(container.dbs) ? container.dbs : [];
+                };
+
+                const shouldShowEnvToggle = (group) => {
+                    return group?.useEnvironments !== false;
+                };
+
                 // --- Auth & Config ---
                 const requestAuth = () => {
-                    const input = prompt("请输入工号 (Employee ID) 以进入编辑模式：\\n(测试可用: 1001, admin)");
+                    const input = prompt("请输入密码以进入编辑模式：");
                     if (input === null) return;
-                    if (ALLOWED_IDS.includes(input.trim())) {
+                    if (allowedIds.value.includes(input.trim())) {
                         isEditMode.value = true;
                         currentAdminId.value = input.trim();
                         ElementPlus.ElMessage.success(`欢迎, ${currentAdminId.value}。已进入编辑模式。`);
                     } else {
-                        alert("❌ 验证失败：工号无编辑权限。");
+                        alert("验证失败");
                     }
                 };
 
@@ -272,7 +470,30 @@
                 const fetchConfig = async () => {
                     try {
                         const res = await axios.get(API_URL);
-                        workspaceData.value = res.data;
+                        const payload = res.data;
+                        const groups = Array.isArray(payload)
+                            ? payload
+                            : (Array.isArray(payload?.groups) ? payload.groups : []);
+                        const adminIds = Array.isArray(payload?.allowedIds)
+                            ? payload.allowedIds
+                                .map(id => (id == null ? '' : String(id).trim()))
+                                .filter(id => id.length > 0)
+                            : [];
+
+                        allowedIds.value = adminIds;
+                        workspaceData.value = groups;
+
+                        const groupIds = new Set();
+                        workspaceData.value.forEach(group => {
+                            prepareGroup(group);
+                            groupIds.add(group.id);
+                        });
+
+                        Object.keys(activeEnvMap).forEach(id => {
+                            if (!groupIds.has(id)) {
+                                delete activeEnvMap[id];
+                            }
+                        });
                     } catch (err) {
                         ElementPlus.ElMessage.error('加载配置失败');
                         console.error(err);
@@ -281,7 +502,12 @@
 
                 const saveConfig = async () => {
                     try {
-                        await axios.post(API_URL, workspaceData.value);
+                        workspaceData.value.forEach(prepareGroup);
+                        const payload = {
+                            allowedIds: [...allowedIds.value],
+                            groups: JSON.parse(JSON.stringify(workspaceData.value))
+                        };
+                        await axios.post(API_URL, payload);
                         ElementPlus.ElMessage.success('配置已保存');
                     } catch (err) {
                         ElementPlus.ElMessage.error('保存配置失败');
@@ -291,13 +517,19 @@
 
                 // --- Group Operations ---
                 const openAddGroupDialog = () => {
-                    forms.group = { title: '', icon: 'fa-solid fa-folder', color: 'text-slate-600', badge: '', badgeColor: '' };
+                    forms.group = { title: '', useEnvironments: true };
                     dialogs.group.isEdit = false;
+                    dialogs.group.index = -1;
                     dialogs.group.visible = true;
                 };
 
                 const editGroup = (index) => {
-                    forms.group = { ...workspaceData.value[index] };
+                    const group = workspaceData.value[index];
+                    prepareGroup(group);
+                    forms.group = {
+                        title: group.title || '',
+                        useEnvironments: group.useEnvironments !== false
+                    };
                     dialogs.group.isEdit = true;
                     dialogs.group.index = index;
                     dialogs.group.visible = true;
@@ -305,21 +537,31 @@
 
                 const saveGroup = () => {
                     if (dialogs.group.isEdit) {
-                        Object.assign(workspaceData.value[dialogs.group.index], forms.group);
-                    } else {
-                        workspaceData.value.push({
-                            id: Date.now().toString(),
-                            ...forms.group,
-                            items: [],
-                            dbs: []
+                        const group = workspaceData.value[dialogs.group.index];
+                        Object.assign(group, {
+                            title: forms.group.title,
+                            useEnvironments: forms.group.useEnvironments !== false
                         });
+                        prepareGroup(group);
+                    } else {
+                        const newGroup = {
+                            title: forms.group.title,
+                            useEnvironments: forms.group.useEnvironments !== false,
+                            defaultEnv: ENV_DEFAULT,
+                            shared: createEmptyEnv()
+                        };
+                        workspaceData.value.push(newGroup);
+                        prepareGroup(newGroup);
                     }
                     dialogs.group.visible = false;
                 };
 
                 const deleteGroup = (index) => {
                     if (confirm('确定要删除这个分组吗？')) {
-                        workspaceData.value.splice(index, 1);
+                        const [removed] = workspaceData.value.splice(index, 1);
+                        if (removed?.id) {
+                            delete activeEnvMap[removed.id];
+                        }
                     }
                 };
 
@@ -334,32 +576,39 @@
 
                 // --- Link Operations ---
                 const openAddLinkDialog = (groupIndex) => {
-                    forms.link = { name: '', url: '', icon: 'fa-solid fa-link', desc: '' };
+                    const group = workspaceData.value[groupIndex];
+                    prepareGroup(group);
+                    forms.link = { name: '', url: '', desc: '' };
                     dialogs.link.isEdit = false;
                     dialogs.link.groupIndex = groupIndex;
+                    dialogs.link.itemIndex = -1;
+                    dialogs.link.env = group.useEnvironments === false ? ENV_DEFAULT : getActiveEnv(group);
                     dialogs.link.visible = true;
                 };
 
                 const editLink = (groupIndex, itemIndex) => {
                     const group = workspaceData.value[groupIndex];
-                    const items = group.items || group.links || [];
-                    forms.link = { ...items[itemIndex] };
+                    prepareGroup(group);
+                    const env = getActiveEnv(group);
+                    const items = getEnvItems(group, env);
+                    forms.link = sanitizeLinkItem(items[itemIndex]);
                     dialogs.link.isEdit = true;
                     dialogs.link.groupIndex = groupIndex;
                     dialogs.link.itemIndex = itemIndex;
+                    dialogs.link.env = group.useEnvironments === false ? ENV_DEFAULT : env;
                     dialogs.link.visible = true;
                 };
 
                 const saveLink = () => {
                     const group = workspaceData.value[dialogs.link.groupIndex];
-                    // Ensure items array exists
-                    if (!group.items && group.links) group.items = group.links;
-                    if (!group.items) group.items = [];
+                    prepareGroup(group);
+                    const envData = ensureEnvContainer(group, dialogs.link.env);
+                    const payload = sanitizeLinkItem(forms.link);
 
-                    if (dialogs.link.isEdit) {
-                        group.items[dialogs.link.itemIndex] = { ...forms.link };
+                    if (dialogs.link.isEdit && dialogs.link.itemIndex > -1) {
+                        envData.items.splice(dialogs.link.itemIndex, 1, payload);
                     } else {
-                        group.items.push({ ...forms.link });
+                        envData.items.push(payload);
                     }
                     dialogs.link.visible = false;
                 };
@@ -367,42 +616,56 @@
                 const deleteLink = (groupIndex, itemIndex) => {
                     if (confirm('确定删除此链接？')) {
                         const group = workspaceData.value[groupIndex];
-                        const items = group.items || group.links;
-                        items.splice(itemIndex, 1);
+                        prepareGroup(group);
+                        const envData = ensureEnvContainer(group, getActiveEnv(group));
+                        envData.items.splice(itemIndex, 1);
                     }
                 };
 
                 // --- DB Operations ---
                 const openAddDbDialog = (groupIndex) => {
+                    const group = workspaceData.value[groupIndex];
+                    prepareGroup(group);
                     forms.db = { name: '', host: '', port: '3306', user: '', pass: '' };
                     dialogs.db.isEdit = false;
                     dialogs.db.groupIndex = groupIndex;
+                    dialogs.db.itemIndex = -1;
+                    dialogs.db.env = group.useEnvironments === false ? ENV_DEFAULT : getActiveEnv(group);
                     dialogs.db.visible = true;
                 };
 
                 const editDb = (groupIndex, itemIndex) => {
-                    forms.db = { ...workspaceData.value[groupIndex].dbs[itemIndex] };
+                    const group = workspaceData.value[groupIndex];
+                    prepareGroup(group);
+                    const env = getActiveEnv(group);
+                    const dbs = getEnvDbs(group, env);
+                    forms.db = { ...dbs[itemIndex] };
                     dialogs.db.isEdit = true;
                     dialogs.db.groupIndex = groupIndex;
                     dialogs.db.itemIndex = itemIndex;
+                    dialogs.db.env = group.useEnvironments === false ? ENV_DEFAULT : env;
                     dialogs.db.visible = true;
                 };
 
                 const saveDb = () => {
                     const group = workspaceData.value[dialogs.db.groupIndex];
-                    if (!group.dbs) group.dbs = [];
+                    prepareGroup(group);
+                    const envData = ensureEnvContainer(group, dialogs.db.env);
 
-                    if (dialogs.db.isEdit) {
-                        group.dbs[dialogs.db.itemIndex] = { ...forms.db };
+                    if (dialogs.db.isEdit && dialogs.db.itemIndex > -1) {
+                        envData.dbs.splice(dialogs.db.itemIndex, 1, { ...forms.db });
                     } else {
-                        group.dbs.push({ ...forms.db });
+                        envData.dbs.push({ ...forms.db });
                     }
                     dialogs.db.visible = false;
                 };
 
                 const deleteDb = (groupIndex, itemIndex) => {
                     if (confirm('确定删除此数据库配置？')) {
-                        workspaceData.value[groupIndex].dbs.splice(itemIndex, 1);
+                        const group = workspaceData.value[groupIndex];
+                        prepareGroup(group);
+                        const envData = ensureEnvContainer(group, getActiveEnv(group));
+                        envData.dbs.splice(itemIndex, 1);
                     }
                 };
 
@@ -418,10 +681,12 @@
 
                 return {
                     workspaceData, isEditMode, currentAdminId, dialogs, forms,
+                    envOptions, allowedIds,
                     requestAuth, exitEditMode, saveConfig, copyToClipboard,
                     openAddGroupDialog, editGroup, saveGroup, deleteGroup, moveGroup,
                     openAddLinkDialog, editLink, saveLink, deleteLink,
-                    openAddDbDialog, editDb, saveDb, deleteDb
+                    openAddDbDialog, editDb, saveDb, deleteDb,
+                    getEnvItems, getEnvDbs, setGroupEnv, getActiveEnv, shouldShowEnvToggle
                 };
             }
         });
